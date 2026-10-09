@@ -35,5 +35,8 @@ for fragment in ['notify_register_dispatch(SBHR_NOTIFY', 'atomic_store_explicit'
 for forbidden in ['NSTimer', 'dispatch_source_create', 'thermalState', 'notify_post(', 'system(', 'posix_spawn', 'kill(']: assert forbidden not in runtime
 assert runtime.index('original(screen, maximum) < 120') < runtime.index('Install(screenClass, maximum')
 for original in ['gScreenOriginal','gPolicyOriginal','gControllerOriginal','gFPSOriginal','gRangeOriginal']: assert original+'(object, selector' in runtime
+# CAFrameRateRange is iOS 15+ while the package deployment target remains iOS 14.
+assert 'static void (*gRangeOriginal)(id, SEL, CAFrameRateRange) API_AVAILABLE(ios(15.0));' in runtime
+assert 'if (@available(iOS 15.0, *))' in runtime
 assert 'SBCPUHighRefresh.m' not in text('sbcpuprefs/Makefile')
 print('settings/notification/filter/runtime ABI contracts passed')

@@ -16,7 +16,7 @@ static NSInteger (*gScreenOriginal)(id, SEL);
 static NSInteger (*gPolicyOriginal)(id, SEL);
 static NSInteger (*gControllerOriginal)(id, SEL);
 static void (*gFPSOriginal)(id, SEL, NSInteger);
-static void (*gRangeOriginal)(id, SEL, CAFrameRateRange);
+static void (*gRangeOriginal)(id, SEL, CAFrameRateRange) API_AVAILABLE(ios(15.0));
 static bool Enabled(void) { return atomic_load_explicit(&gEnabled, memory_order_acquire); }
 
 static bool MethodMatches(Method method, const char *ret, const char *arg) {
