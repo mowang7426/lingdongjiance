@@ -262,6 +262,7 @@ API_AVAILABLE(ios(15.0))
 static SBCPUPiPManager *Manager API_AVAILABLE(ios(15.0));
 static int PiPTokens[4];
 
+void SBCPUPiPInstall(UIWindow *(^windowProvider)(void), BOOL (^lockedProvider)(void)) API_AVAILABLE(ios(15.0));
 void SBCPUPiPInstall(UIWindow *(^windowProvider)(void), BOOL (^lockedProvider)(void)) {
     if (!NSThread.isMainThread) {
         dispatch_async(dispatch_get_main_queue(), ^{ SBCPUPiPInstall(windowProvider, lockedProvider); });
@@ -277,9 +278,9 @@ void SBCPUPiPInstall(UIWindow *(^windowProvider)(void), BOOL (^lockedProvider)(v
         (void)stop;
         notify_register_dispatch(name.UTF8String, &PiPTokens[index], dispatch_get_main_queue(), ^(int token) {
             (void)token;
-            if ([name isEqualToString:SBCPUPiPStartRequest]) [Manager start];
-            else if ([name isEqualToString:SBCPUPiPStopRequest]) [Manager stop:@"收到停止请求"];
-            else if ([name isEqualToString:SBCPUPrefsChanged]) [Manager preferenceChanged];
+            if ([name isEqualToString:@"com.sbcpu.pip-experiment.start"]) [Manager start];
+            else if ([name isEqualToString:@"com.sbcpu.pip-experiment.stop"]) [Manager stop:@"收到停止请求"];
+            else if ([name isEqualToString:@"com.yourname.sbcpufloating/settingsChanged"]) [Manager preferenceChanged];
             else [Manager publishQuery];
         });
     }];
