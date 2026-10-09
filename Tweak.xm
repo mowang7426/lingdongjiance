@@ -1,3 +1,4 @@
+#import "SBCPUTextOnlyPolicy.h"
 #import "SBCPUTextOnlyColor.h"
 #import "SBCPUTextBackdropLabel.h"
 #import "SBCPUCapsuleTextPolicy.h"
