@@ -12,9 +12,18 @@
 // Explicit single-line baseline: center the CoreText ascent+descent box.
 // CATextLayer's string is an opaque-white attributed string, never the UI color.
 @interface SBCPUTextAlphaMask : CATextLayer
+@property(nonatomic, strong) UILabel *glyphLabel;
 @end
 @implementation SBCPUTextAlphaMask
 - (void)drawInContext:(CGContextRef)context {
+    if (self.glyphLabel) {
+        // Draw glyphs only, not a view snapshot. UIKit keeps baseline, alignment,
+        // truncation and font substitution identical to the fallback label.
+        UIGraphicsPushContext(context);
+        [self.glyphLabel drawTextInRect:self.bounds];
+        UIGraphicsPopContext();
+        return;
+    }
     NSAttributedString *string = self.string;
     if (!string.length) return;
     CTLineRef line = CTLineCreateWithAttributedString((__bridge CFAttributedStringRef)string);
@@ -119,6 +128,25 @@ static BOOL SBCPUBackdropUnavailable = NO;
         _alphaMask.contentsScale = scale;
         _alphaMask.string = [[NSAttributedString alloc] initWithString:self.text attributes:@{
             NSFontAttributeName:fittedFont, NSForegroundColorAttributeName:UIColor.whiteColor}];
+        if ([self isKindOfClass:SBCPUCapsuleBackdropLabel.class]) {
+            UILabel *glyph = _alphaMask.glyphLabel;
+            if (!glyph) {
+                glyph = [[UILabel alloc] initWithFrame:self.bounds];
+                glyph.backgroundColor = UIColor.clearColor;
+                glyph.textColor = UIColor.whiteColor;
+                _alphaMask.glyphLabel = glyph;
+            }
+            glyph.bounds = self.bounds;
+            glyph.font = font;
+            glyph.text = self.text;
+            glyph.textAlignment = self.textAlignment;
+            glyph.numberOfLines = self.numberOfLines;
+            glyph.lineBreakMode = self.lineBreakMode;
+            glyph.adjustsFontSizeToFitWidth = self.adjustsFontSizeToFitWidth;
+            glyph.minimumScaleFactor = self.minimumScaleFactor;
+            glyph.baselineAdjustment = self.baselineAdjustment;
+            glyph.semanticContentAttribute = self.semanticContentAttribute;
+        }
         [_alphaMask setNeedsDisplay];
         _lastText = [self.text copy];
         _lastFont = self.font;
@@ -131,6 +159,11 @@ static BOOL SBCPUBackdropUnavailable = NO;
     } @finally {
         [CATransaction commit];
     }
+}
+
+- (void)invalidateBackdropTypography {
+    _lastText = nil;
+    [self setNeedsLayout];
 }
 
 - (void)setRealtimeInvertEnabled:(BOOL)enabled {
@@ -154,5 +187,37 @@ static BOOL SBCPUBackdropUnavailable = NO;
 }
 - (void)drawTextInRect:(CGRect)rect {
     if (!_backdrop) [super drawTextInRect:rect]; // fallback is never made transparent
+}
+@end
+
+@implementation SBCPUCapsuleBackdropLabel
+- (void)setHidden:(BOOL)hidden {
+    [super setHidden:hidden];
+    if (hidden) self.realtimeInvertEnabled = NO;
+}
+- (void)didMoveToWindow {
+    [super didMoveToWindow];
+    if (!self.window) self.realtimeInvertEnabled = NO;
+}
+- (void)setTextAlignment:(NSTextAlignment)value {
+    [super setTextAlignment:value]; [self invalidateBackdropTypography];
+}
+- (void)setNumberOfLines:(NSInteger)value {
+    [super setNumberOfLines:value]; [self invalidateBackdropTypography];
+}
+- (void)setLineBreakMode:(NSLineBreakMode)value {
+    [super setLineBreakMode:value]; [self invalidateBackdropTypography];
+}
+- (void)setAdjustsFontSizeToFitWidth:(BOOL)value {
+    [super setAdjustsFontSizeToFitWidth:value]; [self invalidateBackdropTypography];
+}
+- (void)setMinimumScaleFactor:(CGFloat)value {
+    [super setMinimumScaleFactor:value]; [self invalidateBackdropTypography];
+}
+- (void)setBaselineAdjustment:(UIBaselineAdjustment)value {
+    [super setBaselineAdjustment:value]; [self invalidateBackdropTypography];
+}
+- (void)setSemanticContentAttribute:(UISemanticContentAttribute)value {
+    [super setSemanticContentAttribute:value]; [self invalidateBackdropTypography];
 }
 @end

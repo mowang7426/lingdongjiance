@@ -1,6 +1,10 @@
 #import <UIKit/UIKit.h>
 
-// Only the pure-text overlay uses this class. textColor remains the fallback.
+// Pure-text and explicitly opted-in capsule glyphs only. textColor is the fallback.
 @interface SBCPUTextBackdropLabel : UILabel
 @property(nonatomic) BOOL realtimeInvertEnabled;
+@end
+
+// Preserve UIKit typography (including replacement fonts) in ordinary capsules.
+@interface SBCPUCapsuleBackdropLabel : SBCPUTextBackdropLabel
 @end

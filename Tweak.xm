@@ -1,6 +1,7 @@
 #import "SBCPUTextOnlyPolicy.h"
 #import "SBCPUTextOnlyColor.h"
 #import "SBCPUTextBackdropLabel.h"
+#import "SBCPUCapsuleTextPolicy.h"
 #import "SBCPUTextOnlyFormat.h"
 #import "SBCPUTextOnlyCurrent.h"
 
@@ -241,6 +242,7 @@ typedef struct {
 @property (nonatomic, strong) UILongPressGestureRecognizer *longPressGesture;
 
 - (void)applyLiquidGlassStyle;
+- (void)applyCapsuleTextFilter;
 - (void)refreshNativeLiquidGlass;
 - (void)resetInactivityTimer;
 - (void)scheduleStatusDockReturn;
@@ -1117,6 +1119,7 @@ static void LoadPreferences(void) {
         applyVisibility();
         if (floatingView && wasTextOnly != floatingTextOnlyMode) handleTextOnlyModeTransition(wasTextOnly);
         if (floatingView && floatingTextOnlyMode) applyTextOnlyMode();
+        [floatingView applyCapsuleTextFilter]; // preference changes do not wait for the metric tick
         if (showFps || collapsedDisplayMode == 1 || (floatingTextOnlyMode && textOnlyShowFPS)) {
             [[SBCPUFPSHelper sharedInstance] startMonitoring];
         } else {
@@ -2488,6 +2491,7 @@ static void applyTextOnlyTextFilter(void) {
 }
 
 static void applyTextOnlyMode(void) {
+    [floatingView applyCapsuleTextFilter]; // entering text-only clears every capsule mask
     if (!floatingView || !floatingTextOnlyMode) return;
     if (!textOnlyLabel || textOnlyLabel.superview != floatingView) {
         [textOnlyLabel removeFromSuperview];
@@ -3073,8 +3077,30 @@ static void LGRemoveLabelShadowInView(UIView *view) {
 }
 
 
+- (void)applyCapsuleTextFilter {
+    if (!_miniDockInfoLabel) return; // initialization has not completed
+    // Explicit glyph whitelist: never traverse/filter the card, glass or details.
+    NSArray *normal = @[_cpuTitleLabel, _cpuValueLabel, _cpuFreqLabel,
+        _fpsTitleLabel, _fpsValueLabel, _fpsSubLabel, _batteryValueLabel,
+        _batterySubLabel, _tempValueLabel, _tempSubLabel, _currentValueLabel,
+        _currentSubLabel, _timeLabel, _signalLabel];
+    NSArray *folded = @[_miniCpuLabel, _miniFpsLabel, _miniBattLabel,
+        _miniTempLabel, _miniDockInfoLabel];
+    for (NSArray *group in @[normal, folded]) {
+        for (SBCPUCapsuleBackdropLabel *label in group) {
+            BOOL visible = !label.hidden;
+            for (UIView *parent = label.superview; parent && parent != self; parent = parent.superview)
+                if (parent.hidden) visible = NO;
+            label.realtimeInvertEnabled = SBCPUCapsuleTextEnabled((int)floatingTextOnlyColor,
+                floatingTextOnlyMode, self.isShowingNotification, fastChargeStartupAnimating,
+                self.isCollapsed, group == folded, visible, label.text.length > 0);
+        }
+    }
+}
+
 - (void)layoutSubviews {
     [super layoutSubviews];
+    [self applyCapsuleTextFilter];
     if (floatingTextOnlyMode) return;
     if (_nativeLiquidGlassView && _usingNativeLiquidGlass) {
         CGRect b = self.bounds;
@@ -3144,6 +3170,7 @@ static void LGRemoveLabelShadowInView(UIView *view) {
 
 // 液态玻璃：实时采样浮窗下方背景亮度，文字自动反色（亮背景→黑字，暗背景→白字）
 - (void)applyAdaptiveTextColors {
+    [self applyCapsuleTextFilter];
     if (floatingTextOnlyMode) {
         // Text-only color follows system appearance or a fixed color, never sampled.
         applyTextOnlyMode();
@@ -3411,20 +3438,20 @@ static void LGRemoveLabelShadowInView(UIView *view) {
 
         UIColor *titleGrayColor = [UIColor colorWithWhite:0.35 alpha:1.0f];
 
-        _cpuTitleLabel = [[UILabel alloc] init];
+        _cpuTitleLabel = [[SBCPUCapsuleBackdropLabel alloc] init];
         _cpuTitleLabel.text = @"CPU";
         _cpuTitleLabel.textColor = titleGrayColor;
         _cpuTitleLabel.font = [UIFont systemFontOfSize:10 weight:UIFontWeightMedium];
         [_performanceContainer addSubview:_cpuTitleLabel];
 
-        _cpuValueLabel = [[UILabel alloc] init];
+        _cpuValueLabel = [[SBCPUCapsuleBackdropLabel alloc] init];
         _cpuValueLabel.textColor = [UIColor colorWithRed:0.18f green:0.75f blue:0.35f alpha:1.0f];
         _cpuValueLabel.font = [UIFont systemFontOfSize:15 weight:UIFontWeightBold];
         _cpuValueLabel.adjustsFontSizeToFitWidth = YES;
         _cpuValueLabel.minimumScaleFactor = 0.5f;
         [_performanceContainer addSubview:_cpuValueLabel];
 
-        _cpuFreqLabel = [[UILabel alloc] init];
+        _cpuFreqLabel = [[SBCPUCapsuleBackdropLabel alloc] init];
         _cpuFreqLabel.textColor = titleGrayColor;
         _cpuFreqLabel.font = [UIFont systemFontOfSize:10 weight:UIFontWeightMedium];
         _cpuFreqLabel.adjustsFontSizeToFitWidth = YES;
@@ -3435,20 +3462,20 @@ static void LGRemoveLabelShadowInView(UIView *view) {
         _div1.backgroundColor = [UIColor colorWithWhite:0.0f alpha:0.1f];
         [_performanceContainer addSubview:_div1];
 
-        _fpsTitleLabel = [[UILabel alloc] init];
+        _fpsTitleLabel = [[SBCPUCapsuleBackdropLabel alloc] init];
         _fpsTitleLabel.text = @"FPS";
         _fpsTitleLabel.textColor = titleGrayColor;
         _fpsTitleLabel.font = [UIFont systemFontOfSize:10 weight:UIFontWeightMedium];
         [_performanceContainer addSubview:_fpsTitleLabel];
 
-        _fpsValueLabel = [[UILabel alloc] init];
+        _fpsValueLabel = [[SBCPUCapsuleBackdropLabel alloc] init];
         _fpsValueLabel.textColor = [UIColor colorWithRed:0.47f green:0.33f blue:0.90f alpha:1.0f];
         _fpsValueLabel.font = [UIFont systemFontOfSize:15 weight:UIFontWeightBold];
         _fpsValueLabel.adjustsFontSizeToFitWidth = YES;
         _fpsValueLabel.minimumScaleFactor = 0.5f;
         [_performanceContainer addSubview:_fpsValueLabel];
 
-        _fpsSubLabel = [[UILabel alloc] init];
+        _fpsSubLabel = [[SBCPUCapsuleBackdropLabel alloc] init];
         _fpsSubLabel.text = @"FPS";
         _fpsSubLabel.textColor = titleGrayColor;
         _fpsSubLabel.font = [UIFont systemFontOfSize:10 weight:UIFontWeightMedium];
@@ -3463,14 +3490,14 @@ static void LGRemoveLabelShadowInView(UIView *view) {
         _batteryIconLabel.font = [UIFont systemFontOfSize:16];
         [_performanceContainer addSubview:_batteryIconLabel];
 
-        _batteryValueLabel = [[UILabel alloc] init];
+        _batteryValueLabel = [[SBCPUCapsuleBackdropLabel alloc] init];
         _batteryValueLabel.textColor = [UIColor colorWithRed:0.15f green:0.45f blue:0.25f alpha:1.0f];
         _batteryValueLabel.font = [UIFont systemFontOfSize:14 weight:UIFontWeightBold];
         _batteryValueLabel.adjustsFontSizeToFitWidth = YES;
         _batteryValueLabel.minimumScaleFactor = 0.5f;
         [_performanceContainer addSubview:_batteryValueLabel];
 
-        _batterySubLabel = [[UILabel alloc] init];
+        _batterySubLabel = [[SBCPUCapsuleBackdropLabel alloc] init];
         _batterySubLabel.text = @"电量";
         _batterySubLabel.textColor = titleGrayColor;
         _batterySubLabel.font = [UIFont systemFontOfSize:10 weight:UIFontWeightMedium];
@@ -3489,14 +3516,14 @@ static void LGRemoveLabelShadowInView(UIView *view) {
         }
         [_performanceContainer addSubview:_tempIconView];
 
-        _tempValueLabel = [[UILabel alloc] init];
+        _tempValueLabel = [[SBCPUCapsuleBackdropLabel alloc] init];
         _tempValueLabel.textColor = [UIColor blackColor];
         _tempValueLabel.font = [UIFont systemFontOfSize:14 weight:UIFontWeightBold];
         _tempValueLabel.adjustsFontSizeToFitWidth = YES;
         _tempValueLabel.minimumScaleFactor = 0.5f;
         [_performanceContainer addSubview:_tempValueLabel];
 
-        _tempSubLabel = [[UILabel alloc] init];
+        _tempSubLabel = [[SBCPUCapsuleBackdropLabel alloc] init];
         _tempSubLabel.text = @"温度";
         _tempSubLabel.textColor = titleGrayColor;
         _tempSubLabel.font = [UIFont systemFontOfSize:10 weight:UIFontWeightMedium];
@@ -3511,14 +3538,14 @@ static void LGRemoveLabelShadowInView(UIView *view) {
         _currentIconLabel.font = [UIFont systemFontOfSize:14];
         [_performanceContainer addSubview:_currentIconLabel];
 
-        _currentValueLabel = [[UILabel alloc] init];
+        _currentValueLabel = [[SBCPUCapsuleBackdropLabel alloc] init];
         _currentValueLabel.textColor = [UIColor blackColor];
         _currentValueLabel.font = [UIFont systemFontOfSize:14 weight:UIFontWeightBold];
         _currentValueLabel.adjustsFontSizeToFitWidth = YES;
         _currentValueLabel.minimumScaleFactor = 0.5f;
         [_performanceContainer addSubview:_currentValueLabel];
 
-        _currentSubLabel = [[UILabel alloc] init];
+        _currentSubLabel = [[SBCPUCapsuleBackdropLabel alloc] init];
         _currentSubLabel.text = @"电流";
         _currentSubLabel.textColor = titleGrayColor;
         _currentSubLabel.font = [UIFont systemFontOfSize:10 weight:UIFontWeightMedium];
@@ -3540,7 +3567,7 @@ static void LGRemoveLabelShadowInView(UIView *view) {
         _statusLabel.textAlignment = NSTextAlignmentCenter;
         [_bottomCapsule addSubview:_statusLabel];
 
-        _timeLabel = [[UILabel alloc] init];
+        _timeLabel = [[SBCPUCapsuleBackdropLabel alloc] init];
         _timeLabel.text = @"00:00:00";
         _timeLabel.textColor = [UIColor darkGrayColor];
         _timeLabel.font = [UIFont monospacedDigitSystemFontOfSize:11 weight:UIFontWeightSemibold];
@@ -3550,7 +3577,7 @@ static void LGRemoveLabelShadowInView(UIView *view) {
         [_performanceContainer addSubview:_timeLabel];
 
         // SIM 卡信号行：浮窗最底部，实时显示运营商/制式/信号
-        _signalLabel = [[UILabel alloc] init];
+        _signalLabel = [[SBCPUCapsuleBackdropLabel alloc] init];
         _signalLabel.text = @"📶 信号检测中";
         _signalLabel.textColor = [UIColor whiteColor]; // 深色浮窗上白色更清晰（V4.18.6）
         _signalLabel.font = [UIFont systemFontOfSize:11 weight:UIFontWeightMedium];
@@ -3624,35 +3651,35 @@ static void LGRemoveLabelShadowInView(UIView *view) {
         _statusDot.hidden = YES; // Expanded initial state; folded layout restores its indicator.
         [_collapsedContainerView addSubview:_statusDot];
 
-        _miniCpuLabel = [[UILabel alloc] initWithFrame:CGRectMake(22, 5, 45, 18)];
+        _miniCpuLabel = [[SBCPUCapsuleBackdropLabel alloc] initWithFrame:CGRectMake(22, 5, 45, 18)];
         _miniCpuLabel.textColor = [UIColor blackColor];
         _miniCpuLabel.font = [UIFont systemFontOfSize:12 weight:UIFontWeightBold];
         _miniCpuLabel.textAlignment = NSTextAlignmentLeft;
         [_collapsedContainerView addSubview:_miniCpuLabel];
 
         // 横屏迷你胶囊：FPS / 电量 / 温度（默认隐藏，进入横屏折叠态时显示）
-        _miniFpsLabel = [[UILabel alloc] initWithFrame:CGRectMake(84, 5, 44, 18)];
+        _miniFpsLabel = [[SBCPUCapsuleBackdropLabel alloc] initWithFrame:CGRectMake(84, 5, 44, 18)];
         _miniFpsLabel.textColor = [UIColor blackColor];
         _miniFpsLabel.font = [UIFont systemFontOfSize:12 weight:UIFontWeightBold];
         _miniFpsLabel.textAlignment = NSTextAlignmentLeft;
         _miniFpsLabel.hidden = YES;
         [_collapsedContainerView addSubview:_miniFpsLabel];
 
-        _miniBattLabel = [[UILabel alloc] initWithFrame:CGRectMake(130, 5, 42, 18)];
+        _miniBattLabel = [[SBCPUCapsuleBackdropLabel alloc] initWithFrame:CGRectMake(130, 5, 42, 18)];
         _miniBattLabel.textColor = [UIColor blackColor];
         _miniBattLabel.font = [UIFont systemFontOfSize:12 weight:UIFontWeightBold];
         _miniBattLabel.textAlignment = NSTextAlignmentLeft;
         _miniBattLabel.hidden = YES;
         [_collapsedContainerView addSubview:_miniBattLabel];
 
-        _miniTempLabel = [[UILabel alloc] initWithFrame:CGRectMake(174, 5, 52, 18)];
+        _miniTempLabel = [[SBCPUCapsuleBackdropLabel alloc] initWithFrame:CGRectMake(174, 5, 52, 18)];
         _miniTempLabel.textColor = [UIColor blackColor];
         _miniTempLabel.font = [UIFont systemFontOfSize:12 weight:UIFontWeightBold];
         _miniTempLabel.textAlignment = NSTextAlignmentLeft;
         _miniTempLabel.hidden = YES;
         [_collapsedContainerView addSubview:_miniTempLabel];
 
-        _miniDockInfoLabel = [[UILabel alloc] initWithFrame:CGRectZero];
+        _miniDockInfoLabel = [[SBCPUCapsuleBackdropLabel alloc] initWithFrame:CGRectZero];
         _miniDockInfoLabel.textColor = [UIColor blackColor];
         _miniDockInfoLabel.font = [UIFont systemFontOfSize:11.0f weight:UIFontWeightBold];
         _miniDockInfoLabel.textAlignment = NSTextAlignmentCenter;
@@ -4402,6 +4429,7 @@ return self;
     if (floatingTextOnlyMode) return;
     if (_isCollapsed || self.isShowingNotification) return;
     _isCollapsed = YES;
+    [self applyCapsuleTextFilter];
 
     UIView *parent = self.superview;
     CGRect containerBounds = parent ? parent.bounds : [UIScreen mainScreen].bounds;
@@ -4651,6 +4679,7 @@ return self;
         return;
     }
     _isCollapsed = NO;
+    [self applyCapsuleTextFilter];
     _statusDot.hidden = YES;
     self.collapsedContainerView.hidden = NO;
     self.collapsedContainerView.alpha = 0.0;
@@ -4819,6 +4848,7 @@ return self;
     [self.layer removeAllAnimations];
     self.isCollapsed = NO;
     self.isShowingNotification = YES;
+    [self applyCapsuleTextFilter];
     self.currentNotification = req;
 
     [self.inactivityTimer invalidate];
