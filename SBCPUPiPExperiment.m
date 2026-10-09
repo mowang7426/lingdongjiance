@@ -259,7 +259,7 @@ API_AVAILABLE(ios(15.0))
 }
 @end
 
-static SBCPUPiPManager *Manager;
+static SBCPUPiPManager *Manager API_AVAILABLE(ios(15.0));
 static int PiPTokens[4];
 
 void SBCPUPiPInstall(UIWindow *(^windowProvider)(void), BOOL (^lockedProvider)(void)) {
@@ -272,7 +272,7 @@ void SBCPUPiPInstall(UIWindow *(^windowProvider)(void), BOOL (^lockedProvider)(v
     HostLocked = [lockedProvider copy];
     Session = NSUUID.UUID.UUIDString;
     Manager = [SBCPUPiPManager new];
-    NSArray<NSString *> *names = @[SBCPUPiPStartRequest, SBCPUPiPStopRequest, SBCPUPiPQuery, SBCPUPrefsChanged];
+    NSArray<NSString *> *names = @[[NSString stringWithUTF8String:SBCPUPiPStartRequest], [NSString stringWithUTF8String:SBCPUPiPStopRequest], [NSString stringWithUTF8String:SBCPUPiPQuery], SBCPUPrefsChanged];
     [names enumerateObjectsUsingBlock:^(NSString *name, NSUInteger index, BOOL *stop) {
         (void)stop;
         notify_register_dispatch(name.UTF8String, &PiPTokens[index], dispatch_get_main_queue(), ^(int token) {
