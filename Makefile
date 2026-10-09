@@ -3,15 +3,7 @@ TARGET = iphone:clang:16.5:14.0
 
 include $(THEOS)/makefiles/common.mk
 
-TWEAK_NAME = SBCPUFloating SBCPUPowerd SBCPUFloatingCCRegistration SBCPUHighRefresh
-
-# Independent SpringBoard-only opt-in policy. Theos relocates this tweak/filter
-# for both rootless and roothide; preferences use CFPreferences, not jbroot paths.
-SBCPUHighRefresh_FILES = SBCPUHighRefresh.m
-SBCPUHighRefresh_CFLAGS = -fobjc-arc -std=gnu11
-SBCPUHighRefresh_FRAMEWORKS = UIKit Foundation QuartzCore CoreFoundation
-SBCPUHighRefresh_LIBRARIES = substrate
-SBCPUHighRefresh_INSTALL_TARGET_PROCESSES = SpringBoard
+TWEAK_NAME = SBCPUFloating SBCPUPowerd SBCPUFloatingCCRegistration
 
 # 1. 桌面 UI、悬浮窗、FPS 监测、通知管理
 SBCPUFloating_FILES = Tweak.xm SBCPUTextBackdropLabel.m Shared/LGLiveBackdropView.m Shared/LGWallpaperBlurCache.m Shared/LGSharedSupport.m

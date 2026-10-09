@@ -2,7 +2,6 @@
 #import <Preferences/PSSpecifier.h>
 #import "SBCPUPrefsRootListController.h"
 #import "../SBCPUChargeStore.h"
-#import "../SBCPUHighRefreshPreferences.h"
 #import <notify.h>
 #import <sys/file.h>
 #import <fcntl.h>
@@ -114,7 +113,6 @@ static BOOL InsulationWritePref(NSString *key, id value) {
 // 把旧缓存写回并把开关恢复为关闭。
 - (id)getPreferenceValue:(PSSpecifier *)specifier {
     NSString *key = [specifier propertyForKey:@"key"];
-    if ([key isEqualToString:(__bridge NSString *)SBHR_KEY]) return @(SBHRReadEnabled());
     // Insulation settings are displayed inside SBCPU but intentionally retain
     // Insulation's original preference domain so its original thermal daemon hook
     // reads exactly the same keys. This does not touch SBCPU charging preferences.
@@ -139,11 +137,6 @@ static BOOL InsulationWritePref(NSString *key, id value) {
 
 - (void)setPreferenceValue:(id)value specifier:(PSSpecifier *)specifier {
     NSString *key = [specifier propertyForKey:@"key"];
-    if ([key isEqualToString:(__bridge NSString *)SBHR_KEY]) {
-        if (SBHRWriteEnabled([value boolValue])) notify_post(SBHR_NOTIFY);
-        else [self reloadSpecifiers];
-        return;
-    }
     if (InsulationKey(key)) {
         if (InsulationWritePref(key, value)) {
             CFNotificationCenterRef center = CFNotificationCenterGetDarwinNotifyCenter();

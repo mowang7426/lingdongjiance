@@ -5,20 +5,6 @@
 	<key>items</key>
 	<array>
 		<dict>
-			<key>cell</key><string>PSGroupCell</string>
-			<key>label</key><string>系统界面高刷新（实验性）</string>
-			<key>footerText</key><string>默认关闭，仅在原始屏幕能力 ≥120Hz 的设备上请求 SpringBoard 系统界面高刷新；不是全 App 120 帧，也不保证实际帧率。可能增加耗电与发热。开关影响后续请求，开启或关闭后可能需要用户手动注销才能完整生效或恢复；不会自动注销。保留系统温控及电源策略。</string>
-		</dict>
-		<dict>
-			<key>cell</key><string>PSSwitchCell</string>
-			<key>label</key><string>120 帧（仅系统界面请求）</string>
-			<key>key</key><string>springBoard120HzEnabled</string>
-			<key>defaults</key><string>com.yourname.sbcpufloating.highrefresh</string>
-			<key>default</key><false/>
-			<key>get</key><string>getPreferenceValue:</string>
-			<key>set</key><string>setPreferenceValue:specifier:</string>
-		</dict>
-		<dict>
 			<key>cell</key>
 			<string>PSGroupCell</string>
 			<key>label</key>
