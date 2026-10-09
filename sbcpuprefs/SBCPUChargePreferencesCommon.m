@@ -1,0 +1,166 @@
+#import "SBCPUChargePreferencesCommon.h"
+#import <CoreFoundation/CoreFoundation.h>
+#import "../SBCPUChargeStore.h"
+#include <string.h>
+#include <notify.h>
+#include <sys/socket.h>
+#include <sys/un.h>
+#include <unistd.h>
+#include <errno.h>
+#include <sys/file.h>
+#include <fcntl.h>
+#include "../include/SBCPUChargeProtocol.h"
+
+@implementation SBCPUChargePreferencesCommon
+
++ (id)valueForKey:(NSString *)key defaultValue:(id)defaultValue {
+    if (SBChargeKey(key)) return SBChargeRead()[key] ?: defaultValue;
+    NSDictionary *d = [NSDictionary dictionaryWithContentsOfFile:@SB_PREF_FILE];
+    id v = d[key];
+    if (v) return v;
+
+    CFPropertyListRef cfv = CFPreferencesCopyValue((__bridge CFStringRef)key,
+                                                   CFSTR(SB_PREF_DOMAIN),
+                                                   kCFPreferencesCurrentUser,
+                                                   kCFPreferencesAnyHost);
+    if (cfv) return CFBridgingRelease(cfv);
+    return defaultValue;
+}
+
++ (void)setValues:(NSDictionary *)values {
+    if (!values.count || !SBChargePatch(values)) {
+        NSLog(@"[SBCPUChargePrefs] rejected atomic charge configuration");
+        return;
+    }
+    [self redecideDaemon];
+    CFNotificationCenterPostNotification(CFNotificationCenterGetDarwinNotifyCenter(), CFSTR("com.yourname.sbcpufloating.prefschanged"), NULL, NULL, YES);
+    notify_post("com.yourname.sbcpufloating/settingsChanged");
+}
+
++ (void)setValue:(id)value forKey:(NSString *)key {
+    if (SBChargeKey(key)) {
+        if (!value || !SBChargePatch(@{key: value})) {
+            NSLog(@"[SBCPUChargePrefs] failed to persist %@", key);
+            return;
+        }
+        [self redecideDaemon];
+        CFNotificationCenterPostNotification(CFNotificationCenterGetDarwinNotifyCenter(),
+            CFSTR("com.yourname.sbcpufloating.prefschanged"), NULL, NULL, YES);
+        return;
+    }
+    int prefLock = open(SB_PREF_WRITE_LOCK_PATH, O_CREAT | O_RDWR, 0644);
+    if (prefLock >= 0) flock(prefLock, LOCK_EX);
+    NSMutableDictionary *d = [NSMutableDictionary dictionaryWithContentsOfFile:@SB_PREF_FILE];
+    if (!d) d = [NSMutableDictionary dictionary];
+    NSDictionary *before = [d copy];
+    if (value) d[key] = value;
+    else [d removeObjectForKey:key];
+
+    // V1 keeps the existing SBCPU smart-charge master switch as the single
+    // source of truth. This prevents an old chargeLimitEnabled=YES value from
+    // silently re-enabling the daemon after smartChargeEnable is turned off.
+    if ([key isEqualToString:@"smartChargeEnable"]) {
+        d[@"chargeLimitEnabled"] = @([value boolValue]);
+    }
+
+    // Keep the hysteresis interval valid when sliders are edited independently.
+    if ([key isEqualToString:@"smartChargeUpperLimit"]) {
+        NSInteger upper = [value integerValue];
+        NSInteger lower = [(d[@"smartChargeLowerLimit"] ?: @70) integerValue];
+        if (upper <= lower) d[@"smartChargeLowerLimit"] = @(MAX(0, upper - 1));
+    } else if ([key isEqualToString:@"smartChargeLowerLimit"]) {
+        NSInteger lower = [value integerValue];
+        NSInteger upper = [(d[@"smartChargeUpperLimit"] ?: @80) integerValue];
+        if (lower >= upper) d[@"smartChargeUpperLimit"] = @(MIN(100, lower + 1));
+    } else if ([key isEqualToString:@"smartThermalUpperC"]) {
+        NSInteger upper = [value integerValue];
+        NSInteger lower = [(d[@"smartThermalLowerC"] ?: @38) integerValue];
+        if (upper <= lower) d[@"smartThermalLowerC"] = @(MAX(25, upper - 1));
+    } else if ([key isEqualToString:@"smartThermalLowerC"]) {
+        NSInteger lower = [value integerValue];
+        NSInteger upper = [(d[@"smartThermalUpperC"] ?: @42) integerValue];
+        if (lower >= upper) d[@"smartThermalUpperC"] = @(MIN(60, lower + 1));
+    }
+
+    [d writeToFile:@SB_PREF_FILE atomically:YES];
+    if (prefLock >= 0) { flock(prefLock, LOCK_UN); close(prefLock); }
+
+    // Persist to both stores and synchronize immediately so PreferenceLoader
+    // does not fall back to the plist defaults after navigation.
+    // Publish paired threshold adjustments too; otherwise cfprefsd can restore
+    // the old lower limit after the plist was updated with the new upper limit.
+    NSMutableSet *changedKeys = [NSMutableSet setWithObject:key];
+    for (NSString *candidate in d) {
+        if (![d[candidate] isEqual:before[candidate]]) [changedKeys addObject:candidate];
+    }
+    for (NSString *changed in changedKeys) {
+        CFPreferencesSetValue((__bridge CFStringRef)changed,
+                              (__bridge CFPropertyListRef)d[changed],
+                              CFSTR(SB_PREF_DOMAIN),
+                              kCFPreferencesCurrentUser,
+                              kCFPreferencesAnyHost);
+    }
+    CFPreferencesSynchronize(CFSTR(SB_PREF_DOMAIN),
+                             kCFPreferencesCurrentUser,
+                             kCFPreferencesAnyHost);
+
+    // Keep the SpringBoard-side cached settings in sync immediately, even when
+    // the user changes values from these child preference controllers.
+    CFNotificationCenterPostNotification(CFNotificationCenterGetDarwinNotifyCenter(),
+                                          CFSTR("com.yourname.sbcpufloating.prefschanged"),
+                                          NULL, NULL, YES);
+    notify_post("com.yourname.sbcpufloating/settingsChanged");
+}
+
++ (BOOL)daemonRunning {
+    int fd = socket(AF_UNIX, SOCK_STREAM, 0);
+    if (fd < 0) return NO;
+    struct sockaddr_un addr;
+    memset(&addr, 0, sizeof(addr));
+    addr.sun_family = AF_UNIX;
+    strncpy(addr.sun_path, SB_SOCKET_PATH, sizeof(addr.sun_path) - 1);
+    BOOL ok = connect(fd, (struct sockaddr *)&addr, sizeof(addr)) == 0;
+    close(fd);
+    return ok;
+}
+
++ (void)redecideDaemon {
+    int fd = socket(AF_UNIX, SOCK_STREAM, 0);
+    if (fd < 0) return;
+    struct sockaddr_un addr;
+    memset(&addr, 0, sizeof(addr));
+    addr.sun_family = AF_UNIX;
+    strncpy(addr.sun_path, SB_SOCKET_PATH, sizeof(addr.sun_path) - 1);
+    if (connect(fd, (struct sockaddr *)&addr, sizeof(addr)) != 0) {
+        close(fd);
+        return;
+    }
+
+    sb_cmd_t cmd = {0};
+    cmd.magic = SB_MAGIC;
+    cmd.cmd = SB_CMD_REDECIDE;
+    size_t done = 0;
+    while (done < sizeof(cmd)) {
+        ssize_t n = write(fd, (uint8_t *)&cmd + done, sizeof(cmd) - done);
+        if (n > 0) done += (size_t)n;
+        else if (n < 0 && errno == EINTR) continue;
+        else { close(fd); return; }
+    }
+
+    sb_resp_t resp = {0};
+    done = 0;
+    while (done < sizeof(resp)) {
+        ssize_t n = read(fd, (uint8_t *)&resp + done, sizeof(resp) - done);
+        if (n > 0) done += (size_t)n;
+        else if (n < 0 && errno == EINTR) continue;
+        else break;
+    }
+    close(fd);
+}
+
++ (NSString *)daemonStatusText {
+    if (![self daemonRunning]) return @"值守进程：未运行";
+    return @"值守进程：运行中（由 launchd 托管）";
+}
+
+@end

@@ -1,0 +1,32 @@
+
+ARCHS = arm64 arm64e
+TARGET = iphone:clang:16.5:14.0
+
+include $(THEOS)/makefiles/common.mk
+
+BUNDLE_NAME = SBCPUPrefs
+
+SBCPUPrefs_FILES = SBCPUPrefsRootListController.m SBCPUTextOnlyController.m SBCPUFloatingAdvancedController.m SBCPUPluginConflictController.m SBCPUChoiceControllers.m SBCPUDockReturnController.m SBCPUChargeHistoryController.m SBCPULockCleanupWhitelistController.m SBCPUChargePreferencesCommon.m SBCPUChargeManagementController.m SBCPUChargeLimitController.m SBCPULiquidGlassController.m SBCPULiquidGlassSliderCell.m
+SBCPUPrefs_FRAMEWORKS = UIKit
+SBCPUPrefs_PRIVATE_FRAMEWORKS = Preferences
+SBCPUPrefs_CFLAGS = -fobjc-arc -I../include
+
+# 🔴 核心修复3：指定正确的安装路径和主类
+SBCPUPrefs_INSTALL_PATH = /Library/PreferenceBundles
+SBCPUPrefs_PRINCIPAL_CLASS = SBCPUPrefsRootListController
+SBCPUPrefs_RESOURCE_DIRS = Resources
+
+include $(THEOS_MAKE_PATH)/bundle.mk
+
+# PreferenceLoader does NOT discover entry.plist just because it exists
+# inside the subproject. It must be staged into /Library/PreferenceLoader/Preferences.
+internal-stage::
+	$(ECHO_NOTHING)mkdir -p $(THEOS_STAGING_DIR)/Library/PreferenceLoader/Preferences$(ECHO_END)
+	$(ECHO_NOTHING)cp entry.plist $(THEOS_STAGING_DIR)/Library/PreferenceLoader/Preferences/SBCPUPrefs.plist$(ECHO_END)
+	$(ECHO_NOTHING)cp Resources/icon*.PNG $(THEOS_STAGING_DIR)/Library/PreferenceLoader/Preferences/$(ECHO_END)
+	# The source plist is named SBCPUPrefs-Info.plist, outside Resources.
+	# The previous DEBs had no Info.plist: explicitly pin bundle metadata so
+	# NSBundle/PreferenceLoader cannot fall back to the first linked class.
+	$(ECHO_NOTHING)mkdir -p $(THEOS_STAGING_DIR)/Library/PreferenceBundles/SBCPUPrefs.bundle$(ECHO_END)
+	$(ECHO_NOTHING)cp SBCPUPrefs-Info.plist $(THEOS_STAGING_DIR)/Library/PreferenceBundles/SBCPUPrefs.bundle/Info.plist$(ECHO_END)
+

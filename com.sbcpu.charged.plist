@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>com.sbcpu.charged</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>/var/jb/usr/libexec/SBCPUChargeDaemon</string>
+	</array>
+	<key>RunAtLoad</key>
+	<true/>
+	<!-- 常驻；卸载前由 prerm 先 bootout，避免正常退出后失联。 -->
+	<key>KeepAlive</key>
+	<true/>
+	<key>ProcessType</key>
+	<string>Background</string>
+	<key>ThrottleInterval</key>
+	<integer>5</integer>
+	<key>StandardOutPath</key>
+	<string>/var/jb/var/log/sbcpu_charge.log</string>
+	<key>StandardErrorPath</key>
+	<string>/var/jb/var/log/sbcpu_charge.log</string>
+</dict>
+</plist>

@@ -1,0 +1,185 @@
+
+name: Build 灵动监测
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-14
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Floating position lock regression
+        run: |
+          set -e
+          python3 tests/floating_lock.py
+          TMP_LOCK=$(mktemp -d)
+          clang -std=c11 -Wall -Wextra -Werror -pedantic tests/floating_lock_policy.c -lm -o "$TMP_LOCK/lock"
+          "$TMP_LOCK/lock"
+          clang++ -x c++ -std=c++11 -Wall -Wextra -Werror -pedantic tests/floating_lock_policy.c -o "$TMP_LOCK/lock-cxx"
+          "$TMP_LOCK/lock-cxx"
+
+      - name: Text-only presentation policy regression
+        run: |
+          set -e
+          python3 tests/text_only_mode.py
+          TMP_TEXT=$(mktemp -d)
+          clang -std=c11 -Wall -Wextra -Werror -pedantic tests/text_only_policy.c -o "$TMP_TEXT/policy"
+          "$TMP_TEXT/policy"
+          clang -fobjc-arc -framework Foundation -Wall -Wextra -Werror \
+            tests/text_only_format.m -o "$TMP_TEXT/format"
+          "$TMP_TEXT/format"
+          clang -fobjc-arc -framework Foundation -Wall -Wextra -Werror \
+            tests/text_only_current.m -o "$TMP_TEXT/current"
+          "$TMP_TEXT/current"
+          clang -fobjc-arc -framework Foundation -Wall -Wextra -Werror \
+            tests/text_only_color.m -o "$TMP_TEXT/color"
+          "$TMP_TEXT/color"
+          clang++ -x objective-c++ -std=c++11 -fobjc-arc -framework Foundation -Wall -Wextra -Werror \
+            tests/text_only_color.m -o "$TMP_TEXT/color-cxx"
+          "$TMP_TEXT/color-cxx"
+
+      - name: Insulation integration and settings navigation
+        run: |
+          python3 tests/thermal_removed.py
+          python3 tests/preferences_navigation.py
+
+      - name: Native respring policy regression
+        run: python3 tests/respring_native_policy.py
+
+      - name: Charge configuration regression
+        run: |
+          set -e
+          TMP_STORE=$(mktemp -d)
+          clang -fobjc-arc -framework Foundation -Wall -Wextra -Werror \
+            -DSBCPU_CHARGE_STORE=\"$TMP_STORE/config.plist\" \
+            -DSBCPU_CHARGE_STORE_LOCK=\"$TMP_STORE/config.lock\" \
+            -DSBCPU_CHARGE_LEGACY=\"$TMP_STORE/legacy.plist\" \
+            tests/charge_store.m -o "$TMP_STORE/test"
+          "$TMP_STORE/test"
+          python3 tests/charge_regression.py
+
+      - name: Plugin grouping regression
+        run: |
+          set -e
+          TMP_GROUPS=$(mktemp -d)
+          clang -fobjc-arc -framework Foundation -Wall -Wextra -Werror \
+            tests/plugin_groups.m -o "$TMP_GROUPS/test"
+          "$TMP_GROUPS/test"
+
+      - name: Panel data and display regressions
+        run: |
+          set -e
+          TMP_PANEL=$(mktemp -d)
+          clang -fobjc-arc -framework Foundation -Wall -Wextra -Werror \
+            tests/battery_metrics.m -o "$TMP_PANEL/battery"
+          "$TMP_PANEL/battery"
+          clang++ -x objective-c++ -std=c++11 -fobjc-arc -framework Foundation -Wall -Wextra -Werror \
+            tests/battery_metrics.m -o "$TMP_PANEL/battery-cxx"
+          "$TMP_PANEL/battery-cxx"
+          sh tests/memory_metrics.sh
+          clang -std=c11 -Wall -Wextra -Werror -pedantic \
+            tests/floating_display_policy.c -o "$TMP_PANEL/display"
+          "$TMP_PANEL/display"
+          python3 tests/panel_branding.py
+
+      - name: Install dependencies
+        run: |
+          brew install make dpkg ldid xz
+
+      - name: Set THEOS
+        run: |
+          echo "THEOS=$HOME/theos" >> $GITHUB_ENV
+          echo "THEOS_MAKE_PATH=$HOME/theos/makefiles" >> $GITHUB_ENV
+          echo "$HOME/theos/bin" >> $GITHUB_PATH
+
+      - name: Install RootHide Theos
+        run: |
+          rm -rf "$HOME/theos"
+          git clone --recursive https://github.com/roothide/theos.git "$HOME/theos"
+
+      - name: Install iPhoneOS 16.5 SDK
+        run: |
+          set -e
+          rm -rf /tmp/theos-sdks
+          mkdir -p "$HOME/theos/sdks"
+          git clone --depth=1 --filter=blob:none --sparse https://github.com/theos/sdks.git /tmp/theos-sdks
+          cd /tmp/theos-sdks
+          git sparse-checkout set iPhoneOS16.5.sdk
+          cp -R "iPhoneOS16.5.sdk" "$HOME/theos/sdks/"
+
+      - name: Verify Theos environment
+        run: |
+          set -e
+          echo "THEOS=$THEOS"
+          echo "THEOS_MAKE_PATH=$THEOS_MAKE_PATH"
+          test -f "$THEOS/makefiles/common.mk"
+          test -f "$THEOS/makefiles/tweak.mk"
+          test -f "$THEOS/makefiles/aggregate.mk"
+
+      - name: Verify package metadata
+        run: |
+          set -e
+          grep -E '^(Package|Name|Version|Depends):' control
+
+      - name: Prepare build directory
+        run: |
+          rm -rf build
+          mkdir -p build
+
+      - name: Build Rootless
+        run: |
+          set -e
+          make clean
+          THEOS_PACKAGE_SCHEME=rootless make package FINALPACKAGE=1
+
+      - name: Copy Rootless package
+        run: |
+          set -e
+          ROOTLESS_DEB=$(find packages -maxdepth 1 -type f -name "*.deb" | head -n 1)
+          VERSION=$(awk '/^Version:/ {print $2}' control)
+          cp "$ROOTLESS_DEB" "build/LingDongMonitor-$VERSION-${GITHUB_SHA:0:12}-rootless.deb"
+
+      - name: Clean before RootHide
+        run: |
+          make clean
+          rm -rf packages
+
+      - name: Build RootHide
+        run: |
+          set -e
+          THEOS_PACKAGE_SCHEME=roothide make package FINALPACKAGE=1
+
+      - name: Copy RootHide package
+        run: |
+          set -e
+          ROOTHIDE_DEB=$(find packages -maxdepth 1 -type f -name "*.deb" | head -n 1)
+          VERSION=$(awk '/^Version:/ {print $2}' control)
+          cp "$ROOTHIDE_DEB" "build/LingDongMonitor-$VERSION-${GITHUB_SHA:0:12}-roothide.deb"
+
+      - name: Verify preference bundle is packaged
+        run: |
+          set -e
+          for deb in build/*.deb; do
+            echo "===== Checking $deb ====="
+            dpkg-deb -c "$deb" | grep -E 'PreferenceBundles/SBCPUPrefs\.bundle|PreferenceLoader/Preferences/SBCPUPrefs\.plist'
+            STAGED_ICONS=$(mktemp -d)
+            dpkg-deb -x "$deb" "$STAGED_ICONS"
+            python3 tests/thermal_removed.py --staged "$STAGED_ICONS"
+            python3 tests/panel_branding.py --staged "$STAGED_ICONS"
+            python3 tests/preferences_navigation.py --staged "$STAGED_ICONS"
+            python3 tests/text_only_mode.py --staged "$STAGED_ICONS"
+            rm -rf "$STAGED_ICONS"
+          done
+
+      - name: Upload DEB packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: LingDongMonitor
+          path: build/*.deb
+
