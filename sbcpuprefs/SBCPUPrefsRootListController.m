@@ -10,6 +10,11 @@
 
 static NSString * const InsulationPrefsPath = @"/var/mobile/Library/Preferences/com.be-huge.insulation-prefs.plist";
 static NSString * const InsulationRuntimeNotify = @"com.be-huge.insulation.runtimeState";
+static NSString * const PiPStatusPath = @"/var/mobile/Library/Preferences/com.sbcpu.pip-experiment.status.plist";
+static const char *PiPChanged = "com.sbcpu.pip-experiment.changed";
+static const char *PiPStartRequest = "com.sbcpu.pip-experiment.start";
+static const char *PiPStopRequest = "com.sbcpu.pip-experiment.stop";
+static const char *PiPQuery = "com.sbcpu.pip-experiment.query";
 static BOOL InsulationKey(NSString *key) {
     return [@[@"thermalPowerMode", @"thermalPreventDimmingEnabled",
         @"thermalSuppressNotificationsEnabled", @"thermalDisablePocketSunlightEnabled",
@@ -62,6 +67,8 @@ static BOOL InsulationWritePref(NSString *key, id value) {
 @interface SBCPUPrefsRootListController () {
     int _insulationNotifyToken;
     BOOL _insulationNotifyRegistered;
+    int _pipNotifyToken;
+    BOOL _pipNotifyRegistered;
 }
 @end
 
@@ -84,10 +91,13 @@ static BOOL InsulationWritePref(NSString *key, id value) {
             typeof(self) strongSelf = weakSelf;
             if (strongSelf.isViewLoaded && strongSelf.view.window) [strongSelf reloadSpecifiers];
         }) == NOTIFY_STATUS_OK;
+    _pipNotifyRegistered = notify_register_dispatch(PiPChanged, &_pipNotifyToken,
+        dispatch_get_main_queue(), ^(int token) { (void)token; });
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(insulationPrefsDidChange:) name:UIApplicationWillEnterForegroundNotification object:nil];
 }
 - (void)dealloc {
     if (_insulationNotifyRegistered) notify_cancel(_insulationNotifyToken);
+    if (_pipNotifyRegistered) notify_cancel(_pipNotifyToken);
     [[NSNotificationCenter defaultCenter] removeObserver:self];
 }
 
@@ -129,8 +139,12 @@ static BOOL InsulationWritePref(NSString *key, id value) {
         id value = stored ? CFBridgingRelease(stored) : nil;
         return [value isKindOfClass:[NSNumber class]] ? @([value boolValue]) : @NO;
     }
-    if ([key isEqualToString:@"screenRecordingHighFrameRateEnabled"])
-        return SBChargeRead()[key] ?: @NO;
+    if ([key isEqualToString:@"pipVideoCallExperimentEnabled"]) {
+        CFPreferencesSynchronize(CFSTR("com.yourname.sbcpufloating"), kCFPreferencesCurrentUser, kCFPreferencesAnyHost);
+        CFPropertyListRef stored = CFPreferencesCopyValue((__bridge CFStringRef)key, CFSTR("com.yourname.sbcpufloating"), kCFPreferencesCurrentUser, kCFPreferencesAnyHost);
+        id value = stored ? CFBridgingRelease(stored) : nil;
+        return [value isKindOfClass:[NSNumber class]] ? @([value boolValue]) : @NO;
+    }
 
     return nil;
 }
@@ -154,6 +168,19 @@ static BOOL InsulationWritePref(NSString *key, id value) {
             notify_post("com.yourname.sbcpufloating/settingsChanged");
             CFNotificationCenterPostNotification(CFNotificationCenterGetDarwinNotifyCenter(), CFSTR("com.yourname.sbcpufloating.prefschanged"), NULL, NULL, YES);
         }
+        return;
+    }
+    if ([key isEqualToString:@"pipVideoCallExperimentEnabled"]) {
+        BOOL enabled = [value boolValue];
+        CFPreferencesSetValue((__bridge CFStringRef)key, enabled ? kCFBooleanTrue : kCFBooleanFalse, CFSTR("com.yourname.sbcpufloating"), kCFPreferencesCurrentUser, kCFPreferencesAnyHost);
+        if (!CFPreferencesSynchronize(CFSTR("com.yourname.sbcpufloating"), kCFPreferencesCurrentUser, kCFPreferencesAnyHost)) {
+            UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"PiP 设置失败" message:@"偏好写入失败，开关状态未确认。" preferredStyle:UIAlertControllerStyleAlert];
+            [alert addAction:[UIAlertAction actionWithTitle:@"好" style:UIAlertActionStyleDefault handler:nil]];
+            [self presentViewController:alert animated:YES completion:nil];
+            return;
+        }
+        notify_post("com.yourname.sbcpufloating/settingsChanged");
+        if (!enabled) notify_post(PiPStopRequest);
         return;
     }
     if ([key isEqualToString:@"screenRecordingHighFrameRateEnabled"]) {
@@ -198,6 +225,37 @@ static BOOL InsulationWritePref(NSString *key, id value) {
         return;
     }
     [super tableView:tableView didSelectRowAtIndexPath:indexPath];
+}
+
+- (void)startPiPExperiment {
+    CFPreferencesSynchronize(CFSTR("com.yourname.sbcpufloating"), kCFPreferencesCurrentUser, kCFPreferencesAnyHost);
+    CFPropertyListRef stored = CFPreferencesCopyValue(CFSTR("pipVideoCallExperimentEnabled"), CFSTR("com.yourname.sbcpufloating"), kCFPreferencesCurrentUser, kCFPreferencesAnyHost);
+    BOOL enabled = stored && CFGetTypeID(stored) == CFBooleanGetTypeID() && CFBooleanGetValue((CFBooleanRef)stored);
+    if (stored) CFRelease(stored);
+    if (!enabled) {
+        UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"PiP 未启用" message:@"请先打开“启用 PiP 实验”开关。" preferredStyle:UIAlertControllerStyleAlert];
+        [alert addAction:[UIAlertAction actionWithTitle:@"好" style:UIAlertActionStyleDefault handler:nil]];
+        [self presentViewController:alert animated:YES completion:nil];
+        return;
+    }
+    notify_post(PiPStartRequest);
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.6 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{ [self showPiPExperimentStatus]; });
+}
+
+- (void)stopPiPExperiment {
+    notify_post(PiPStopRequest);
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.3 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{ [self showPiPExperimentStatus]; });
+}
+
+- (void)showPiPExperimentStatus {
+    notify_post(PiPQuery);
+    NSDictionary *status = [NSDictionary dictionaryWithContentsOfFile:PiPStatusPath];
+    NSString *message = [status[@"message"] isKindOfClass:NSString.class] ? status[@"message"] : @"SpringBoard 插件未加载或尚未发布状态";
+    BOOL active = [status[@"active"] boolValue];
+    NSString *text = [NSString stringWithFormat:@"%@\n\n公开回调确认 active：%@\n更新时间：%@", message, active ? @"是" : @"否", status[@"updated"] ?: @"未知"];
+    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"PiP 真实状态 / 错误" message:text preferredStyle:UIAlertControllerStyleAlert];
+    [alert addAction:[UIAlertAction actionWithTitle:@"好" style:UIAlertActionStyleDefault handler:nil]];
+    [self presentViewController:alert animated:YES completion:nil];
 }
 
 - (void)openMoWangSource {

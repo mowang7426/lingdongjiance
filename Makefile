@@ -3,7 +3,7 @@ TARGET = iphone:clang:16.5:14.0
 
 include $(THEOS)/makefiles/common.mk
 
-TWEAK_NAME = SBCPUFloating SBCPUPowerd SBCPUFloatingCCRegistration
+TWEAK_NAME = SBCPUFloating SBCPUPowerd SBCPUFloatingCCRegistration SBCPUPiP
 
 # 1. 桌面 UI、悬浮窗、FPS 监测、通知管理
 SBCPUFloating_FILES = Tweak.xm SBCPUTextBackdropLabel.m Shared/LGLiveBackdropView.m Shared/LGWallpaperBlurCache.m Shared/LGSharedSupport.m
@@ -13,7 +13,11 @@ SBCPUFloating_FRAMEWORKS = UIKit Foundation QuartzCore CoreMotion CoreImage Core
 SBCPUFloating_PRIVATE_FRAMEWORKS = PowerUI IOKit FrontBoardServices
 SBCPUFloating_INSTALL_TARGET_PROCESSES = SpringBoard
 
-# 3. 独立 powerd 满血充电核心：只负责强制快充/解除充电降流限制。
+SBCPUPiP_FILES = SBCPUPiPExperiment.m
+SBCPUPiP_CFLAGS = -fobjc-arc -Iinclude -Wno-deprecated-declarations
+SBCPUPiP_FRAMEWORKS = Foundation UIKit AVKit AVFoundation CoreMedia CoreVideo
+SBCPUPiP_INSTALL_TARGET_PROCESSES = SpringBoard
+
 # 与 thermalmonitord 分离，避免把 powerd 专属 Hook 混入温控核心。
 SBCPUPowerd_FILES = SBCPUPowerd.xm
 SBCPUPowerd_CFLAGS = -fobjc-arc -Iinclude -Wno-deprecated-declarations -DTHEOS_INSIDE -fvisibility=hidden

@@ -1,4 +1,3 @@
-#import "SBCPUTextOnlyPolicy.h"
 #import "SBCPUTextOnlyColor.h"
 #import "SBCPUTextBackdropLabel.h"
 #import "SBCPUCapsuleTextPolicy.h"
@@ -59,6 +58,7 @@ static BOOL sbSMCGetPowerBlocked(void);
 static NSString *sbSMCAvailableString(void);
 static IOReturn sbSMCRedecide(void);
 static void updateSmartCharge(void);
+static void stopPiPExperimentForLock(void) { notify_post("com.sbcpu.pip-experiment.stop"); }
 
 #pragma mark - 1. 👑 幽灵代理类 (欺骗 Objective-C++ 编译器)
 
@@ -9846,14 +9846,17 @@ static void scheduleLockCleanupAfterRealLock(void) {
 %hook SBLockScreenManager
 - (void)lockUIFromSource:(long long)source {
     %orig;
+    stopPiPExperimentForLock();
     scheduleLockCleanupAfterRealLock();
 }
 - (void)lockUIFromSource:(long long)source withOptions:(id)options {
     %orig;
+    stopPiPExperimentForLock();
     scheduleLockCleanupAfterRealLock();
 }
 - (void)_lockUIFromSource:(long long)source withOptions:(id)options {
     %orig;
+    stopPiPExperimentForLock();
     scheduleLockCleanupAfterRealLock();
 }
 %end
