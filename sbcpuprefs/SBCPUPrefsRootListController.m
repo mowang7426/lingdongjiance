@@ -3,11 +3,98 @@
 #import "SBCPUPrefsRootListController.h"
 #import "../SBCPUChargeStore.h"
 #import <notify.h>
+#import <sys/file.h>
+#import <fcntl.h>
+#import <unistd.h>
+#import <roothide.h>
+
+static NSString * const InsulationPrefsPath = @"/var/mobile/Library/Preferences/com.be-huge.insulation-prefs.plist";
+static NSString * const InsulationRuntimeNotify = @"com.be-huge.insulation.runtimeState";
+static BOOL InsulationKey(NSString *key) {
+    return [@[@"thermalPowerMode", @"thermalPreventDimmingEnabled",
+        @"thermalSuppressNotificationsEnabled", @"thermalDisablePocketSunlightEnabled",
+        @"thermalSunlightLockedEnabled", @"cpuMinPowerValue", @"thermalPuppetValue"] containsObject:key];
+}
+static NSString *InsulationPrefsFilePath(void) {
+    const char *path = jbroot([InsulationPrefsPath UTF8String]);
+    return path ? [NSString stringWithUTF8String:path] : nil;
+}
+// The bundled CC writes this jbroot file directly, not via cfprefsd. Never synchronize
+// CFPreferences here: its cached domain may write stale keys back over the CC file.
+static NSDictionary *InsulationReadPrefs(void) {
+    NSString *path = InsulationPrefsFilePath();
+    NSDictionary *prefs = path ? [NSDictionary dictionaryWithContentsOfFile:path] : nil;
+    return [prefs isKindOfClass:[NSDictionary class]] ? prefs : @{};
+}
+static NSString *InsulationMode(NSDictionary *prefs) {
+    NSString *mode = prefs[@"thermalPowerMode"];
+    return [mode isKindOfClass:[NSString class]] &&
+        [@[@"off", @"lowPower", @"fullPower"] containsObject:mode] ? mode : @"off";
+}
+static NSString *InsulationModeTitle(NSString *mode) {
+    NSDictionary *titles = @{@"off": @"苹果原生温控", @"lowPower": @"模拟低电频率",
+        @"fullPower": @"防止温控降频"};
+    return titles[mode];
+}
+static BOOL InsulationWritePref(NSString *key, id value) {
+    NSString *path = InsulationPrefsFilePath();
+    if (!path || !key || !value) return NO;
+    int fd = open([[path stringByAppendingString:@".lock"] fileSystemRepresentation], O_CREAT | O_RDWR, 0666);
+    if (fd < 0) return NO;
+    if (flock(fd, LOCK_EX) != 0) { close(fd); return NO; }
+    BOOL exists = [[NSFileManager defaultManager] fileExistsAtPath:path];
+    NSMutableDictionary *prefs = exists ? [NSMutableDictionary dictionaryWithContentsOfFile:path] : [NSMutableDictionary dictionary];
+    BOOL ok = prefs != nil; // Do not replace an existing unreadable/corrupt plist.
+    if (ok) {
+        prefs[key] = value;
+        ok = [prefs writeToFile:path atomically:YES];
+        if (ok && geteuid() == 0) {
+            // Settings may run as root; the CC and thermal daemon must still read it.
+            ok = chown(path.fileSystemRepresentation, 501, 501) == 0 &&
+                chmod(path.fileSystemRepresentation, 0644) == 0;
+        }
+    }
+    flock(fd, LOCK_UN);
+    close(fd);
+    return ok;
+}
+
+@interface SBCPUPrefsRootListController () {
+    int _insulationNotifyToken;
+    BOOL _insulationNotifyRegistered;
+}
+@end
 
 @implementation SBCPUPrefsRootListController
 
+- (void)insulationPrefsDidChange:(NSNotification *)notification {
+    (void)notification;
+    __weak typeof(self) weakSelf = self;
+    dispatch_async(dispatch_get_main_queue(), ^{
+        typeof(self) strongSelf = weakSelf;
+        if (strongSelf.isViewLoaded && strongSelf.view.window) [strongSelf reloadSpecifiers];
+    });
+}
+- (void)viewDidLoad {
+    [super viewDidLoad];
+    __weak typeof(self) weakSelf = self;
+    _insulationNotifyRegistered = notify_register_dispatch(InsulationRuntimeNotify.UTF8String,
+        &_insulationNotifyToken, dispatch_get_main_queue(), ^(int token) {
+            (void)token;
+            typeof(self) strongSelf = weakSelf;
+            if (strongSelf.isViewLoaded && strongSelf.view.window) [strongSelf reloadSpecifiers];
+        }) == NOTIFY_STATUS_OK;
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(insulationPrefsDidChange:) name:UIApplicationWillEnterForegroundNotification object:nil];
+}
+- (void)dealloc {
+    if (_insulationNotifyRegistered) notify_cancel(_insulationNotifyToken);
+    [[NSNotificationCenter defaultCenter] removeObserver:self];
+}
+
 - (void)viewWillAppear:(BOOL)animated {
     [super viewWillAppear:animated];
+    [self reloadSpecifiers];
+
     // Restore the root title when returning from a detail or host-restored page.
     self.title = @"灵动监测";
     self.navigationItem.title = @"灵动监测";
@@ -29,22 +116,12 @@
     // Insulation settings are displayed inside SBCPU but intentionally retain
     // Insulation's original preference domain so its original thermal daemon hook
     // reads exactly the same keys. This does not touch SBCPU charging preferences.
-    NSSet *insulationKeys = [NSSet setWithArray:@[@"thermalPowerMode",
-        @"thermalPreventDimmingEnabled", @"thermalSuppressNotificationsEnabled",
-        @"thermalDisablePocketSunlightEnabled", @"thermalSunlightLockedEnabled",
-        @"cpuMinPowerValue", @"thermalPuppetValue"]];
-    if ([insulationKeys containsObject:key]) {
-        CFPreferencesSynchronize(CFSTR("com.be-huge.insulation-prefs"), kCFPreferencesCurrentUser, kCFPreferencesAnyHost);
-        CFPropertyListRef stored = CFPreferencesCopyValue((__bridge CFStringRef)key,
-            CFSTR("com.be-huge.insulation-prefs"), kCFPreferencesCurrentUser, kCFPreferencesAnyHost);
-        id value = stored ? CFBridgingRelease(stored) : nil;
+    if (InsulationKey(key)) {
+        NSDictionary *prefs = InsulationReadPrefs();
         if ([key isEqualToString:@"thermalPowerMode"]) {
-            NSString *mode = [value isKindOfClass:[NSString class]] ? value : @"off";
-            NSDictionary *titles = @{@"off": @"苹果原生温控",
-                @"lowPower": @"模拟低电频率", @"fullPower": @"防止温控降频"};
-            return titles[mode] ?: @"苹果原生温控";
+            return InsulationModeTitle(InsulationMode(prefs));
         }
-        return value ?: [specifier propertyForKey:@"default"];
+        return prefs[key] ?: [specifier propertyForKey:@"default"];
     }
     if ([key isEqualToString:@"respringPreserveNativeUnlockEnabled"]) {
         CFPreferencesSynchronize(CFSTR("com.yourname.sbcpufloating"), kCFPreferencesCurrentUser, kCFPreferencesAnyHost);
@@ -60,16 +137,15 @@
 
 - (void)setPreferenceValue:(id)value specifier:(PSSpecifier *)specifier {
     NSString *key = [specifier propertyForKey:@"key"];
-    NSSet *insulationKeys = [NSSet setWithArray:@[@"thermalPowerMode",
-        @"thermalPreventDimmingEnabled", @"thermalSuppressNotificationsEnabled",
-        @"thermalDisablePocketSunlightEnabled", @"thermalSunlightLockedEnabled",
-        @"cpuMinPowerValue", @"thermalPuppetValue"]];
-    if ([insulationKeys containsObject:key]) {
-        CFPreferencesSetValue((__bridge CFStringRef)key, (__bridge CFPropertyListRef)value,
-            CFSTR("com.be-huge.insulation-prefs"), kCFPreferencesCurrentUser, kCFPreferencesAnyHost);
-        CFPreferencesSynchronize(CFSTR("com.be-huge.insulation-prefs"), kCFPreferencesCurrentUser, kCFPreferencesAnyHost);
-        CFNotificationCenterPostNotification(CFNotificationCenterGetDarwinNotifyCenter(),
-            CFSTR("com.be-huge.insulation-executePuppetEvent"), NULL, NULL, YES);
+    if (InsulationKey(key)) {
+        if (InsulationWritePref(key, value)) {
+            CFNotificationCenterRef center = CFNotificationCenterGetDarwinNotifyCenter();
+            CFNotificationCenterPostNotification(center, (__bridge CFStringRef)InsulationRuntimeNotify, NULL, NULL, YES);
+            CFNotificationCenterPostNotification(center, CFSTR("com.be-huge.insulation-executePuppetEvent"), NULL, NULL, YES);
+            if ([key isEqualToString:@"thermalPowerMode"]) {
+                CFNotificationCenterPostNotification(center, CFSTR("com.be-huge.insulation-restartThermalMonitor"), NULL, NULL, YES);
+            }
+        }
         return;
     }
     if ([key isEqualToString:@"respringPreserveNativeUnlockEnabled"]) {
@@ -102,9 +178,7 @@
             message:nil preferredStyle:UIAlertControllerStyleActionSheet];
         NSArray<NSString *> *values = @[@"off", @"lowPower", @"fullPower"];
         NSArray<NSString *> *titles = @[@"苹果原生温控", @"模拟低电频率", @"防止温控降频"];
-        CFPropertyListRef currentRef = CFPreferencesCopyValue(CFSTR("thermalPowerMode"),
-            CFSTR("com.be-huge.insulation-prefs"), kCFPreferencesCurrentUser, kCFPreferencesAnyHost);
-        NSString *current = currentRef ? CFBridgingRelease(currentRef) : @"off";
+        NSString *current = InsulationMode(InsulationReadPrefs());
         for (NSUInteger i = 0; i < values.count; i++) {
             NSString *value = values[i];
             NSString *title = titles[i];

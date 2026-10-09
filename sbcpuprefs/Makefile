@@ -10,6 +10,10 @@ SBCPUPrefs_FILES = SBCPUPrefsRootListController.m SBCPUTextOnlyController.m SBCP
 SBCPUPrefs_FRAMEWORKS = UIKit
 SBCPUPrefs_PRIVATE_FRAMEWORKS = Preferences
 SBCPUPrefs_CFLAGS = -fobjc-arc -I../include
+ifeq ($(THEOS_PACKAGE_SCHEME),roothide)
+SBCPUPrefs_CFLAGS += -I$(THEOS_VENDOR_INCLUDE_PATH)/roothide
+SBCPUPrefs_LDFLAGS += -L$(THEOS_VENDOR_LIBRARY_PATH)/iphone/roothide -lroothide
+endif
 
 # 🔴 核心修复3：指定正确的安装路径和主类
 SBCPUPrefs_INSTALL_PATH = /Library/PreferenceBundles
