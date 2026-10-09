@@ -26,7 +26,12 @@ static inline int SBCPUTextSystemStyle(int screenStyle, int springBoardWindowSty
     if (screenStyle == 1 || screenStyle == 2) return screenStyle;
     return springBoardWindowStyle == 2 ? 2 : 1;
 }
+static inline int SBCPUTextColorMode(long long mode) {
+    return mode >= 0 && mode <= 4 ? mode : 0;
+}
 static inline int SBCPUTextUsesWhite(int mode, int systemStyle) {
-    return mode == 1 || (mode == 0 && systemStyle == 2);
+    mode = SBCPUTextColorMode(mode);
+    // Mode 4 uses automatic color if the private compositor is unavailable.
+    return mode == 1 || ((mode == 0 || mode == 4) && systemStyle == 2);
 }
 #endif

@@ -1,5 +1,6 @@
 #import "SBCPUTextOnlyPolicy.h"
 #import "SBCPUTextOnlyColor.h"
+#import "SBCPUTextBackdropLabel.h"
 #import "SBCPUTextOnlyFormat.h"
 #import "SBCPUTextOnlyCurrent.h"
 
@@ -342,7 +343,7 @@ static BOOL floatingTextOnlyMode = NO;
 static NSInteger floatingTextOnlyPreset = 1;
 static CGFloat floatingTextOnlyX = 0, floatingTextOnlyY = 0;
 static CGFloat floatingTextOnlyFontSize = 13;
-static NSInteger floatingTextOnlyColor = 0; // 0 system appearance, 1 white, 2 black, 3 custom
+static NSInteger floatingTextOnlyColor = 0; // 0 system appearance, 1 white, 2 black, 3 custom, 4 realtime invert
 static SBCPUTextRGBA textOnlyCustomRGBA = {0, 122.0/255.0, 1, 1};
 static BOOL textOnlyShowCPU = YES, textOnlyShowFrequency = YES, textOnlyShowFPS = YES;
 static BOOL textOnlyShowBattery = YES, textOnlyShowTemperature = YES, textOnlyShowCurrent = YES;
@@ -352,7 +353,7 @@ static NSArray<NSDictionary *> *textOnlySignals = nil;
 // smart-stop zero or the legacy 150 mA fallback.
 static NSNumber *textOnlyBatteryCurrent = nil;
 static NSTimeInterval textOnlyCurrentUptime = 0;
-static UILabel *textOnlyLabel = nil;
+static SBCPUTextBackdropLabel *textOnlyLabel = nil;
 static BOOL textOnlyDragging = NO;
 static BOOL textOnlySnapshotValid = NO, textOnlySnapshotCollapsed = NO;
 static CGPoint textOnlySnapshotCenter;
@@ -1031,8 +1032,7 @@ static void LoadPreferences(void) {
     floatingTextOnlyX = SBCPUTextOnlyBound(getFloatPref(CFSTR("floatingTextOnlyX"), 0), -1000, 1000, 0);
     floatingTextOnlyY = SBCPUTextOnlyBound(getFloatPref(CFSTR("floatingTextOnlyY"), 0), -1000, 1000, 0);
     floatingTextOnlyFontSize = SBCPUTextOnlyBound(getFloatPref(CFSTR("floatingTextOnlyFontSize"), 13), 8, 24, 13);
-    floatingTextOnlyColor = getIntPref(CFSTR("floatingTextOnlyColor"), 0);
-    if (floatingTextOnlyColor < 0 || floatingTextOnlyColor > 3) floatingTextOnlyColor = 0;
+    floatingTextOnlyColor = SBCPUTextColorMode(getIntPref(CFSTR("floatingTextOnlyColor"), 0));
     textOnlyCustomRGBA = SBCPUTextDecodeRGBA(getArrayPref(CFSTR("floatingTextOnlyRGBA"), nil));
     // Independent defaults: ordinary show flags never govern this row.
     textOnlyShowCPU = getBoolPref(CFSTR("floatingTextOnlyShowCPU"), YES);
@@ -2470,7 +2470,10 @@ static void applyTextOnlyTextFilter(void) {
     if (!textOnlyLabel) return;
     // Always clear the obsolete compositor filter, including fixed/custom modes.
     textOnlyLabel.layer.compositingFilter = nil;
-    if (!floatingTextOnlyMode) return;
+    if (!floatingTextOnlyMode) {
+        textOnlyLabel.realtimeInvertEnabled = NO;
+        return;
+    }
     // SpringBoard's main-screen environment is authoritative, not foreground-app
     // traits or sampled pixels. Its own overlay window is the unspecified fallback.
     int style = SBCPUTextSystemStyle((int)UIScreen.mainScreen.traitCollection.userInterfaceStyle,
@@ -2481,13 +2484,14 @@ static void applyTextOnlyTextFilter(void) {
     } else {
         textOnlyLabel.textColor = SBCPUTextUsesWhite((int)floatingTextOnlyColor, style) ? UIColor.whiteColor : UIColor.blackColor;
     }
+    textOnlyLabel.realtimeInvertEnabled = (floatingTextOnlyColor == 4 && textOnlyLabel.text.length > 0);
 }
 
 static void applyTextOnlyMode(void) {
     if (!floatingView || !floatingTextOnlyMode) return;
     if (!textOnlyLabel || textOnlyLabel.superview != floatingView) {
         [textOnlyLabel removeFromSuperview];
-        textOnlyLabel = [[UILabel alloc] initWithFrame:CGRectZero];
+        textOnlyLabel = [[SBCPUTextBackdropLabel alloc] initWithFrame:CGRectZero];
         textOnlyLabel.numberOfLines = 1;
         textOnlyLabel.lineBreakMode = NSLineBreakByClipping;
         textOnlyLabel.adjustsFontSizeToFitWidth = YES;
@@ -2551,6 +2555,7 @@ static void handleTextOnlyModeTransition(BOOL wasEnabled) {
         floatingView.isCollapsed = NO;
         applyTextOnlyMode();
     } else {
+        textOnlyLabel.realtimeInvertEnabled = NO;
         textOnlyLabel.layer.compositingFilter = nil;
         [textOnlyLabel removeFromSuperview];
         textOnlyLabel = nil;

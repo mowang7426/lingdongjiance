@@ -11,7 +11,10 @@ int main(void) { @autoreleasepool {
     assert(SBCPUTextSystemStyle(0, 1) == 1);
     assert(SBCPUTextSystemStyle(0, 0) == 1);
     assert(SBCPUTextSystemStyle(99, -1) == 1);
+    for (int mode = 0; mode <= 4; mode++) assert(SBCPUTextColorMode(mode) == mode);
+    assert(SBCPUTextColorMode(-1) == 0 && SBCPUTextColorMode(5) == 0);
     for (int style = 0; style <= 2; style++) {
+        assert(SBCPUTextUsesWhite(4, style) == SBCPUTextUsesWhite(0, style));
         assert(SBCPUTextUsesWhite(1, style));
         assert(!SBCPUTextUsesWhite(2, style));
     }

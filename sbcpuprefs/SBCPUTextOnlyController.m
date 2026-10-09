@@ -78,6 +78,7 @@
     [self reloadSpecifiers];
 }
 - (void)automaticText { [self selectColorMode:0]; }
+- (void)realtimeInvertText { [self selectColorMode:4]; }
 - (void)whiteText { [self selectColorMode:1]; }
 - (void)blackText { [self selectColorMode:2]; }
 - (void)customText {
@@ -131,7 +132,7 @@
     if (!choice) return;
     id rawMode = [self valueForKeyName:@"floatingTextOnlyColor" fallback:@0];
     NSInteger mode = [rawMode isKindOfClass:NSNumber.class] ? [rawMode integerValue] : 0;
-    if (mode < 0 || mode > 3) mode = 0;
+    mode = SBCPUTextColorMode(mode);
     cell.accessoryType = mode == choice.integerValue ? UITableViewCellAccessoryCheckmark : UITableViewCellAccessoryNone;
     cell.textLabel.text = [specifier name];
     cell.imageView.image = nil;

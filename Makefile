@@ -6,10 +6,10 @@ include $(THEOS)/makefiles/common.mk
 TWEAK_NAME = SBCPUFloating SBCPUPowerd SBCPUFloatingCCRegistration
 
 # 1. 桌面 UI、悬浮窗、FPS 监测、通知管理
-SBCPUFloating_FILES = Tweak.xm Shared/LGLiveBackdropView.m Shared/LGWallpaperBlurCache.m Shared/LGSharedSupport.m
+SBCPUFloating_FILES = Tweak.xm SBCPUTextBackdropLabel.m Shared/LGLiveBackdropView.m Shared/LGWallpaperBlurCache.m Shared/LGSharedSupport.m
 SBCPUFloating_CFLAGS = -fobjc-arc -Iinclude -IShared
 SBCPUFloating_LDFLAGS = -Wl,-U,___isOSVersionAtLeast
-SBCPUFloating_FRAMEWORKS = UIKit Foundation QuartzCore CoreMotion CoreImage CoreGraphics
+SBCPUFloating_FRAMEWORKS = UIKit Foundation QuartzCore CoreMotion CoreImage CoreGraphics CoreText
 SBCPUFloating_PRIVATE_FRAMEWORKS = PowerUI IOKit FrontBoardServices
 SBCPUFloating_INSTALL_TARGET_PROCESSES = SpringBoard
 
@@ -72,6 +72,8 @@ include $(THEOS_MAKE_PATH)/aggregate.mk
 
 # 确保 Control Center bundle 的资源和注册过滤器一定进入最终 DEB。
 after-stage::
+	$(ECHO_NOTHING)mkdir -p "$(THEOS_STAGING_DIR)/usr/share/doc/sbcpufloating"$(ECHO_END)
+	$(ECHO_NOTHING)cp "$(THEOS_PROJECT_DIR)/LICENSE.TrollSpeed" "$(THEOS_PROJECT_DIR)/TEXT_ONLY_MODE.md" "$(THEOS_STAGING_DIR)/usr/share/doc/sbcpufloating/"$(ECHO_END)
 	$(ECHO_NOTHING)mkdir -p "$(THEOS_STAGING_DIR)/Library/MobileSubstrate/DynamicLibraries"$(ECHO_END)
 	$(ECHO_NOTHING)cp "$(THEOS_PROJECT_DIR)/SBCPUPowerd.plist" "$(THEOS_STAGING_DIR)/Library/MobileSubstrate/DynamicLibraries/SBCPUPowerd.plist"$(ECHO_END)
 	$(ECHO_NOTHING)mkdir -p "$(THEOS_STAGING_DIR)/Library/ControlCenter/Bundles/SBCPUFloatingCC.bundle"$(ECHO_END)

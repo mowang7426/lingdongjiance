@@ -234,7 +234,7 @@
 			<key>label</key>
 			<string>文字颜色</string>
 			<key>footerText</key>
-			<string>自动模式跟随系统外观：浅色模式黑字，深色模式白字，不检测背景像素。自定义颜色通过系统选色面板选择，完成或下滑关闭后保存并启用；不透明文字，默认蓝色。颜色设置仅影响纯文字浮窗。</string>
+			<string>自动模式跟随系统外观：浅色模式黑字，深色模式白字，不检测背景像素。实时反色由系统合成器按文字后方背景实时生成黑白字，不截图；不支持时回退自动模式，可能增加 GPU 开销。自定义颜色通过系统选色面板选择，完成或下滑关闭后保存并启用；不透明文字，默认蓝色。颜色设置仅影响纯文字浮窗。</string>
 		</dict>
 		<dict>
 			<key>cell</key>
@@ -242,9 +242,15 @@
 			<key>label</key>
 			<string>自动模式</string>
             <key>textColorMode</key><integer>0</integer>
-			<key>action</key>
+            <key>action</key>
 			<string>automaticText</string>
 		</dict>
+        <dict>
+            <key>cell</key><string>PSButtonCell</string>
+            <key>label</key><string>实时反色</string>
+            <key>textColorMode</key><integer>4</integer>
+            <key>action</key><string>realtimeInvertText</string>
+        </dict>
         <dict>
             <key>cell</key><string>PSButtonCell</string>
             <key>label</key><string>自定义文字颜色</string>
