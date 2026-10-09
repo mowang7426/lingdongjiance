@@ -272,7 +272,7 @@ void SBCPUPiPInstall(UIWindow *(^windowProvider)(void), BOOL (^lockedProvider)(v
     HostWindow = [windowProvider copy];
     HostLocked = [lockedProvider copy];
     Session = NSUUID.UUID.UUIDString;
-    Manager = [SBCPUPiPManager new];
+    Manager = (SBCPUPiPManager *)[SBCPUPiPManager new];
     NSArray<NSString *> *names = @[[NSString stringWithUTF8String:SBCPUPiPStartRequest], [NSString stringWithUTF8String:SBCPUPiPStopRequest], [NSString stringWithUTF8String:SBCPUPiPQuery], SBCPUPrefsChanged];
     [names enumerateObjectsUsingBlock:^(NSString *name, NSUInteger index, BOOL *stop) {
         (void)stop;
@@ -291,6 +291,7 @@ void SBCPUPiPInstall(UIWindow *(^windowProvider)(void), BOOL (^lockedProvider)(v
     [Manager preferenceChanged];
 }
 
+void SBCPUPiPStop(NSString *reason) API_AVAILABLE(ios(15.0));
 void SBCPUPiPStop(NSString *reason) {
     dispatch_async(dispatch_get_main_queue(), ^{ [Manager stop:reason ?: @"宿主清理"]; });
 }
@@ -298,10 +299,12 @@ void SBCPUPiPStop(NSString *reason) {
 __attribute__((constructor)) static void SBCPUPiPConstructor(void) {
     if (![NSProcessInfo.processInfo.processName isEqualToString:@"SpringBoard"]) return;
     dispatch_async(dispatch_get_main_queue(), ^{
-        SBCPUPiPInstall(^UIWindow *{
+        if (@available(iOS 15.0, *)) {
+            SBCPUPiPInstall(^UIWindow *{
             for (UIWindow *window in UIApplication.sharedApplication.windows)
                 if (!window.hidden && window.rootViewController && window.windowScene.activationState != UISceneActivationStateUnattached) return window;
             return nil;
-        }, ^BOOL{ return !UIApplication.sharedApplication.protectedDataAvailable; });
+            }, ^BOOL{ return !UIApplication.sharedApplication.protectedDataAvailable; });
+        }
     });
 }
