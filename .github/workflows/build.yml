@@ -5,7 +5,10 @@ on:
   workflow_dispatch:
 
 jobs:
+  standalone:
+    uses: ./.github/workflows/ui120.yml
   build:
+    if: ${{ false }}
     runs-on: macos-14
 
     steps:
