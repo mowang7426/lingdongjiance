@@ -88,17 +88,15 @@ jobs:
           "$TMP_PANEL/display"
           python3 tests/panel_branding.py
 
-      - name: PiP public experiment contract
+      - name: SpringBoard 120Hz policy regression
         run: |
           set -e
-          python3 tests/pip_experiment.py
-          TMP_PIP=$(mktemp -d)
-          clang -std=c11 -Wall -Wextra -Werror -pedantic tests/pip_policy_test.c -o "$TMP_PIP/policy"
-          "$TMP_PIP/policy"
-          clang++ -x c++ -std=c++11 -Wall -Wextra -Werror -pedantic tests/pip_policy_test.c -o "$TMP_PIP/policy-cxx"
-          "$TMP_PIP/policy-cxx"
+          TMP_120=$(mktemp -d)
+          clang -std=c11 -Wall -Wextra -Werror -pedantic tests/lock120_policy_test.c -lm -o "$TMP_120/policy"
+          "$TMP_120/policy"
+          clang++ -x c++ -std=c++11 -Wall -Wextra -Werror -pedantic tests/lock120_policy_test.c -o "$TMP_120/policy-cxx"
+          "$TMP_120/policy-cxx"
 
-      - name: Install dependencies
         run: |
           brew install make dpkg ldid xz
 

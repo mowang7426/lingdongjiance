@@ -8,17 +8,17 @@
 			<key>cell</key>
 			<string>PSGroupCell</string>
 			<key>label</key>
-			<string>公开 AVKit VideoCall PiP 实验</string>
+			<string>SpringBoard 120Hz（实验性）</string>
 			<key>footerText</key>
-			<string>默认关闭，仅 SpringBoard 内使用公开 AVKit VideoCall PiP API；60fps 小型合成 sample buffer，不截图、不修改音频、不辅助 App、不使用 MotionX 或上游私有 Hook。120fps 不保证。</string>
+			<string>默认关闭，仅 iPhone 14 Pro Max（iPhone15,3）且仅 SpringBoard 请求 120Hz。低电量、系统温度临界、锁屏或后台时自动让位；不影响其他 App，也不保证面板或动画始终 120Hz。</string>
 		</dict>
 		<dict>
 			<key>cell</key>
 			<string>PSSwitchCell</string>
 			<key>label</key>
-			<string>启用 PiP 实验（默认关闭）</string>
+			<string>启用 SpringBoard 120Hz（默认关闭）</string>
 			<key>key</key>
-			<string>pipVideoCallExperimentEnabled</string>
+			<string>springBoard120HzEnabled</string>
 			<key>defaults</key>
 			<string>com.yourname.sbcpufloating</string>
 			<key>default</key>
@@ -28,30 +28,7 @@
 			<key>set</key>
 			<string>setPreferenceValue:specifier:</string>
 		</dict>
-		<dict>
-			<key>cell</key>
-			<string>PSButtonCell</string>
-			<key>label</key>
-			<string>启动 PiP</string>
-			<key>action</key>
-			<string>startPiPExperiment</string>
-		</dict>
-		<dict>
-			<key>cell</key>
-			<string>PSButtonCell</string>
-			<key>label</key>
-			<string>停止 PiP</string>
-			<key>action</key>
-			<string>stopPiPExperiment</string>
-		</dict>
-		<dict>
-			<key>cell</key>
-			<string>PSButtonCell</string>
-			<key>label</key>
-			<string>查看 PiP 真实状态/错误</string>
-			<key>action</key>
-			<string>showPiPExperimentStatus</string>
-		</dict>
+
 		<dict>
 			<key>cell</key>
 			<string>PSGroupCell</string>
