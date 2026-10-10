@@ -91,6 +91,15 @@ jobs:
       - name: MotionX availability contract
         run: python3 tests/motionx_availability.py
 
+      - name: MotionX preference persistence contract
+        run: |
+          set -e
+          TMP_MOTIONX=$(mktemp -d)
+          python3 tests/motionx_preferences.py --emit-native "$TMP_MOTIONX/preferences.m"
+          clang -fobjc-arc -framework Foundation -Wall -Wextra -Werror \
+            "$TMP_MOTIONX/preferences.m" -o "$TMP_MOTIONX/preferences"
+          "$TMP_MOTIONX/preferences"
+
       - name: Install dependencies
         run: |
           brew install make dpkg ldid xz

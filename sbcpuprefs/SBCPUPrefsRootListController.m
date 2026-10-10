@@ -129,6 +129,14 @@ static BOOL InsulationWritePref(NSString *key, id value) {
         id value = stored ? CFBridgingRelease(stored) : nil;
         return [value isKindOfClass:[NSNumber class]] ? @([value boolValue]) : @NO;
     }
+    if ([key isEqualToString:@"system120HzEnabled"]) {
+        // Use the same explicit scope as MotionX; no direct jbroot plist writes
+        // or PreferenceLoader/AppValue fallback domains can shadow this value.
+        CFPreferencesSynchronize(CFSTR("com.yourname.sbcpufloating"), kCFPreferencesCurrentUser, kCFPreferencesAnyHost);
+        CFPropertyListRef stored = CFPreferencesCopyValue((__bridge CFStringRef)key, CFSTR("com.yourname.sbcpufloating"), kCFPreferencesCurrentUser, kCFPreferencesAnyHost);
+        id value = stored ? CFBridgingRelease(stored) : nil;
+        return [value isKindOfClass:[NSNumber class]] ? @([value boolValue]) : @NO;
+    }
     if ([key isEqualToString:@"screenRecordingHighFrameRateEnabled"])
         return SBChargeRead()[key] ?: @NO;
 
@@ -153,6 +161,39 @@ static BOOL InsulationWritePref(NSString *key, id value) {
         if (CFPreferencesSynchronize(CFSTR("com.yourname.sbcpufloating"), kCFPreferencesCurrentUser, kCFPreferencesAnyHost)) {
             notify_post("com.yourname.sbcpufloating/settingsChanged");
             CFNotificationCenterPostNotification(CFNotificationCenterGetDarwinNotifyCenter(), CFSTR("com.yourname.sbcpufloating.prefschanged"), NULL, NULL, YES);
+        }
+        return;
+    }
+    if ([key isEqualToString:@"system120HzEnabled"]) {
+        CFStringRef domain = CFSTR("com.yourname.sbcpufloating");
+        CFStringRef preferenceKey = (__bridge CFStringRef)key;
+        CFPreferencesSynchronize(domain, kCFPreferencesCurrentUser, kCFPreferencesAnyHost);
+        CFPropertyListRef previous = CFPreferencesCopyValue(preferenceKey, domain, kCFPreferencesCurrentUser, kCFPreferencesAnyHost);
+        BOOL valid = [value isKindOfClass:[NSNumber class]];
+        BOOL saved = NO;
+        if (valid) {
+            CFPreferencesSetValue(preferenceKey, [value boolValue] ? kCFBooleanTrue : kCFBooleanFalse, domain, kCFPreferencesCurrentUser, kCFPreferencesAnyHost);
+            saved = CFPreferencesSynchronize(domain, kCFPreferencesCurrentUser, kCFPreferencesAnyHost);
+            if (!saved) {
+                // A failed sync can leave the attempted value in this process's
+                // cache. Restore it before the getter refreshes the switch.
+                CFPreferencesSetValue(preferenceKey, previous, domain, kCFPreferencesCurrentUser, kCFPreferencesAnyHost);
+                CFPreferencesSynchronize(domain, kCFPreferencesCurrentUser, kCFPreferencesAnyHost);
+            }
+        }
+        if (previous) CFRelease(previous);
+        if (saved) {
+            notify_post("com.yourname.sbcpufloating/settingsChanged");
+            CFNotificationCenterPostNotification(CFNotificationCenterGetDarwinNotifyCenter(), CFSTR("com.yourname.sbcpufloating.prefschanged"), NULL, NULL, YES);
+        } else {
+            dispatch_async(dispatch_get_main_queue(), ^{
+                [self reloadSpecifier:specifier];
+                UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"120Hz 设置保存失败"
+                    message:@"未能确认偏好设置写入成功，开关已重新读取当前状态。请检查偏好设置访问权限后重试。"
+                    preferredStyle:UIAlertControllerStyleAlert];
+                [alert addAction:[UIAlertAction actionWithTitle:@"好" style:UIAlertActionStyleDefault handler:nil]];
+                [self presentViewController:alert animated:YES completion:nil];
+            });
         }
         return;
     }

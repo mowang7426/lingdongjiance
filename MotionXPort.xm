@@ -9,11 +9,16 @@ static NSString * const kSBCPURefreshDomain = @"com.yourname.sbcpufloating";
 static NSString * const kSBCPURefreshKey = @"system120HzEnabled";
 
 static BOOL SBCPU120HzEnabled(void) {
-    CFPreferencesAppSynchronize((__bridge CFStringRef)kSBCPURefreshDomain);
-    CFPropertyListRef value = CFPreferencesCopyAppValue((__bridge CFStringRef)kSBCPURefreshKey,
-                                                        (__bridge CFStringRef)kSBCPURefreshDomain);
-    BOOL enabled = value && CFGetTypeID(value) == CFBooleanGetTypeID()
-        ? CFBooleanGetValue((CFBooleanRef)value) : NO;
+    CFPreferencesSynchronize((__bridge CFStringRef)kSBCPURefreshDomain,
+                             kCFPreferencesCurrentUser, kCFPreferencesAnyHost);
+    CFPropertyListRef value = CFPreferencesCopyValue((__bridge CFStringRef)kSBCPURefreshKey,
+        (__bridge CFStringRef)kSBCPURefreshDomain, kCFPreferencesCurrentUser, kCFPreferencesAnyHost);
+    BOOL enabled = NO;
+    if (value && CFGetTypeID(value) == CFBooleanGetTypeID()) {
+        enabled = CFBooleanGetValue((CFBooleanRef)value);
+    } else if (value && CFGetTypeID(value) == CFNumberGetTypeID()) {
+        enabled = [(__bridge NSNumber *)value boolValue];
+    }
     if (value) CFRelease(value);
     return enabled;
 }
