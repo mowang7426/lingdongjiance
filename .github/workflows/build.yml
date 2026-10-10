@@ -27,6 +27,14 @@ jobs:
           clang++ -x c++ -std=c++11 -Wall -Wextra -Werror -pedantic tests/floating_lock_policy.c -o "$TMP_LOCK/lock-cxx"
           "$TMP_LOCK/lock-cxx"
 
+      - name: Hidden text production lifecycle with UIKit doubles
+        run: |
+          set -e
+          TMP_HIDDEN=$(mktemp -d)
+          clang -fobjc-arc -fblocks -framework Foundation -framework CoreGraphics -Wall -Wextra -Werror \
+            tests/hidden_text_lifecycle.m -o "$TMP_HIDDEN/lifecycle"
+          "$TMP_HIDDEN/lifecycle"
+
       - name: Text anchor and refresh lifecycle regressions
         run: |
           set -e
