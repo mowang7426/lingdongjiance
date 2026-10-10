@@ -3,6 +3,10 @@
 #include <math.h>
 typedef struct { double x, y; } SBCPUTextPoint;
 typedef struct { int right, bottom; double xMargin, yMargin; } SBCPUTextAnchor;
+/* Pure text always reaches display top; only capsules/panels opt into avoidance. */
+static inline double SBCPUFloatingProtectedTop(int textOnly, int enabled, double originalTop) {
+    return textOnly || !enabled ? 0 : originalTop;
+}
 static inline SBCPUTextPoint SBCPUTextPointMake(double x, double y) { SBCPUTextPoint p = {x,y}; return p; }
 /* rotation: 0 oriented container; +1/-1 landscape in a portrait container;
  * 2 upside down in a portrait container. No UIKit/window conversion is repeated. */

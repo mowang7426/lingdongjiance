@@ -6,8 +6,8 @@ int main(void) {
         assert(SBCPUTextOnlyDockEffective(configured, 1) == 0);
         assert(SBCPUTextOnlyDockEffective(configured, 0) == configured);
     }
-    assert(SBCPUTextOnlyTop(1, 59, 1) == 2);
-    assert(SBCPUTextOnlyTop(1, 0, 0) == 2);
+    assert(SBCPUTextOnlyTop(1, 59, 1) == 0);
+    assert(SBCPUTextOnlyTop(1, 0, 0) == 0);
     assert(SBCPUTextOnlyTop(0, 59, 0) == 67);
     assert(SBCPUTextOnlyTop(0, 59, 1) == 61);
     assert(SBCPUTextOnlyTop(0, 0, 0) == 20);

@@ -343,6 +343,7 @@ static BOOL statusBarDockEnable = NO; // 开启后浮窗吸附到顶部状态栏
 
 // Presentation-only mode: never overwrite normal docking/geometry preferences.
 static BOOL floatingTextOnlyMode = NO;
+static BOOL dynamicIslandProtectionEnable = YES;
 static NSInteger floatingTextOnlyPreset = 1;
 static CGFloat floatingTextOnlyX = 0, floatingTextOnlyY = 0;
 static CGFloat floatingTextOnlyFontSize = 13;
@@ -1031,6 +1032,7 @@ static void LoadPreferences(void) {
     rememberPositionEnable = getBoolPref(CFSTR("rememberPositionEnable"), YES);
     statusBarDockEnable = getBoolPref(CFSTR("statusBarDockEnable"), NO);
     floatingTextOnlyMode = getBoolPref(CFSTR("floatingTextOnlyMode"), NO);
+    dynamicIslandProtectionEnable = getBoolPref(CFSTR("dynamicIslandProtectionEnable"), YES);
     floatingTextOnlyPreset = MAX(0, MIN(2, getIntPref(CFSTR("floatingTextOnlyPreset"), 1)));
     floatingTextOnlyX = SBCPUTextOnlyBound(getFloatPref(CFSTR("floatingTextOnlyX"), 0), -1000, 1000, 0);
     floatingTextOnlyY = SBCPUTextOnlyBound(getFloatPref(CFSTR("floatingTextOnlyY"), 0), -1000, 1000, 0);
@@ -2391,8 +2393,11 @@ static SBCPUTextGeometry textOnlyGeometry(void) {
     // Transform safe rect exactly once into display-direction coordinates.
     SBCPUTextPoint a = SBCPUTextToLogical(SBCPUTextPointMake(safe.left, safe.top), g.bounds.size.width, g.bounds.size.height, g.rotation);
     SBCPUTextPoint b = SBCPUTextToLogical(SBCPUTextPointMake(g.bounds.size.width-safe.right, g.bounds.size.height-safe.bottom), g.bounds.size.width, g.bounds.size.height, g.rotation);
-    g.left = MAX(4, MIN(a.x,b.x)); g.top = MAX(2, MIN(a.y,b.y));
+    g.left = MAX(4, MIN(a.x,b.x));
     g.right = MAX(4, g.width-MAX(a.x,b.x)); g.bottom = MAX(10, g.height-MAX(a.y,b.y));
+    // Display top is ALWAYS reachable for pure text, including locked rotation.
+    // Retain transformed side/bottom bounds; never feed status-bar top back in.
+    g.top = SBCPUFloatingProtectedTop(1, dynamicIslandProtectionEnable, 0);
     return g;
 }
 static SBCPUTextPoint textOnlyLogicalCenter(CGPoint center, SBCPUTextGeometry g) {
@@ -2424,7 +2429,8 @@ static CGPoint resolveLockedTextCenter(void) {
 static CGFloat floatingTopSafeMargin(UIView *container) {
     CGFloat safeTop = 0.0f;
     if (@available(iOS 11.0, *)) safeTop = container.safeAreaInsets.top;
-    return SBCPUTextOnlyTop(floatingTextOnlyMode, safeTop, sbcpuStatusBarDockEffective());
+    return SBCPUFloatingProtectedTop(floatingTextOnlyMode, dynamicIslandProtectionEnable,
+        SBCPUTextOnlyTop(floatingTextOnlyMode, safeTop, sbcpuStatusBarDockEffective()));
 }
 
 // 状态栏胶囊尺寸：接近灵动岛，独立于普通竖屏/横屏折叠尺寸。
@@ -2443,6 +2449,15 @@ static void clampAndPositionFloatingView(CGPoint targetCenter, BOOL animate) {
     if (!floatingView || !floatingView.superview) return;
     if (floatingView.positionLocked) {
         floatingView.center = floatingView.lockedCenter; // safety-only correction after size/rotation changes
+        return;
+    }
+    // Every caller (including a metric tick during dragging) shares logical text bounds.
+    if (floatingTextOnlyMode) {
+        SBCPUTextGeometry g = textOnlyGeometry();
+        SBCPUTextPoint p = textOnlyLogicalCenter(targetCenter,g);
+        p.x = SBCPUTextSafeCoordinate(p.x,g.left+floatingView.bounds.size.width/2,g.width-g.right-floatingView.bounds.size.width/2);
+        p.y = SBCPUTextSafeCoordinate(p.y,g.top+floatingView.bounds.size.height/2,g.height-g.bottom-floatingView.bounds.size.height/2);
+        floatingView.center = textOnlyContainerCenter(p,g);
         return;
     }
     // Periodic layout must not cancel the user-selected undocked interval.
@@ -2706,7 +2721,7 @@ static void updateFloatingSize(void) {
             CGFloat halfH = floatingView.bounds.size.height * 0.5;
             CGFloat x = SBCPUTextOnlyAnchorX((int)floatingTextOnlyPreset, g.width, halfW) + floatingTextOnlyX;
             SBCPUTextPoint p = SBCPUTextPointMake(SBCPUTextSafeCoordinate(x,g.left+halfW,g.width-g.right-halfW),
-                SBCPUTextSafeCoordinate(halfH+2+floatingTextOnlyY,g.top+halfH,g.height-g.bottom-halfH));
+                SBCPUTextSafeCoordinate(halfH+floatingTextOnlyY,g.top+halfH,g.height-g.bottom-halfH));
             floatingView.center = textOnlyContainerCenter(p,g);
         }
         return; // Do not clamp logical text a second time with physical capsule geometry.
@@ -3869,7 +3884,7 @@ return self;
             SBCPUTextGeometry g = textOnlyGeometry();
             SBCPUTextPoint p = textOnlyLogicalCenter(self.center,g);
             floatingTextOnlyX = p.x-SBCPUTextOnlyAnchorX((int)floatingTextOnlyPreset,g.width,self.bounds.size.width/2);
-            floatingTextOnlyY = p.y-self.bounds.size.height/2-2;
+            floatingTextOnlyY = p.y-self.bounds.size.height/2;
             setFloatPref(CFSTR("floatingTextOnlyX"), floatingTextOnlyX);
             setFloatPref(CFSTR("floatingTextOnlyY"), floatingTextOnlyY);
             CFPreferencesAppSynchronize(kPrefAppID);
@@ -4050,7 +4065,7 @@ return self;
             SBCPUTextGeometry g = textOnlyGeometry();
             SBCPUTextPoint p = textOnlyLogicalCenter(self.center,g);
             floatingTextOnlyX = MAX(-1000, MIN(1000, p.x-SBCPUTextOnlyAnchorX((int)floatingTextOnlyPreset,g.width,self.bounds.size.width/2)));
-            floatingTextOnlyY = MAX(-1000, MIN(1000, p.y-self.bounds.size.height/2-2));
+            floatingTextOnlyY = MAX(-1000, MIN(1000, p.y-self.bounds.size.height/2));
             setFloatPref(CFSTR("floatingTextOnlyX"), floatingTextOnlyX);
             setFloatPref(CFSTR("floatingTextOnlyY"), floatingTextOnlyY);
             CFPreferencesAppSynchronize(kPrefAppID);

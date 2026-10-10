@@ -12,7 +12,7 @@ static inline double SBCPUTextOnlyAnchorX(int preset, double width, double halfW
     return preset == 0 ? halfWidth + 4 : (preset == 2 ? width - halfWidth - 4 : width * 0.5);
 }
 static inline double SBCPUTextOnlyTop(int enabled, double safeTop, int dock) {
-    return enabled ? 2 : (dock ? fmax(0, safeTop + 2) : fmax(20, safeTop + (safeTop > 0 ? 8 : 0)));
+    return enabled ? 0 : (dock ? fmax(0, safeTop + 2) : fmax(20, safeTop + (safeTop > 0 ? 8 : 0)));
 }
 // Bounds are measured before the floating view's orientation transform.
 static inline double SBCPUTextOnlyAvailableWidth(double width, double height, int rotated) {
