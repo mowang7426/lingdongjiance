@@ -56,12 +56,12 @@ static BOOL SBCPURefreshSetterABI(SEL sel, const char *argument) {
 }
 - (void)readLock {
     uint64_t state = 0;
-    _lockKnown = _lockToken >= 0 && notify_get_state(_lockToken,&state) == NOTIFY_STATUS_OK;
+    _lockKnown = _lockToken >= 0 && notify_get_state(_lockToken,&state) == NOTIFY_STATUS_OK && state <= 1;
     _locked = !_lockKnown || state != 0;
 }
 - (void)readDisplay {
     uint64_t state = 0;
-    _displayKnown = _displayToken >= 0 && notify_get_state(_displayToken,&state) == NOTIFY_STATUS_OK;
+    _displayKnown = _displayToken >= 0 && notify_get_state(_displayToken,&state) == NOTIFY_STATUS_OK && state <= 1;
     _displayOn = _displayKnown && state != 0;
 }
 - (void)start {
