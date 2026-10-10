@@ -8,31 +8,6 @@
 			<key>cell</key>
 			<string>PSGroupCell</string>
 			<key>label</key>
-			<string>SpringBoard 120Hz（实验性）</string>
-			<key>footerText</key>
-			<string>默认关闭，仅 iPhone 14 Pro Max（iPhone15,3）且仅 SpringBoard 请求 120Hz。低电量、系统温度临界、锁屏或后台时自动让位；不影响其他 App，也不保证面板或动画始终 120Hz。</string>
-		</dict>
-		<dict>
-			<key>cell</key>
-			<string>PSSwitchCell</string>
-			<key>label</key>
-			<string>启用 SpringBoard 120Hz（默认关闭）</string>
-			<key>key</key>
-			<string>springBoard120HzEnabled</string>
-			<key>defaults</key>
-			<string>com.yourname.sbcpufloating</string>
-			<key>default</key>
-			<false/>
-			<key>get</key>
-			<string>getPreferenceValue:</string>
-			<key>set</key>
-			<string>setPreferenceValue:specifier:</string>
-		</dict>
-
-		<dict>
-			<key>cell</key>
-			<string>PSGroupCell</string>
-			<key>label</key>
 			<string>注销便利（实验性）</string>
 			<key>footerText</key>
 			<string>面向 iOS 17.0，默认关闭。开启仅请求系统原生 dontLockAfterCrash 尽量保留注销前的解锁状态，不覆盖认证、不伪造凭据。是否保留由系统决定，不能保证已锁屏时或重启后的行为；重启后的认证仍由系统控制。未完成真机验证。</string>

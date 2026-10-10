@@ -6,7 +6,7 @@ include $(THEOS)/makefiles/common.mk
 TWEAK_NAME = SBCPUFloating SBCPUPowerd SBCPUFloatingCCRegistration
 
 # 1. 桌面 UI、悬浮窗、FPS 监测、通知管理
-SBCPUFloating_FILES = Tweak.xm SBCPULock120.m SBCPUTextBackdropLabel.m Shared/LGLiveBackdropView.m Shared/LGWallpaperBlurCache.m Shared/LGSharedSupport.m
+SBCPUFloating_FILES = Tweak.xm SBCPUTextBackdropLabel.m Shared/LGLiveBackdropView.m Shared/LGWallpaperBlurCache.m Shared/LGSharedSupport.m
 SBCPUFloating_CFLAGS = -fobjc-arc -Iinclude -IShared
 SBCPUFloating_LDFLAGS = -Wl,-U,___isOSVersionAtLeast
 SBCPUFloating_FRAMEWORKS = UIKit Foundation QuartzCore CoreMotion CoreImage CoreGraphics CoreText

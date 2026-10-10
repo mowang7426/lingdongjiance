@@ -123,7 +123,7 @@ static BOOL InsulationWritePref(NSString *key, id value) {
         }
         return prefs[key] ?: [specifier propertyForKey:@"default"];
     }
-    if ([key isEqualToString:@"springBoard120HzEnabled"] || [key isEqualToString:@"respringPreserveNativeUnlockEnabled"]) {
+    if ([key isEqualToString:@"respringPreserveNativeUnlockEnabled"]) {
         CFPreferencesSynchronize(CFSTR("com.yourname.sbcpufloating"), kCFPreferencesCurrentUser, kCFPreferencesAnyHost);
         CFPropertyListRef stored = CFPreferencesCopyValue((__bridge CFStringRef)key, CFSTR("com.yourname.sbcpufloating"), kCFPreferencesCurrentUser, kCFPreferencesAnyHost);
         id value = stored ? CFBridgingRelease(stored) : nil;
@@ -148,7 +148,7 @@ static BOOL InsulationWritePref(NSString *key, id value) {
         }
         return;
     }
-    if ([key isEqualToString:@"springBoard120HzEnabled"] || [key isEqualToString:@"respringPreserveNativeUnlockEnabled"]) {
+    if ([key isEqualToString:@"respringPreserveNativeUnlockEnabled"]) {
         CFPreferencesSetValue((__bridge CFStringRef)key, [value boolValue] ? kCFBooleanTrue : kCFBooleanFalse, CFSTR("com.yourname.sbcpufloating"), kCFPreferencesCurrentUser, kCFPreferencesAnyHost);
         if (CFPreferencesSynchronize(CFSTR("com.yourname.sbcpufloating"), kCFPreferencesCurrentUser, kCFPreferencesAnyHost)) {
             notify_post("com.yourname.sbcpufloating/settingsChanged");
