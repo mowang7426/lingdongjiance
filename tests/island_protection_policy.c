@@ -22,6 +22,12 @@ int main(void) {
                 eq(saved.yMargin,0);
                 SBCPUTextPoint restored=SBCPUTextResolveAnchor(saved,w,h,hw,hh,left,top,right,bottom);
                 eq(restored.x,x); eq(restored.y,hh);
+                for (int tick=0; tick<120; ++tick) {
+                    SBCPUTextPoint periodic=SBCPUTextResolveAnchor(saved,w,h,hw,(tick%2)?12:hh,left,
+                        SBCPUFloatingProtectedTop(1,enabled,59),right,bottom);
+                    eq(periodic.y-((tick%2)?12:hh),0); // metric refresh never drops top edge
+                    eq(saved.yMargin,0);
+                }
                 SBCPUTextPoint physical=SBCPUTextFromLogical(restored,430,932,r);
                 SBCPUTextPoint display=SBCPUTextToLogical(physical,430,932,r);
                 eq(display.x,restored.x); eq(display.y,hh);

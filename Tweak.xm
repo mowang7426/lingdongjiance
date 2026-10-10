@@ -239,6 +239,9 @@ typedef struct {
 @property (nonatomic, assign) BOOL positionLocked;
 @property (nonatomic, assign) CGPoint lockedCenter;
 @property (nonatomic, strong) UITapGestureRecognizer *doubleTapGesture;
+@property (nonatomic, assign) BOOL panBlockedByLock;
+@property (nonatomic, strong) UILabel *lockFeedbackLabel;
+- (void)showLockFeedback:(NSString *)message;
 @property (nonatomic, strong) UITapGestureRecognizer *singleTapGesture;
 @property (nonatomic, strong) UILongPressGestureRecognizer *longPressGesture;
 
@@ -3432,6 +3435,8 @@ static void LGRemoveLabelShadowInView(UIView *view) {
         self.doubleTapGesture.delegate = self;
         [self addGestureRecognizer:self.doubleTapGesture];
         [self.singleTapGesture requireGestureRecognizerToFail:self.doubleTapGesture];
+        // A two-tap lock wins over incidental movement; real drags make the tap fail.
+        [pan requireGestureRecognizerToFail:self.doubleTapGesture];
 
 
         self.longPressGesture = [[UILongPressGestureRecognizer alloc] initWithTarget:self action:@selector(handleLongPress:)];
@@ -3858,19 +3863,79 @@ return self;
     [super setCenter:center];
 }
 
+- (void)showLockFeedback:(NSString *)message {
+    // A sibling toast, never a metric label: no change to text bounds/style/anchor.
+    [self.lockFeedbackLabel removeFromSuperview];
+    UIView *host = self.superview;
+    if (!host) return;
+    UILabel *toast = [[UILabel alloc] initWithFrame:CGRectZero];
+    toast.text = message;
+    toast.font = [UIFont systemFontOfSize:13 weight:UIFontWeightMedium];
+    toast.textColor = UIColor.whiteColor;
+    toast.backgroundColor = [UIColor colorWithWhite:0.08 alpha:0.85];
+    toast.textAlignment = NSTextAlignmentCenter;
+    toast.userInteractionEnabled = NO;
+    toast.layer.cornerRadius = 8;
+    toast.clipsToBounds = YES;
+    [toast sizeToFit];
+    CGSize size = CGSizeMake(MIN(host.bounds.size.width, toast.bounds.size.width+24), 30);
+    CGRect anchor = self.frame;
+    CGFloat x = MIN(MAX(CGRectGetMidX(anchor)-size.width/2,0), MAX(0,host.bounds.size.width-size.width));
+    CGFloat y = MIN(MAX(CGRectGetMaxY(anchor)+8,host.safeAreaInsets.top), MAX(0,host.bounds.size.height-size.height));
+    toast.frame = CGRectMake(x,y,size.width,size.height);
+    toast.transform = self.transform;
+    [host addSubview:toast];
+    self.lockFeedbackLabel = toast;
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW,(int64_t)(1.2*NSEC_PER_SEC)),dispatch_get_main_queue(), ^{
+        [toast removeFromSuperview];
+        if (self.lockFeedbackLabel == toast) self.lockFeedbackLabel = nil;
+    });
+}
+
 - (void)handleDoubleTap:(UITapGestureRecognizer *)tap {
     if (tap.state != UIGestureRecognizerStateEnded) return;
-    if (!self.positionLocked) {
-        CALayer *presentation = (CALayer *)self.layer.presentationLayer;
-        CGPoint anchor = presentation ? presentation.position : self.center;
-        [self.layer removeAllAnimations];
-        self.layoutTransitionAnimating = NO;
-        self.lockedCenter = anchor;
+    NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+    BOOL wasLocked = self.positionLocked;
+    BOOL requestedLocked = !wasLocked;
+    NSArray *keys = @[@"SBCPU.LockedCenter", @"SBCPU.PositionLocked", @"SBCPU.LockedTextAnchor"];
+    NSMutableDictionary *previous = [NSMutableDictionary dictionary];
+    for (NSString *key in keys) previous[key] = [defaults objectForKey:key] ?: NSNull.null;
+    SBCPUTextAnchor previousAnchor = lockedTextAnchor;
+    BOOL previousAnchorValid = lockedTextAnchorValid;
+    CALayer *presentation = (CALayer *)self.layer.presentationLayer;
+    CGPoint anchor = requestedLocked && presentation ? presentation.position : self.center;
+    if (requestedLocked) {
         if (floatingTextOnlyMode) captureLockedTextAnchor(anchor);
         else {
             lockedTextAnchorValid = NO;
-            [[NSUserDefaults standardUserDefaults] removeObjectForKey:@"SBCPU.LockedTextAnchor"];
+            [defaults removeObjectForKey:@"SBCPU.LockedTextAnchor"];
         }
+        [defaults setObject:NSStringFromCGPoint(anchor) forKey:@"SBCPU.LockedCenter"];
+    }
+    NSDictionary *expectedTextAnchor = [defaults dictionaryForKey:@"SBCPU.LockedTextAnchor"];
+    [defaults setBool:requestedLocked forKey:@"SBCPU.PositionLocked"];
+    BOOL saved = [defaults synchronize];
+    BOOL storedLocked = [defaults boolForKey:@"SBCPU.PositionLocked"];
+    BOOL centerMatches = !requestedLocked || [[defaults stringForKey:@"SBCPU.LockedCenter"] isEqualToString:NSStringFromCGPoint(anchor)];
+    NSDictionary *storedTextAnchor = [defaults dictionaryForKey:@"SBCPU.LockedTextAnchor"];
+    BOOL textAnchorMatches = expectedTextAnchor ? [expectedTextAnchor isEqual:storedTextAnchor] : !storedTextAnchor;
+    if (!saved || storedLocked != requestedLocked || !centerMatches || !textAnchorMatches) {
+        for (NSString *key in keys) {
+            id old = previous[key];
+            if (old == NSNull.null) [defaults removeObjectForKey:key];
+            else [defaults setObject:old forKey:key];
+        }
+        [defaults synchronize]; // best-effort rollback; never claim persistence succeeded
+        lockedTextAnchor = previousAnchor;
+        lockedTextAnchorValid = previousAnchorValid;
+        [self showLockFeedback:wasLocked ? @"保存失败，仍已锁定" : @"保存失败，仍已解锁"];
+        return;
+    }
+    // Publish only the verified stored state, not an optimistic toggle.
+    if (storedLocked) {
+        [self.layer removeAllAnimations];
+        self.layoutTransitionAnimating = NO;
+        self.lockedCenter = CGPointFromString([defaults stringForKey:@"SBCPU.LockedCenter"]);
         self.positionLocked = YES;
         self.center = anchor;
         [self.statusDockReturnTimer invalidate];
@@ -3891,10 +3956,7 @@ return self;
         }
         if (sbcpuStatusBarDockEffective() && self.isCollapsed) [self scheduleStatusDockReturn];
     }
-    NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
-    [defaults setObject:NSStringFromCGPoint(self.lockedCenter) forKey:@"SBCPU.LockedCenter"];
-    [defaults setBool:self.positionLocked forKey:@"SBCPU.PositionLocked"];
-    [defaults synchronize];
+    [self showLockFeedback:storedLocked ? @"已锁定" : @"已解锁"];
     [self resetInactivityTimer];
     UIImpactFeedbackGenerator *feedback = [[UIImpactFeedbackGenerator alloc] initWithStyle:UIImpactFeedbackStyleMedium];
     [feedback prepare];
@@ -3902,7 +3964,10 @@ return self;
 }
 
 - (BOOL)gestureRecognizerShouldBegin:(UIGestureRecognizer *)gestureRecognizer {
-    if (self.positionLocked && [gestureRecognizer isKindOfClass:[UIPanGestureRecognizer class]]) return NO;
+    if ([gestureRecognizer isKindOfClass:[UIPanGestureRecognizer class]]) {
+        self.panBlockedByLock = self.positionLocked;
+        if (self.panBlockedByLock) return NO;
+    }
     return YES;
 }
 
@@ -4018,7 +4083,9 @@ return self;
 }
 
 - (void)handlePan:(UIPanGestureRecognizer *)pan {
+    self.panBlockedByLock = SBCPUPanLockBlocked(self.positionLocked,self.panBlockedByLock,pan.state == UIGestureRecognizerStateBegan);
     if (self.positionLocked) return;
+    if (self.panBlockedByLock) return; // A blocked gesture cannot resume by unlocking mid-stream.
     [self resetInactivityTimer];
 
     if (pan.state == UIGestureRecognizerStateBegan) {

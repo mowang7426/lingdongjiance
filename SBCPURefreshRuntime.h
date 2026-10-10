@@ -31,6 +31,7 @@ static BOOL SBCPURefreshSetterABI(SEL sel, const char *argument) {
     CFTimeInterval _first, _last;
     NSUInteger _callbacks;
     double _callbackHz, _sampleSeconds;
+    CFTimeInterval _sampleAt;
 }
 + (instancetype)shared;
 - (void)start;
@@ -72,6 +73,12 @@ static BOOL SBCPURefreshSetterABI(SEL sel, const char *argument) {
     // Inspect but do NOT install guessed NSInteger hooks on private selectors.
     _audit[@"SBProMotionPolicy.maximumSupportedRefreshRate (not hooked)"] = SBCPURefreshMethodABI(NSClassFromString(@"SBProMotionPolicy"),NSSelectorFromString(@"maximumSupportedRefreshRate"));
     _audit[@"SBDisplayRefreshRateController.maximumRefreshRate (not hooked)"] = SBCPURefreshMethodABI(NSClassFromString(@"SBDisplayRefreshRateController"),NSSelectorFromString(@"maximumRefreshRate"));
+    // Read-only discovery of candidate CA policies; signatures are evidence, not permission to invoke.
+    for (NSString *selector in @[@"initWithDisplay:", @"setPreferredFrameRateRange:", @"setHighFrameRateReasons:count:"]) {
+        NSString *key = [@"CADynamicFrameRateSource." stringByAppendingString:selector];
+        _audit[key] = SBCPURefreshMethodABI(NSClassFromString(@"CADynamicFrameRateSource"),NSSelectorFromString(selector));
+    }
+    _audit[@"CADisplay.setHighFrameRateReason: (not called)"] = SBCPURefreshMethodABI(NSClassFromString(@"CADisplay"),NSSelectorFromString(@"setHighFrameRateReason:"));
     _lockToken = _displayToken = -1;
     int result = notify_register_dispatch("com.apple.springboard.lockstate",&_lockToken,dispatch_get_main_queue(),^(int token) {
         (void)token; [self readLock]; [self updateRequest];
@@ -106,12 +113,12 @@ static BOOL SBCPURefreshSetterABI(SEL sel, const char *argument) {
     _reason = _enabled && !_hardware120 ? @"未确认真实120Hz硬件型号，安全暂停" : [NSString stringWithUTF8String:reason];
     if (_reason.length) {
         [_link invalidate]; _link = nil;
-        _first = _last = 0; _callbacks = 0; _callbackHz = _sampleSeconds = 0;
+        _first = _last = 0; _callbacks = 0; _callbackHz = _sampleSeconds = 0; _sampleAt = 0;
         _requestSelector = @"none (paused)";
         return;
     }
     if (!_link) {
-        _first = _last = 0; _callbacks = 0; _callbackHz = _sampleSeconds = 0;
+        _first = _last = 0; _callbacks = 0; _callbackHz = _sampleSeconds = 0; _sampleAt = 0;
         _link = [CADisplayLink displayLinkWithTarget:self selector:@selector(tick:)];
         // Own link is created/reconfigured immediately on state changes, including
         // prefs changed after boot. Never mutate other components' existing links.
@@ -132,13 +139,14 @@ static BOOL SBCPURefreshSetterABI(SEL sel, const char *argument) {
     // Pure memory counters: no preferences sync, notifications, file writes or screenshots.
     CFTimeInterval now = link.timestamp;
     if (!isfinite(now) || now <= _last || (_last && now-_last > 0.5)) {
-        _first = _last = now; _callbacks = 0; _callbackHz = _sampleSeconds = 0; return;
+        _first = _last = now; _callbacks = 0; _callbackHz = _sampleSeconds = 0; _sampleAt = 0; return;
     }
     if (!_first) _first = now;
     _last = now;
     _callbacks++;
     if (now-_first >= 2.0) {
         _sampleSeconds = now-_first;
+        _sampleAt = CACurrentMediaTime();
         _callbackHz = (_callbacks-1)/_sampleSeconds;
         _first = now; _callbacks = 1;
     }
@@ -146,12 +154,20 @@ static BOOL SBCPURefreshSetterABI(SEL sel, const char *argument) {
 - (void)writeDiagnostic {
     NSString *path = SBCPURefreshDiagnosticPath();
     if (!path) return;
+    id gate = [NSBundle.mainBundle objectForInfoDictionaryKey:@"CADisableMinimumFrameDurationOnPhone"];
+    NSString *gateStatus = !gate ? @"absent" : ([gate isKindOfClass:NSNumber.class] ? ([gate boolValue] ? @"true" : @"false") : @"invalid type (not a boolean)");
+    BOOL fresh = _sampleAt > 0 && CACurrentMediaTime()-_sampleAt <= 5 && _sampleSeconds >= 2;
+    NSString *limitation = !_link ? @"请求已暂停，参见暂停原因" : (!fresh ? @"有效采样不足2秒或样本超过5秒，不能判断当前调度结果" : (_callbackHz < 90 ? @"120请求已提交，但本displaylink回调低于90Hz；系统未按请求调度，宿主资格/CA仲裁/主线程负载的具体原因未确认" : @"回调超过90Hz仍不等于面板120Hz，亦非全App资格"));
     NSDictionary *snapshot = @{@"generatedAt":@([NSDate date].timeIntervalSince1970), @"pid":@(getpid()),
         @"loaded":@YES, @"enabled":@(_enabled), @"originalCapability":@(_capability),
         @"hardwareModel":_model ?: @"unknown", @"hardware120":@(_hardware120),
         @"selectorABI":_audit ?: @{}, @"installedHooks":@"none; no UIScreen/private getter spoofing",
         @"requestSelector":_requestSelector ?: @"none", @"requestedHz":@(_link ? 120 : 0),
         @"callbackHz":@(_callbackHz), @"sampleSeconds":@(_sampleSeconds), @"pauseReason":_reason ?: @"初始化中",
+        @"sampleFresh":@(fresh), @"sampleAgeSeconds":@(_sampleAt > 0 ? CACurrentMediaTime()-_sampleAt : -1),
+        @"hostBundle":NSBundle.mainBundle.bundleIdentifier ?: @"unknown", @"phoneHighFrameRateGate":gateStatus,
+        @"limitation":limitation, @"privatePolicy":@"read-only selector audit; no dynamic source/restriction/arbitration override",
+        @"lowPowerMode":@(NSProcessInfo.processInfo.lowPowerModeEnabled), @"thermalState":@(NSProcessInfo.processInfo.thermalState),
         @"scope":@"SpringBoard owned displaylink only; callback Hz != panel Hz or game FPS"};
     // Only a user-requested snapshot crosses processes. No per-frame/status polling writes.
     [snapshot writeToFile:path atomically:YES];
