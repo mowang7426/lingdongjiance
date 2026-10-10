@@ -12,7 +12,8 @@ assert filters.count('"com.apple.') == 1
 if a.staged:
     dylib, = a.staged.rglob('SBCPURefreshRate.dylib')
     plist, = a.staged.rglob('SBCPURefreshRate.plist')
-    assert plist.read_text() == filters
+    # Theos converts OpenStep source to binary plist in both package schemes.
+    assert plistlib.loads(plist.read_bytes()) == {'Filter': {'Bundles': ['com.apple.springboard']}}
     binary = dylib.read_bytes()
     for s in (b'SBCPURefreshRuntime',b'120diagnostic.request',b'callbackHz',b'originalCapability',b'pauseReason',b'preferredFrameRateRange'):
         # Selector begins setPreferred... on some builds; use stored range ABI audit string.
