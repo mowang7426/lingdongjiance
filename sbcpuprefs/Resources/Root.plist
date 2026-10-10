@@ -129,8 +129,6 @@
 			<string>120Hz 高刷新率（实验性）</string>
 			<key>key</key>
 			<string>system120HzEnabled</string>
-			<key>defaults</key>
-			<string>com.yourname.sbcpufloating</string>
 			<key>default</key>
 			<false/>
 			<key>get</key>
@@ -157,8 +155,6 @@
 				<string>模拟低电频率</string>
 				<string>防止温控降频</string>
 			</array>
-			<key>defaults</key>
-			<string>com.be-huge.insulation-prefs</string>
 			<key>cell</key>
 			<string>PSTitleValueCell</string>
 			<key>label</key>
@@ -183,8 +179,6 @@
 			<string>防止温控暗屏</string>
 			<key>default</key>
 			<false/>
-			<key>defaults</key>
-			<string>com.be-huge.insulation-prefs</string>
 			<key>key</key>
 			<string>thermalPreventDimmingEnabled</string>
 		</dict>
@@ -201,8 +195,6 @@
 			<string>禁温度计弹窗</string>
 			<key>default</key>
 			<false/>
-			<key>defaults</key>
-			<string>com.be-huge.insulation-prefs</string>
 			<key>key</key>
 			<string>thermalSuppressNotificationsEnabled</string>
 		</dict>
@@ -213,8 +205,6 @@
 			<string>禁用口袋高温</string>
 			<key>default</key>
 			<false/>
-			<key>defaults</key>
-			<string>com.be-huge.insulation-prefs</string>
 			<key>key</key>
 			<string>thermalDisablePocketSunlightEnabled</string>
 		</dict>
@@ -225,8 +215,6 @@
 			<string>锁定阳光暴晒</string>
 			<key>default</key>
 			<false/>
-			<key>defaults</key>
-			<string>com.be-huge.insulation-prefs</string>
 			<key>key</key>
 			<string>thermalSunlightLockedEnabled</string>
 		</dict>

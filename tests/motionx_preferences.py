@@ -25,7 +25,7 @@ key = 'system120HzEnabled'
 domain = 'com.yourname.sbcpufloating'
 items = plistlib.loads((root / 'sbcpuprefs/Resources/Root.plist').read_bytes())['items']
 item, = [item for item in items if item.get('key') == key]
-assert item['defaults'] == domain and item['default'] is False
+assert item.get('defaults') is None and item['default'] is False
 assert item['get'] == 'getPreferenceValue:'
 assert item['set'] == 'setPreferenceValue:specifier:'
 selector = f'if ([key isEqualToString:@"{key}"])'

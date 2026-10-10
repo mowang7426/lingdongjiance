@@ -54,6 +54,8 @@ static BOOL InsulationWritePref(NSString *key, id value) {
                 chmod(path.fileSystemRepresentation, 0644) == 0;
         }
     }
+    NSDictionary *verified = [NSDictionary dictionaryWithContentsOfFile:path];
+    ok = ok && [verified isKindOfClass:[NSDictionary class]] && [verified[key] isEqual:value];
     flock(fd, LOCK_UN);
     close(fd);
     return ok;
@@ -140,7 +142,7 @@ static BOOL InsulationWritePref(NSString *key, id value) {
     if ([key isEqualToString:@"screenRecordingHighFrameRateEnabled"])
         return SBChargeRead()[key] ?: @NO;
 
-    return nil;
+    return [specifier propertyForKey:@"default"] ?: @NO;
 }
 
 - (void)setPreferenceValue:(id)value specifier:(PSSpecifier *)specifier {
