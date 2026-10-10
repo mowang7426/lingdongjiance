@@ -2,7 +2,6 @@
 #import <Preferences/PSSpecifier.h>
 #import "SBCPUPrefsRootListController.h"
 #import "../SBCPUChargeStore.h"
-#import "../SBCPURefreshDiagnostics.h"
 #import <notify.h>
 #import <sys/file.h>
 #import <fcntl.h>
@@ -127,17 +126,6 @@ static BOOL InsulationWritePref(NSString *key, id value) {
         id value = stored ? CFBridgingRelease(stored) : nil;
         return [value isKindOfClass:[NSNumber class]] ? @([value boolValue]) : @NO;
     }
-    if (([key isEqualToString:@"system120HzEnabled"] || [key isEqualToString:@"dynamicSource120HzEnabled"] || [key isEqualToString:@"hiddenText120HzEnabled"])) {
-        // Use the same explicit scope as MotionX; no direct jbroot plist writes
-        // or PreferenceLoader/AppValue fallback domains can shadow this value.
-        CFPreferencesSynchronize(CFSTR("com.yourname.sbcpufloating"), kCFPreferencesCurrentUser, kCFPreferencesAnyHost);
-        CFPropertyListRef stored = CFPreferencesCopyValue((__bridge CFStringRef)key, CFSTR("com.yourname.sbcpufloating"), kCFPreferencesCurrentUser, kCFPreferencesAnyHost);
-        id value = stored ? CFBridgingRelease(stored) : nil;
-        return [value isKindOfClass:[NSNumber class]] ? @([value boolValue]) : @NO;
-    }
-    if ([key isEqualToString:@"screenRecordingHighFrameRateEnabled"])
-        return SBChargeRead()[key] ?: @NO;
-
     return [specifier propertyForKey:@"default"] ?: @NO;
 }
 
@@ -166,46 +154,6 @@ static BOOL InsulationWritePref(NSString *key, id value) {
     if ([key isEqualToString:@"respringPreserveNativeUnlockEnabled"]) {
         CFPreferencesSetValue((__bridge CFStringRef)key, [value boolValue] ? kCFBooleanTrue : kCFBooleanFalse, CFSTR("com.yourname.sbcpufloating"), kCFPreferencesCurrentUser, kCFPreferencesAnyHost);
         if (CFPreferencesSynchronize(CFSTR("com.yourname.sbcpufloating"), kCFPreferencesCurrentUser, kCFPreferencesAnyHost)) {
-            notify_post("com.yourname.sbcpufloating/settingsChanged");
-            CFNotificationCenterPostNotification(CFNotificationCenterGetDarwinNotifyCenter(), CFSTR("com.yourname.sbcpufloating.prefschanged"), NULL, NULL, YES);
-        }
-        return;
-    }
-    if (([key isEqualToString:@"system120HzEnabled"] || [key isEqualToString:@"dynamicSource120HzEnabled"] || [key isEqualToString:@"hiddenText120HzEnabled"])) {
-        CFStringRef domain = CFSTR("com.yourname.sbcpufloating");
-        CFStringRef preferenceKey = (__bridge CFStringRef)key;
-        CFPreferencesSynchronize(domain, kCFPreferencesCurrentUser, kCFPreferencesAnyHost);
-        CFPropertyListRef previous = CFPreferencesCopyValue(preferenceKey, domain, kCFPreferencesCurrentUser, kCFPreferencesAnyHost);
-        BOOL valid = [value isKindOfClass:[NSNumber class]];
-        BOOL saved = NO;
-        if (valid) {
-            CFPreferencesSetValue(preferenceKey, [value boolValue] ? kCFBooleanTrue : kCFBooleanFalse, domain, kCFPreferencesCurrentUser, kCFPreferencesAnyHost);
-            saved = CFPreferencesSynchronize(domain, kCFPreferencesCurrentUser, kCFPreferencesAnyHost);
-            if (!saved) {
-                // A failed sync can leave the attempted value in this process's
-                // cache. Restore it before the getter refreshes the switch.
-                CFPreferencesSetValue(preferenceKey, previous, domain, kCFPreferencesCurrentUser, kCFPreferencesAnyHost);
-                CFPreferencesSynchronize(domain, kCFPreferencesCurrentUser, kCFPreferencesAnyHost);
-            }
-        }
-        if (previous) CFRelease(previous);
-        if (saved) {
-            notify_post("com.yourname.sbcpufloating/settingsChanged");
-            CFNotificationCenterPostNotification(CFNotificationCenterGetDarwinNotifyCenter(), CFSTR("com.yourname.sbcpufloating.prefschanged"), NULL, NULL, YES);
-        } else {
-            dispatch_async(dispatch_get_main_queue(), ^{
-                [self reloadSpecifier:specifier];
-                UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"120Hz 设置保存失败"
-                    message:@"未能确认偏好设置写入成功，开关已重新读取当前状态。请检查偏好设置访问权限后重试。"
-                    preferredStyle:UIAlertControllerStyleAlert];
-                [alert addAction:[UIAlertAction actionWithTitle:@"好" style:UIAlertActionStyleDefault handler:nil]];
-                [self presentViewController:alert animated:YES completion:nil];
-            });
-        }
-        return;
-    }
-    if ([key isEqualToString:@"screenRecordingHighFrameRateEnabled"]) {
-        if (SBChargePatch(@{key: @([value boolValue])})) {
             notify_post("com.yourname.sbcpufloating/settingsChanged");
             CFNotificationCenterPostNotification(CFNotificationCenterGetDarwinNotifyCenter(), CFSTR("com.yourname.sbcpufloating.prefschanged"), NULL, NULL, YES);
         }
@@ -246,40 +194,6 @@ static BOOL InsulationWritePref(NSString *key, id value) {
         return;
     }
     [super tableView:tableView didSelectRowAtIndexPath:indexPath];
-}
-
-- (void)show120HzDiagnostics {
-    NSTimeInterval requestedAt = NSDate.date.timeIntervalSince1970;
-    notify_post(SBCPU_REFRESH_DIAGNOSTIC_REQUEST);
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(5.5*NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-        NSDictionary *d = [NSDictionary dictionaryWithContentsOfFile:SBCPURefreshDiagnosticPath()];
-        NSString *message;
-        if (![d isKindOfClass:NSDictionary.class] || [d[@"generatedAt"] doubleValue] < requestedAt) {
-            message = @"SpringBoard 未返回新诊断；不能确认模块已加载。请检查 SBCPURefreshRate 注入过滤、RootHide 插件启用名单及 respring 后装载状态。旧文件不作为已加载证据。";
-        } else {
-            NSMutableString *m = [NSMutableString stringWithFormat:@"宿主 SpringBoard pid: %@\n已加载: %@ / 开关: %@\n原始 UIScreen 能力: %@Hz\n请求: %@Hz\n%@\n暂停: %@\n实测回调: %.2fHz（采样 %.2fs）\nHook: %@\n",
-                d[@"pid"], [d[@"loaded"] boolValue] ? @"是" : @"否", [d[@"enabled"] boolValue] ? @"开" : @"关",
-                d[@"originalCapability"],d[@"requestedHz"],d[@"requestSelector"],
-                [d[@"pauseReason"] length] ? d[@"pauseReason"] : @"无（请求中）",
-                [d[@"callbackHz"] doubleValue],[d[@"sampleSeconds"] doubleValue],d[@"installedHooks"]];
-            NSDictionary *text = d[@"hiddenTextExperiment"];
-            [m appendFormat:@"隐藏文本开关: %@ / 已挂载: %@ / 创建次数: %@\nwindow: %@\n状态: %@\nguard: %@\n初始化尝试: %@（关闭后必须注销隔离）\n",
-                [d[@"textEnabled"] boolValue] ? @"ON" : @"OFF", text[@"mounted"], text[@"createdCount"],
-                text[@"windowClass"], text[@"status"], text[@"guard"], text[@"initializationAttempted"]];
-            [m appendFormat:@"机型: %@ / 真实120硬件核对: %@\n",d[@"hardwareModel"], [d[@"hardware120"] boolValue] ? @"是" : @"否/未知（拒绝请求）"];
-            [m appendFormat:@"宿主bundle: %@\nCADisableMinimumFrameDurationOnPhone: %@（只读，不改系统plist）\n调度限制: %@\n低电量: %@ / 热状态: %@\n私有策略: %@\n", d[@"hostBundle"] ?: @"未提供", d[@"phoneHighFrameRateGate"] ?: @"未提供", d[@"limitation"] ?: @"旧诊断未提供", d[@"lowPowerMode"], d[@"thermalState"], d[@"privatePolicy"] ?: @"未提供"];
-            NSDictionary *audit = d[@"selectorABI"];
-            for (NSString *key in [[audit allKeys] sortedArrayUsingSelector:@selector(compare:)])
-                [m appendFormat:@"%@ = %@\n",key,audit[key]];
-            [m appendFormat:@"\n动态实验: %@ / 保护: %@ / 探针: %@\n%@\n",d[@"dynamicEnabled"],d[@"dynamicGuard"],d[@"probeStatus"],d[@"dynamicExperiment"]];
-            [m appendString:@"\n动态源/DisplayLink范围实验仅对SpringBoard主线程新请求生效；pause/reasons保留原行为。动态开关本身不持续keepalive；诊断按需3秒探针。关闭/保护不跨线程重放私有对象，尚无新请求的旧范围需关闭后respring彻底清除。hook安装成功≠触发≠真实120；回调Hz不是面板Hz或游戏FPS。基线测试请关闭旧120开关与其他高刷插件。"];
-            message = m;
-        }
-        UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"120Hz 诊断" message:message preferredStyle:UIAlertControllerStyleAlert];
-        [alert addAction:[UIAlertAction actionWithTitle:@"关闭" style:UIAlertActionStyleCancel handler:nil]];
-        [alert addAction:[UIAlertAction actionWithTitle:@"刷新" style:UIAlertActionStyleDefault handler:^(__unused UIAlertAction *a) { [self show120HzDiagnostics]; }]];
-        [self presentViewController:alert animated:YES completion:nil];
-    });
 }
 
 - (void)openMoWangSource {

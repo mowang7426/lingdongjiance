@@ -3,7 +3,7 @@ TARGET = iphone:clang:16.5:14.0
 
 include $(THEOS)/makefiles/common.mk
 
-TWEAK_NAME = SBCPUFloating SBCPUPowerd SBCPUFloatingCCRegistration SBCPURefreshRate
+TWEAK_NAME = SBCPUFloating SBCPUPowerd SBCPUFloatingCCRegistration
 
 # 1. 桌面 UI、悬浮窗、FPS 监测、通知管理
 SBCPUFloating_FILES = Tweak.xm SBCPUTextBackdropLabel.m Shared/LGLiveBackdropView.m Shared/LGWallpaperBlurCache.m Shared/LGSharedSupport.m
@@ -32,13 +32,6 @@ SBCPUFloatingCCRegistration_FRAMEWORKS = Foundation CoreFoundation
 SBCPUFloatingCCRegistration_LIBRARIES = substrate
 SBCPUFloatingCCRegistration_INSTALL_TARGET_PROCESSES = SpringBoard
 
-# Experimental MotionX-inspired refresh-rate policy port. Controlled by the main prefs switch.
-SBCPURefreshRate_FILES = MotionXPort.xm
-SBCPURefreshRate_CFLAGS = -fobjc-arc -Iinclude -Wno-deprecated-declarations
-SBCPURefreshRate_FRAMEWORKS = Foundation UIKit QuartzCore
-SBCPURefreshRate_LIBRARIES = substrate
-SBCPURefreshRate_INSTALL_TARGET_PROCESSES = SpringBoard
-
 # 6. 充电控制 root daemon（V4.22 Charge Engine V1）：SpringBoard 无 AppleSMC entitlement，
 # 由 launchd 以 root 拉起本 daemon，ldid 签名带 com.apple.private.applesmc.user-access。
 # 分层：SBCPUChargeSMC(AppleSMC读写) + SBCPUChargePowerSource(IOPMPowerSource事件)
@@ -51,8 +44,6 @@ SBCPUChargeDaemon_CODESIGN_FLAGS = -S$(THEOS_PROJECT_DIR)/SBCPUChargeDaemon.enti
 SBCPUChargeDaemon_INSTALL_PATH = /usr/libexec
 
 ifeq ($(THEOS_PACKAGE_SCHEME),roothide)
-SBCPURefreshRate_CFLAGS += -I$(THEOS_VENDOR_INCLUDE_PATH)/roothide
-SBCPURefreshRate_LDFLAGS += -L$(THEOS_VENDOR_LIBRARY_PATH)/iphone/roothide -lroothide
 SBCPUFloatingCCRegistration_LDFLAGS += -L$(THEOS_VENDOR_LIBRARY_PATH)/iphone/roothide -lroothide
 SBCPUChargeDaemon_CFLAGS += -I$(THEOS_VENDOR_INCLUDE_PATH)/roothide
 SBCPUChargeDaemon_LDFLAGS += -L$(THEOS_VENDOR_LIBRARY_PATH)/iphone/roothide -lroothide
@@ -85,7 +76,6 @@ after-stage::
 	$(ECHO_NOTHING)cp "$(THEOS_PROJECT_DIR)/LICENSE.TrollSpeed" "$(THEOS_PROJECT_DIR)/TEXT_ONLY_MODE.md" "$(THEOS_STAGING_DIR)/usr/share/doc/sbcpufloating/"$(ECHO_END)
 	$(ECHO_NOTHING)mkdir -p "$(THEOS_STAGING_DIR)/Library/MobileSubstrate/DynamicLibraries"$(ECHO_END)
 	$(ECHO_NOTHING)cp "$(THEOS_PROJECT_DIR)/SBCPUPowerd.plist" "$(THEOS_STAGING_DIR)/Library/MobileSubstrate/DynamicLibraries/SBCPUPowerd.plist"$(ECHO_END)
-	$(ECHO_NOTHING)cp "$(THEOS_PROJECT_DIR)/SBCPURefreshRate.plist" "$(THEOS_STAGING_DIR)/Library/MobileSubstrate/DynamicLibraries/SBCPURefreshRate.plist"$(ECHO_END)
 	$(ECHO_NOTHING)mkdir -p "$(THEOS_STAGING_DIR)/Library/ControlCenter/Bundles/SBCPUFloatingCC.bundle"$(ECHO_END)
 	$(ECHO_NOTHING)cp "$(THEOS_PROJECT_DIR)/ControlCenter/resources/Info.plist" "$(THEOS_STAGING_DIR)/Library/ControlCenter/Bundles/SBCPUFloatingCC.bundle/Info.plist"$(ECHO_END)
 	$(ECHO_NOTHING)cp "$(THEOS_PROJECT_DIR)"/ControlCenter/resources/SettingsIcon*.png "$(THEOS_STAGING_DIR)/Library/ControlCenter/Bundles/SBCPUFloatingCC.bundle/"$(ECHO_END)

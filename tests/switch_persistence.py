@@ -6,7 +6,7 @@ s=(r/"sbcpuprefs/SBCPUPrefsRootListController.m").read_text()
 p=(r/"sbcpuprefs/Resources/Root.plist").read_bytes()
 items=plistlib.loads(p)["items"]
 keys={x.get("key"):x for x in items if x.get("key")}
-assert keys["system120HzEnabled"].get("defaults") is None
+assert "system120HzEnabled" not in keys
 for k in ("thermalPowerMode","thermalPreventDimmingEnabled","thermalSuppressNotificationsEnabled","thermalDisablePocketSunlightEnabled","thermalSunlightLockedEnabled"):
  assert keys[k].get("defaults") is None, k
 assert "NSDictionary *verified" in s and "verified[key]" in s

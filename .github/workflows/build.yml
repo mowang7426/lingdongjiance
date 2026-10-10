@@ -19,21 +19,11 @@ jobs:
           set -e
           python3 tests/floating_lock.py
           python3 tests/lock_feedback.py
-          python3 tests/refresh_limitations.py
-          python3 tests/hidden_text_experiment.py
           TMP_LOCK=$(mktemp -d)
           clang -std=c11 -Wall -Wextra -Werror -pedantic tests/floating_lock_policy.c -lm -o "$TMP_LOCK/lock"
           "$TMP_LOCK/lock"
           clang++ -x c++ -std=c++11 -Wall -Wextra -Werror -pedantic tests/floating_lock_policy.c -o "$TMP_LOCK/lock-cxx"
           "$TMP_LOCK/lock-cxx"
-
-      - name: Hidden text production lifecycle with UIKit doubles
-        run: |
-          set -e
-          TMP_HIDDEN=$(mktemp -d)
-          clang -fobjc-arc -fblocks -framework Foundation -framework CoreGraphics -Wall -Wextra -Werror \
-            tests/hidden_text_lifecycle.m -o "$TMP_HIDDEN/lifecycle"
-          "$TMP_HIDDEN/lifecycle"
 
       - name: Text anchor and refresh lifecycle regressions
         run: |
@@ -42,20 +32,12 @@ jobs:
           python3 tests/island_protection_wiring.py
           python3 tests/switch_persistence.py
           TMP_NEW=$(mktemp -d)
-          for src in island_protection_policy text_anchor_policy refresh_request_policy dynamic_range_policy; do
+          for src in island_protection_policy text_anchor_policy; do
             clang -std=c11 -Wall -Wextra -Werror -pedantic tests/$src.c -o "$TMP_NEW/$src"
             "$TMP_NEW/$src"
             clang++ -x c++ -std=c++11 -Wall -Wextra -Werror -pedantic tests/$src.c -o "$TMP_NEW/$src-cxx"
             "$TMP_NEW/$src-cxx"
           done
-
-      - name: Production dynamic range hook behavior regression
-        run: |
-          set -e
-          TMP_DYNAMIC=$(mktemp -d)
-          clang -fobjc-arc -fblocks -framework Foundation -Wall -Wextra -Werror \
-            tests/dynamic_range_hooks.m -o "$TMP_DYNAMIC/hooks"
-          "$TMP_DYNAMIC/hooks"
 
       - name: Text-only presentation policy regression
         run: |
@@ -126,18 +108,6 @@ jobs:
             tests/floating_display_policy.c -o "$TMP_PANEL/display"
           "$TMP_PANEL/display"
           python3 tests/panel_branding.py
-
-      - name: MotionX availability contract
-        run: python3 tests/motionx_availability.py
-
-      - name: MotionX preference persistence contract
-        run: |
-          set -e
-          TMP_MOTIONX=$(mktemp -d)
-          python3 tests/motionx_preferences.py --emit-native "$TMP_MOTIONX/preferences.m"
-          clang -fobjc-arc -framework Foundation -Wall -Wextra -Werror \
-            "$TMP_MOTIONX/preferences.m" -o "$TMP_MOTIONX/preferences"
-          "$TMP_MOTIONX/preferences"
 
       - name: Install dependencies
         run: |
@@ -225,8 +195,8 @@ jobs:
             python3 tests/panel_branding.py --staged "$STAGED_ICONS"
             python3 tests/preferences_navigation.py --staged "$STAGED_ICONS"
             python3 tests/text_only_mode.py --staged "$STAGED_ICONS"
+            python3 tests/no_120_experiments.py --staged "$STAGED_ICONS"
             python3 tests/island_protection_wiring.py --staged "$STAGED_ICONS"
-            python3 tests/refresh_package.py --staged "$STAGED_ICONS"
             rm -rf "$STAGED_ICONS"
           done
 

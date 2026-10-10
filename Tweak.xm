@@ -3111,7 +3111,7 @@ static void updateCPU(void) {
     if (_sampleElapsed >= 0.25) {
         double measured = (double)_frameCount / _sampleElapsed;
         if (measured >= 1.0 && measured <= 240.0) {
-            // 轻度平滑，避免 60/120Hz 之间因单次抖动跳变；不再使用 1 秒滞后窗口。
+            // 轻度平滑，避免采样抖动导致显示跳变；不再使用 1 秒滞后窗口。
             _smoothedFPS = (_smoothedFPS > 0.0) ? (_smoothedFPS * 0.35 + measured * 0.65) : measured;
             self.currentFPS = _smoothedFPS;
         }
@@ -6426,7 +6426,7 @@ static UIImage *sbcpuIconForTitle(NSString *title, NSInteger section) {
     NSString *sym = nil;
     NSDictionary *rules = @{
         @"cpu.fill": @[@"cpu", @"频率", @"核心", @"占用"],
-        @"gauge.fill": @[@"fps", @"帧率", @"gauge", @"网速", @"网络", @"高刷"],
+        @"gauge.fill": @[@"fps", @"帧率", @"gauge", @"网速", @"网络"],
         @"thermometer.sun.fill": @[@"温度", @"温控", @"过热", @"高温", @"发热"],
         @"bolt.fill": @[@"充电", @"快充", @"电流", @"电压", @"功率", @"涓流"],
         @"battery.100percent": @[@"电池", @"电量", @"停充", @"满血"],
