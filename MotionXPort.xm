@@ -12,9 +12,22 @@ static BOOL SBCPU120HzEnabled(void) {
     CFPreferencesAppSynchronize((__bridge CFStringRef)kSBCPURefreshDomain);
     CFPropertyListRef value = CFPreferencesCopyAppValue((__bridge CFStringRef)kSBCPURefreshKey,
                                                         (__bridge CFStringRef)kSBCPURefreshDomain);
-    BOOL enabled = value ? CFBooleanGetValue((CFBooleanRef)value) : NO;
+    BOOL enabled = value && CFGetTypeID(value) == CFBooleanGetTypeID()
+        ? CFBooleanGetValue((CFBooleanRef)value) : NO;
     if (value) CFRelease(value);
     return enabled;
+}
+
+// Keep the iOS 15 range API out of Logos-generated, unannotated globals.
+static void (*SBCPUOriginalSetPreferredFrameRateRange)(id, SEL, CAFrameRateRange)
+    API_AVAILABLE(ios(15.0));
+
+API_AVAILABLE(ios(15.0))
+static void SBCPUSetPreferredFrameRateRange(id self, SEL selector, CAFrameRateRange range) {
+    if (SBCPU120HzEnabled()) {
+        range = CAFrameRateRangeMake(120.0f, 120.0f, 120.0f);
+    }
+    SBCPUOriginalSetPreferredFrameRateRange(self, selector, range);
 }
 
 %group SBCPURefreshRateHooks
@@ -32,15 +45,6 @@ static BOOL SBCPU120HzEnabled(void) {
 - (void)setPreferredFramesPerSecond:(NSInteger)fps {
     if (SBCPU120HzEnabled() && fps > 0) {
         %orig(120);
-        return;
-    }
-    %orig;
-}
-
-- (void)setPreferredFrameRateRange:(CAFrameRateRange)range {
-    if (SBCPU120HzEnabled()) {
-        CAFrameRateRange requested = CAFrameRateRangeMake(120.0f, 120.0f, 120.0f);
-        %orig(requested);
         return;
     }
     %orig;
@@ -72,6 +76,15 @@ static BOOL SBCPU120HzEnabled(void) {
     @autoreleasepool {
         if ([[NSBundle mainBundle].bundleIdentifier isEqualToString:@"com.apple.springboard"]) {
             %init(SBCPURefreshRateHooks);
+            if (@available(iOS 15.0, *)) {
+                Class displayLinkClass = [CADisplayLink class];
+                SEL rangeSelector = @selector(setPreferredFrameRateRange:);
+                if ([displayLinkClass instancesRespondToSelector:rangeSelector]) {
+                    MSHookMessageEx(displayLinkClass, rangeSelector,
+                                    (IMP)SBCPUSetPreferredFrameRateRange,
+                                    (IMP *)&SBCPUOriginalSetPreferredFrameRateRange);
+                }
+            }
         }
     }
 }

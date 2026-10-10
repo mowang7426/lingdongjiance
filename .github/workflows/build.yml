@@ -88,6 +88,9 @@ jobs:
           "$TMP_PANEL/display"
           python3 tests/panel_branding.py
 
+      - name: MotionX availability contract
+        run: python3 tests/motionx_availability.py
+
       - name: Install dependencies
         run: |
           brew install make dpkg ldid xz
