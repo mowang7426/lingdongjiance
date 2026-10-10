@@ -96,7 +96,7 @@ jobs:
           "$TMP_120/policy"
           clang++ -x c++ -std=c++11 -Wall -Wextra -Werror -pedantic tests/lock120_policy_test.c -o "$TMP_120/policy-cxx"
           "$TMP_120/policy-cxx"
-
+      - name: Install dependencies
         run: |
           brew install make dpkg ldid xz
 
