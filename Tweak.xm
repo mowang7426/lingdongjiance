@@ -2751,8 +2751,10 @@ static void createCPUWindow(void) {
         isfinite([textAnchor[@"x"] doubleValue]) && isfinite([textAnchor[@"y"] doubleValue]) &&
         [textAnchor[@"x"] doubleValue] >= 0 && [textAnchor[@"y"] doubleValue] >= 0;
     if (lockedTextAnchorValid) {
-        lockedTextAnchor = { [textAnchor[@"right"] boolValue], [textAnchor[@"bottom"] boolValue],
-            [textAnchor[@"x"] doubleValue], [textAnchor[@"y"] doubleValue] };
+        lockedTextAnchor.right = [textAnchor[@"right"] boolValue];
+        lockedTextAnchor.bottom = [textAnchor[@"bottom"] boolValue];
+        lockedTextAnchor.xMargin = [textAnchor[@"x"] doubleValue];
+        lockedTextAnchor.yMargin = [textAnchor[@"y"] doubleValue];
     }
     NSString *lockedPoint = [positionDefaults stringForKey:@"SBCPU.LockedCenter"];
     if ([positionDefaults boolForKey:@"SBCPU.PositionLocked"] && lockedPoint.length) {
