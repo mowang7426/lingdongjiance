@@ -127,7 +127,7 @@ static BOOL InsulationWritePref(NSString *key, id value) {
         id value = stored ? CFBridgingRelease(stored) : nil;
         return [value isKindOfClass:[NSNumber class]] ? @([value boolValue]) : @NO;
     }
-    if ([key isEqualToString:@"system120HzEnabled"]) {
+    if (([key isEqualToString:@"system120HzEnabled"] || [key isEqualToString:@"dynamicSource120HzEnabled"])) {
         // Use the same explicit scope as MotionX; no direct jbroot plist writes
         // or PreferenceLoader/AppValue fallback domains can shadow this value.
         CFPreferencesSynchronize(CFSTR("com.yourname.sbcpufloating"), kCFPreferencesCurrentUser, kCFPreferencesAnyHost);
@@ -171,7 +171,7 @@ static BOOL InsulationWritePref(NSString *key, id value) {
         }
         return;
     }
-    if ([key isEqualToString:@"system120HzEnabled"]) {
+    if (([key isEqualToString:@"system120HzEnabled"] || [key isEqualToString:@"dynamicSource120HzEnabled"])) {
         CFStringRef domain = CFSTR("com.yourname.sbcpufloating");
         CFStringRef preferenceKey = (__bridge CFStringRef)key;
         CFPreferencesSynchronize(domain, kCFPreferencesCurrentUser, kCFPreferencesAnyHost);
@@ -251,7 +251,7 @@ static BOOL InsulationWritePref(NSString *key, id value) {
 - (void)show120HzDiagnostics {
     NSTimeInterval requestedAt = NSDate.date.timeIntervalSince1970;
     notify_post(SBCPU_REFRESH_DIAGNOSTIC_REQUEST);
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.6*NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(5.5*NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
         NSDictionary *d = [NSDictionary dictionaryWithContentsOfFile:SBCPURefreshDiagnosticPath()];
         NSString *message;
         if (![d isKindOfClass:NSDictionary.class] || [d[@"generatedAt"] doubleValue] < requestedAt) {
@@ -267,7 +267,8 @@ static BOOL InsulationWritePref(NSString *key, id value) {
             NSDictionary *audit = d[@"selectorABI"];
             for (NSString *key in [[audit allKeys] sortedArrayUsingSelector:@selector(compare:)])
                 [m appendFormat:@"%@ = %@\n",key,audit[key]];
-            [m appendString:@"\n开启且解锁后等待至少3秒再诊断。回调Hz不是屏幕panelHz或游戏FPS；本模块不篡改UIScreen能力，仅请求SpringBoard自己的displaylink，系统可降级到60Hz，不保证全App/全系统120。若请求存在但低于120，本框架无法绕过系统显示仲裁。锁屏/AOD、低电量模式和高温时停止；持续请求会增加耗电。"];
+            [m appendFormat:@"\n动态实验: %@ / 保护: %@ / 探针: %@\n%@\n",d[@"dynamicEnabled"],d[@"dynamicGuard"],d[@"probeStatus"],d[@"dynamicExperiment"]];
+            [m appendString:@"\n动态源/DisplayLink范围实验仅对SpringBoard主线程新请求生效；pause/reasons保留原行为。动态开关本身不持续keepalive；诊断按需3秒探针。关闭/保护不跨线程重放私有对象，尚无新请求的旧范围需关闭后respring彻底清除。hook安装成功≠触发≠真实120；回调Hz不是面板Hz或游戏FPS。基线测试请关闭旧120开关与其他高刷插件。"];
             message = m;
         }
         UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"120Hz 诊断" message:message preferredStyle:UIAlertControllerStyleAlert];

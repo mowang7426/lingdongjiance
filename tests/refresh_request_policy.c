@@ -20,6 +20,8 @@ int main(void) {
     assert(strlen(SBCPURefreshPauseReason(1,120,1,1,0,1,0,0,0)));
     assert(strlen(SBCPURefreshPauseReason(1,120,1,1,0,1,1,1,0)));
     for (int thermal=2;thermal<=3;thermal++) assert(strlen(SBCPURefreshPauseReason(1,120,1,1,0,1,1,0,thermal)));
+    assert(strlen(SBCPURefreshPauseReason(1,120,1,1,0,1,1,0,-1)));
+    assert(strlen(SBCPURefreshPauseReason(1,120,1,1,0,1,1,0,99)));
     puts("PASS refresh request: real120 whitelist, default OFF, absent ABI, lock/AOD, unknown state, display off, LPM, serious/critical thermal");
     return 0;
 }

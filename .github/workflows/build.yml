@@ -33,12 +33,20 @@ jobs:
           python3 tests/island_protection_wiring.py
           python3 tests/switch_persistence.py
           TMP_NEW=$(mktemp -d)
-          for src in island_protection_policy text_anchor_policy refresh_request_policy; do
+          for src in island_protection_policy text_anchor_policy refresh_request_policy dynamic_range_policy; do
             clang -std=c11 -Wall -Wextra -Werror -pedantic tests/$src.c -o "$TMP_NEW/$src"
             "$TMP_NEW/$src"
             clang++ -x c++ -std=c++11 -Wall -Wextra -Werror -pedantic tests/$src.c -o "$TMP_NEW/$src-cxx"
             "$TMP_NEW/$src-cxx"
           done
+
+      - name: Production dynamic range hook behavior regression
+        run: |
+          set -e
+          TMP_DYNAMIC=$(mktemp -d)
+          clang -fobjc-arc -fblocks -framework Foundation -Wall -Wextra -Werror \
+            tests/dynamic_range_hooks.m -o "$TMP_DYNAMIC/hooks"
+          "$TMP_DYNAMIC/hooks"
 
       - name: Text-only presentation policy regression
         run: |

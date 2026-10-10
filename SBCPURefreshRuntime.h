@@ -19,8 +19,13 @@ static BOOL SBCPURefreshSetterABI(SEL sel, const char *argument) {
         strcmp([sig getArgumentTypeAtIndex:2],argument) == 0;
 }
 
+#import "SBCPUDynamicRangeHooks.h"
+
 @interface SBCPURefreshRuntime : NSObject {
     CADisplayLink *_link;
+    BOOL _dynamicEnabled, _probeRequested;
+    NSUInteger _probeGeneration;
+    NSString *_probeStatus;
     BOOL _enabled, _lockKnown, _locked, _displayKnown, _displayOn, _rangeABI, _fpsABI;
     NSInteger _capability;
     BOOL _hardware120;
@@ -38,6 +43,8 @@ static BOOL SBCPURefreshSetterABI(SEL sel, const char *argument) {
 - (void)updateRequest;
 - (void)tick:(CADisplayLink *)link;
 - (void)writeDiagnostic;
+- (void)startProbe;
+- (NSString *)dynamicGuard;
 @end
 
 @implementation SBCPURefreshRuntime
@@ -73,8 +80,8 @@ static BOOL SBCPURefreshSetterABI(SEL sel, const char *argument) {
     // Inspect but do NOT install guessed NSInteger hooks on private selectors.
     _audit[@"SBProMotionPolicy.maximumSupportedRefreshRate (not hooked)"] = SBCPURefreshMethodABI(NSClassFromString(@"SBProMotionPolicy"),NSSelectorFromString(@"maximumSupportedRefreshRate"));
     _audit[@"SBDisplayRefreshRateController.maximumRefreshRate (not hooked)"] = SBCPURefreshMethodABI(NSClassFromString(@"SBDisplayRefreshRateController"),NSSelectorFromString(@"maximumRefreshRate"));
-    // Read-only discovery of candidate CA policies; signatures are evidence, not permission to invoke.
-    for (NSString *selector in @[@"initWithDisplay:", @"setPreferredFrameRateRange:", @"setHighFrameRateReasons:count:"]) {
+    // Range hook only after strict ABI validation; pause/reason signatures are audit-only.
+    for (NSString *selector in @[@"initWithDisplay:", @"setPreferredFrameRateRange:", @"setHighFrameRateReasons:count:", @"setPaused:", @"isPaused", @"setHighFrameRateReason:"]) {
         NSString *key = [@"CADynamicFrameRateSource." stringByAppendingString:selector];
         _audit[key] = SBCPURefreshMethodABI(NSClassFromString(@"CADynamicFrameRateSource"),NSSelectorFromString(selector));
     }
@@ -91,11 +98,11 @@ static BOOL SBCPURefreshSetterABI(SEL sel, const char *argument) {
     [self readLock]; [self readDisplay];
     int prefsToken;
     notify_register_dispatch("com.yourname.sbcpufloating/settingsChanged",&prefsToken,dispatch_get_main_queue(),^(int token) {
-        (void)token; self->_enabled = SBCPU120HzEnabled(); [self updateRequest];
+        (void)token; self->_enabled = SBCPU120HzEnabled(); self->_dynamicEnabled = SBCPUDynamic120HzEnabled(); [self updateRequest];
     });
     int diagnosticToken;
     notify_register_dispatch(SBCPU_REFRESH_DIAGNOSTIC_REQUEST,&diagnosticToken,dispatch_get_main_queue(),^(int token) {
-        (void)token; [self readLock]; [self readDisplay]; [self updateRequest]; [self writeDiagnostic];
+        (void)token; [self startProbe];
     });
     NSNotificationCenter *nc = NSNotificationCenter.defaultCenter;
     for (NSString *name in @[NSProcessInfoPowerStateDidChangeNotification, NSProcessInfoThermalStateDidChangeNotification]) {
@@ -104,14 +111,47 @@ static BOOL SBCPURefreshSetterABI(SEL sel, const char *argument) {
         }];
     }
     _enabled = SBCPU120HzEnabled();
+    _dynamicEnabled = SBCPUDynamic120HzEnabled();
+    SBCPUInstallDynamicHooks(_hardware120 && _capability >= 120, ^NSString *{ return [self dynamicGuard]; });
     [self updateRequest];
 }
+- (NSString *)dynamicGuard {
+    [self readLock]; [self readDisplay];
+    NSInteger thermal = NSProcessInfo.processInfo.thermalState;
+    if (thermal < 0 || thermal > 3) return @"热状态未知，安全透传";
+    const char *reason = SBCPURefreshPauseReason(_dynamicEnabled,(int)_capability,SBCPUDynamicReady,
+        _lockKnown,_locked,_displayKnown,_displayOn,NSProcessInfo.processInfo.lowPowerModeEnabled,(int)thermal);
+    return !_hardware120 ? @"真实120硬件未确认" : [NSString stringWithUTF8String:reason];
+}
+- (NSString *)probeGuard {
+    [self readLock]; [self readDisplay];
+    return [NSString stringWithUTF8String:SBCPURefreshPauseReason(_probeRequested || _enabled,
+        (int)_capability,_rangeABI || _fpsABI,_lockKnown,_locked,_displayKnown,_displayOn,
+        NSProcessInfo.processInfo.lowPowerModeEnabled,(int)NSProcessInfo.processInfo.thermalState)];
+}
+- (void)startProbe {
+    if (_probeRequested) return;
+    [self readLock]; [self readDisplay];
+    _probeRequested = YES; _probeStatus = @"采样中";
+    NSUInteger generation = ++_probeGeneration;
+    [_link invalidate]; _link = nil;
+    [self updateRequest];
+    if (!_link) { _probeRequested = NO; _probeStatus = @"保护拒绝探针"; [self writeDiagnostic]; return; }
+    // One-shot completion + watchdog also handles system-paused callbacks.
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW,5*NSEC_PER_SEC),dispatch_get_main_queue(), ^{
+        if (self->_probeRequested && self->_probeGeneration == generation) {
+            self->_probeRequested = NO; self->_probeStatus = @"超时/保护取消";
+            [self->_link invalidate]; self->_link = nil;
+            [self writeDiagnostic]; [self updateRequest];
+        }
+    });
+}
 - (void)updateRequest {
-    const char *reason = SBCPURefreshPauseReason(_enabled,(int)_capability,_rangeABI || _fpsABI,
+    const char *reason = SBCPURefreshPauseReason(_enabled || _probeRequested,(int)_capability,_rangeABI || _fpsABI,
         _lockKnown,_locked,_displayKnown,_displayOn,NSProcessInfo.processInfo.lowPowerModeEnabled,
         (int)NSProcessInfo.processInfo.thermalState);
-    _reason = _enabled && !_hardware120 ? @"未确认真实120Hz硬件型号，安全暂停" : [NSString stringWithUTF8String:reason];
-    if (_reason.length) {
+    _reason = (_enabled || _dynamicEnabled) && !_hardware120 ? @"未确认真实120Hz硬件型号，安全暂停" : [NSString stringWithUTF8String:reason];
+    if (_reason.length || (!_enabled && !_probeRequested)) {
         [_link invalidate]; _link = nil;
         _first = _last = 0; _callbacks = 0; _callbackHz = _sampleSeconds = 0; _sampleAt = 0;
         _requestSelector = @"none (paused)";
@@ -136,7 +176,14 @@ static BOOL SBCPURefreshSetterABI(SEL sel, const char *argument) {
     }
 }
 - (void)tick:(CADisplayLink *)link {
-    // Pure memory counters: no preferences sync, notifications, file writes or screenshots.
+    // Short manual probe, no periodic keepalive for the dynamic experiment.
+    // Per-frame memory updates only; one async diagnostic at probe completion.
+    if (_probeRequested && [self probeGuard].length) {
+        _probeRequested = NO; _probeStatus = @"保护取消";
+        [_link invalidate]; _link = nil;
+        dispatch_async(dispatch_get_main_queue(), ^{ [self updateRequest]; [self writeDiagnostic]; });
+        return;
+    }
     CFTimeInterval now = link.timestamp;
     if (!isfinite(now) || now <= _last || (_last && now-_last > 0.5)) {
         _first = _last = now; _callbacks = 0; _callbackHz = _sampleSeconds = 0; _sampleAt = 0; return;
@@ -144,11 +191,16 @@ static BOOL SBCPURefreshSetterABI(SEL sel, const char *argument) {
     if (!_first) _first = now;
     _last = now;
     _callbacks++;
-    if (now-_first >= 2.0) {
+    if (now-_first >= (_probeRequested ? 3.0 : 2.0)) {
         _sampleSeconds = now-_first;
         _sampleAt = CACurrentMediaTime();
         _callbackHz = (_callbacks-1)/_sampleSeconds;
         _first = now; _callbacks = 1;
+        if (_probeRequested) {
+            _probeRequested = NO; _probeStatus = @"3秒完成";
+            [_link invalidate]; _link = nil;
+            dispatch_async(dispatch_get_main_queue(), ^{ [self writeDiagnostic]; if (self->_enabled) [self updateRequest]; });
+        }
     }
 }
 - (void)writeDiagnostic {
@@ -157,18 +209,20 @@ static BOOL SBCPURefreshSetterABI(SEL sel, const char *argument) {
     id gate = [NSBundle.mainBundle objectForInfoDictionaryKey:@"CADisableMinimumFrameDurationOnPhone"];
     NSString *gateStatus = !gate ? @"absent" : ([gate isKindOfClass:NSNumber.class] ? ([gate boolValue] ? @"true" : @"false") : @"invalid type (not a boolean)");
     BOOL fresh = _sampleAt > 0 && CACurrentMediaTime()-_sampleAt <= 5 && _sampleSeconds >= 2;
-    NSString *limitation = !_link ? @"请求已暂停，参见暂停原因" : (!fresh ? @"有效采样不足2秒或样本超过5秒，不能判断当前调度结果" : (_callbackHz < 90 ? @"120请求已提交，但本displaylink回调低于90Hz；系统未按请求调度，宿主资格/CA仲裁/主线程负载的具体原因未确认" : @"回调超过90Hz仍不等于面板120Hz，亦非全App资格"));
+    NSString *limitation = !_link && !fresh ? @"请求已暂停，参见暂停原因" : (!fresh ? @"有效采样不足2秒或样本超过5秒，不能判断当前调度结果" : (_callbackHz < 90 ? @"120请求已提交，但本displaylink回调低于90Hz；系统未按请求调度，宿主资格/CA仲裁/主线程负载的具体原因未确认" : @"回调超过90Hz仍不等于面板120Hz，亦非全App资格"));
     NSDictionary *snapshot = @{@"generatedAt":@([NSDate date].timeIntervalSince1970), @"pid":@(getpid()),
-        @"loaded":@YES, @"enabled":@(_enabled), @"originalCapability":@(_capability),
+        @"loaded":@YES, @"enabled":@(_enabled || _dynamicEnabled), @"legacyContinuousEnabled":@(_enabled),
+        @"dynamicEnabled":@(_dynamicEnabled), @"dynamicExperiment":SBCPUDynamicSnapshot(),
+        @"dynamicGuard":[self dynamicGuard], @"probeStatus":_probeStatus ?: @"未启动", @"originalCapability":@(_capability),
         @"hardwareModel":_model ?: @"unknown", @"hardware120":@(_hardware120),
-        @"selectorABI":_audit ?: @{}, @"installedHooks":@"none; no UIScreen/private getter spoofing",
-        @"requestSelector":_requestSelector ?: @"none", @"requestedHz":@(_link ? 120 : 0),
+        @"selectorABI":_audit ?: @{}, @"installedHooks":[NSString stringWithFormat:@"dynamic range=%@; displaylink range=%@; no UIScreen/private getter spoofing",@(SBCPUDynamicReady),@(SBCPULinkReady)],
+        @"requestSelector":_requestSelector ?: @"none", @"requestedHz":@(_link || fresh ? 120 : 0),
         @"callbackHz":@(_callbackHz), @"sampleSeconds":@(_sampleSeconds), @"pauseReason":_reason ?: @"初始化中",
         @"sampleFresh":@(fresh), @"sampleAgeSeconds":@(_sampleAt > 0 ? CACurrentMediaTime()-_sampleAt : -1),
         @"hostBundle":NSBundle.mainBundle.bundleIdentifier ?: @"unknown", @"phoneHighFrameRateGate":gateStatus,
-        @"limitation":limitation, @"privatePolicy":@"read-only selector audit; no dynamic source/restriction/arbitration override",
+        @"limitation":limitation, @"privatePolicy":@"existing dynamic source range only; pause/reasons untouched; no source creation, unknown C ABI or reason guessing",
         @"lowPowerMode":@(NSProcessInfo.processInfo.lowPowerModeEnabled), @"thermalState":@(NSProcessInfo.processInfo.thermalState),
-        @"scope":@"SpringBoard owned displaylink only; callback Hz != panel Hz or game FPS"};
+        @"scope":@"SpringBoard only, main-thread range requests + manual 3s probe; callback Hz != panel Hz or game FPS"};
     // Only a user-requested snapshot crosses processes. No per-frame/status polling writes.
     [snapshot writeToFile:path atomically:YES];
 }

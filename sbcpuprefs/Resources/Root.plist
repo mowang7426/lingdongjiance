@@ -137,6 +137,18 @@
 			<string>setPreferenceValue:specifier:</string>
 		</dict>
 		<dict>
+            <key>cell</key><string>PSSwitchCell</string>
+            <key>label</key><string>动态刷新源120（独立实验）</string>
+            <key>key</key><string>dynamicSource120HzEnabled</string>
+            <key>default</key><false/>
+            <key>get</key><string>getPreferenceValue:</string>
+            <key>set</key><string>setPreferenceValue:specifier:</string>
+        </dict>
+        <dict>
+            <key>cell</key><string>PSGroupCell</string>
+            <key>footerText</key><string>动态实验默认关闭，仅SpringBoard已有动态源和DisplayLink主线程新范围请求；保留系统pause/reason。诊断手动采样3秒。旧120开关建议关闭以隔离变量。关闭后新请求透传，旧请求无安全即时重放保证；关闭后respring彻底回退。不保证真实120。</string>
+        </dict>
+		<dict>
 			<key>cell</key>
 			<string>PSButtonCell</string>
 			<key>label</key>

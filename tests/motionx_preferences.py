@@ -28,10 +28,10 @@ item, = [item for item in items if item.get('key') == key]
 assert item.get('defaults') is None and item['default'] is False
 assert item['get'] == 'getPreferenceValue:'
 assert item['set'] == 'setPreferenceValue:specifier:'
-selector = f'if ([key isEqualToString:@"{key}"])'
+selector = f'if (([key isEqualToString:@"{key}"]'
 getter = block(block(prefs, '- (id)getPreferenceValue:'), selector)
 setter = block(block(prefs, '- (void)setPreferenceValue:'), selector)
-reader = block(runtime, 'static BOOL SBCPU120HzEnabled(void)')
+reader = block(runtime, 'static BOOL SBCPURefreshEnabledForKey(NSString *key)')
 assert f'kSBCPURefreshDomain = @"{domain}"' in runtime
 assert f'kSBCPURefreshKey = @"{key}"' in runtime
 for code in (getter, setter, reader):
@@ -67,7 +67,7 @@ if len(sys.argv) == 3 and sys.argv[1] == '--emit-native':
 static NSString * const kSBCPURefreshDomain = @"{domain}";
 static NSString * const kSBCPURefreshKey = @"{key}";
 static id Read(void) {{ NSString *key = kSBCPURefreshKey; {getter} }}
-static BOOL Runtime(void) {{ {reader} }}
+static BOOL Runtime(void) {{ NSString *key = kSBCPURefreshKey; {reader} }}
 static BOOL Save(id value) {{ NSString *key = kSBCPURefreshKey; {save} return saved; }}
 '''
     harness = '''

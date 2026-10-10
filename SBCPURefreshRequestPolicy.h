@@ -28,6 +28,7 @@ static inline const char *SBCPURefreshPauseReason(int enabled, int capability, i
     if (locked) return "锁屏/AOD，已停止";
     if (!displayOn) return "屏幕熄灭，已停止";
     if (lowPower) return "低电量模式，已停止";
+    if (thermal < 0 || thermal > 3) return "热状态未知，安全暂停";
     if (thermal >= 2) return "高温保护，已停止";
     return "";
 }

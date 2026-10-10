@@ -22,7 +22,7 @@ assert 'notify_get_state' in runtime and 'com.apple.springboard.lockstate' in ru
 assert 'com.apple.iokit.hid.displayStatus' in runtime
 assert 'NSProcessInfoPowerStateDidChangeNotification' in runtime
 assert 'NSProcessInfoThermalStateDidChangeNotification' in runtime
-assert 'self->_enabled = SBCPU120HzEnabled(); [self updateRequest];' in runtime
+assert 'self->_enabled = SBCPU120HzEnabled(); self->_dynamicEnabled = SBCPUDynamic120HzEnabled(); [self updateRequest];' in runtime
 assert 'SBCPURefreshHardware120(model)' in runtime
 start = runtime.index('- (void)tick:(CADisplayLink *)link {')
 end = runtime.index('- (void)writeDiagnostic {', start)
