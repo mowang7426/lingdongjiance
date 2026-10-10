@@ -120,7 +120,7 @@
 			<key>label</key>
 			<string>显示刷新率（实验性）</string>
 			<key>footerText</key>
-			<string>尝试请求系统及动画使用 120Hz。系统可能忽略请求，不能保证全局固定 120Hz；若出现异常请关闭此项。默认关闭。</string>
+			<string>SpringBoard 独立 displaylink 请求 120Hz，默认关闭，仅支持真实120Hz硬件。不能保证全App或面板固定120Hz；锁屏/AOD、低电量模式与高温停止，会增加耗电。请用下方诊断检查加载和回调率（不是面板Hz或游戏FPS）。</string>
 		</dict>
 		<dict>
 			<key>cell</key>
@@ -135,6 +135,14 @@
 			<string>getPreferenceValue:</string>
 			<key>set</key>
 			<string>setPreferenceValue:specifier:</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSButtonCell</string>
+			<key>label</key>
+			<string>120Hz 诊断</string>
+			<key>action</key>
+			<string>show120HzDiagnostics</string>
 		</dict>
 		<dict>
 			<key>label</key>

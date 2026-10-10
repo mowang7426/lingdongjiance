@@ -2,6 +2,7 @@
 #import <Preferences/PSSpecifier.h>
 #import "SBCPUPrefsRootListController.h"
 #import "../SBCPUChargeStore.h"
+#import "../SBCPURefreshDiagnostics.h"
 #import <notify.h>
 #import <sys/file.h>
 #import <fcntl.h>
@@ -245,6 +246,34 @@ static BOOL InsulationWritePref(NSString *key, id value) {
         return;
     }
     [super tableView:tableView didSelectRowAtIndexPath:indexPath];
+}
+
+- (void)show120HzDiagnostics {
+    NSTimeInterval requestedAt = NSDate.date.timeIntervalSince1970;
+    notify_post(SBCPU_REFRESH_DIAGNOSTIC_REQUEST);
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.6*NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        NSDictionary *d = [NSDictionary dictionaryWithContentsOfFile:SBCPURefreshDiagnosticPath()];
+        NSString *message;
+        if (![d isKindOfClass:NSDictionary.class] || [d[@"generatedAt"] doubleValue] < requestedAt) {
+            message = @"SpringBoard 未返回新诊断；不能确认模块已加载。请检查 SBCPURefreshRate 注入过滤、RootHide 插件启用名单及 respring 后装载状态。旧文件不作为已加载证据。";
+        } else {
+            NSMutableString *m = [NSMutableString stringWithFormat:@"宿主 SpringBoard pid: %@\n已加载: %@ / 开关: %@\n原始 UIScreen 能力: %@Hz\n请求: %@Hz\n%@\n暂停: %@\n实测回调: %.2fHz（采样 %.2fs）\nHook: %@\n",
+                d[@"pid"], [d[@"loaded"] boolValue] ? @"是" : @"否", [d[@"enabled"] boolValue] ? @"开" : @"关",
+                d[@"originalCapability"],d[@"requestedHz"],d[@"requestSelector"],
+                [d[@"pauseReason"] length] ? d[@"pauseReason"] : @"无（请求中）",
+                [d[@"callbackHz"] doubleValue],[d[@"sampleSeconds"] doubleValue],d[@"installedHooks"]];
+            [m appendFormat:@"机型: %@ / 真实120硬件核对: %@\n",d[@"hardwareModel"], [d[@"hardware120"] boolValue] ? @"是" : @"否/未知（拒绝请求）"];
+            NSDictionary *audit = d[@"selectorABI"];
+            for (NSString *key in [[audit allKeys] sortedArrayUsingSelector:@selector(compare:)])
+                [m appendFormat:@"%@ = %@\n",key,audit[key]];
+            [m appendString:@"\n开启且解锁后等待至少3秒再诊断。回调Hz不是屏幕panelHz或游戏FPS；本模块不篡改UIScreen能力，仅请求SpringBoard自己的displaylink，系统可降级到60Hz，不保证全App/全系统120。若请求存在但低于120，本框架无法绕过系统显示仲裁。锁屏/AOD、低电量模式和高温时停止；持续请求会增加耗电。"];
+            message = m;
+        }
+        UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"120Hz 诊断" message:message preferredStyle:UIAlertControllerStyleAlert];
+        [alert addAction:[UIAlertAction actionWithTitle:@"关闭" style:UIAlertActionStyleCancel handler:nil]];
+        [alert addAction:[UIAlertAction actionWithTitle:@"刷新" style:UIAlertActionStyleDefault handler:^(__unused UIAlertAction *a) { [self show120HzDiagnostics]; }]];
+        [self presentViewController:alert animated:YES completion:nil];
+    });
 }
 
 - (void)openMoWangSource {

@@ -51,6 +51,8 @@ SBCPUChargeDaemon_CODESIGN_FLAGS = -S$(THEOS_PROJECT_DIR)/SBCPUChargeDaemon.enti
 SBCPUChargeDaemon_INSTALL_PATH = /usr/libexec
 
 ifeq ($(THEOS_PACKAGE_SCHEME),roothide)
+SBCPURefreshRate_CFLAGS += -I$(THEOS_VENDOR_INCLUDE_PATH)/roothide
+SBCPURefreshRate_LDFLAGS += -L$(THEOS_VENDOR_LIBRARY_PATH)/iphone/roothide -lroothide
 SBCPUFloatingCCRegistration_LDFLAGS += -L$(THEOS_VENDOR_LIBRARY_PATH)/iphone/roothide -lroothide
 SBCPUChargeDaemon_CFLAGS += -I$(THEOS_VENDOR_INCLUDE_PATH)/roothide
 SBCPUChargeDaemon_LDFLAGS += -L$(THEOS_VENDOR_LIBRARY_PATH)/iphone/roothide -lroothide

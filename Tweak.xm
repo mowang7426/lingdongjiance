@@ -1,4 +1,5 @@
 #import "SBCPUTextOnlyPolicy.h"
+#import "SBCPUTextAnchorPolicy.h"
 #import "SBCPUTextOnlyColor.h"
 #import "SBCPUTextBackdropLabel.h"
 #import "SBCPUCapsuleTextPolicy.h"
@@ -2363,6 +2364,63 @@ static UIInterfaceOrientation getEffectiveFloatingOrientation(void) {
     return UIInterfaceOrientationLandscapeRight;
 }
 
+// Text-only anchors live in the currently displayed orientation, never physical pixels.
+static SBCPUTextAnchor lockedTextAnchor;
+static BOOL lockedTextAnchorValid = NO;
+typedef struct {
+    CGRect bounds;
+    int rotation;
+    double width, height, left, top, right, bottom;
+} SBCPUTextGeometry;
+static SBCPUTextGeometry textOnlyGeometry(void) {
+    UIView *parent = floatingView.superview;
+    SBCPUTextGeometry g = {};
+    g.bounds = parent.bounds;
+    if (CGRectIsEmpty(g.bounds)) g.bounds = UIScreen.mainScreen.bounds;
+    UIInterfaceOrientation o = getEffectiveFloatingOrientation();
+    // UIWindowScene can already supply an oriented container. Rotate only a
+    // portrait-shaped host representing landscape; otherwise UIKit did it for us.
+    if (g.bounds.size.width < g.bounds.size.height && UIInterfaceOrientationIsLandscape(o))
+        g.rotation = o == UIInterfaceOrientationLandscapeRight ? 1 : -1;
+    else if (o == UIInterfaceOrientationPortraitUpsideDown && cpuWindow.windowScene.interfaceOrientation != o)
+        g.rotation = 2;
+    BOOL swap = g.rotation == 1 || g.rotation == -1;
+    g.width = swap ? g.bounds.size.height : g.bounds.size.width;
+    g.height = swap ? g.bounds.size.width : g.bounds.size.height;
+    UIEdgeInsets safe = parent.safeAreaInsets;
+    // Transform safe rect exactly once into display-direction coordinates.
+    SBCPUTextPoint a = SBCPUTextToLogical(SBCPUTextPointMake(safe.left, safe.top), g.bounds.size.width, g.bounds.size.height, g.rotation);
+    SBCPUTextPoint b = SBCPUTextToLogical(SBCPUTextPointMake(g.bounds.size.width-safe.right, g.bounds.size.height-safe.bottom), g.bounds.size.width, g.bounds.size.height, g.rotation);
+    g.left = MAX(4, MIN(a.x,b.x)); g.top = MAX(2, MIN(a.y,b.y));
+    g.right = MAX(4, g.width-MAX(a.x,b.x)); g.bottom = MAX(10, g.height-MAX(a.y,b.y));
+    return g;
+}
+static SBCPUTextPoint textOnlyLogicalCenter(CGPoint center, SBCPUTextGeometry g) {
+    return SBCPUTextToLogical(SBCPUTextPointMake(center.x-g.bounds.origin.x, center.y-g.bounds.origin.y), g.bounds.size.width, g.bounds.size.height, g.rotation);
+}
+static CGPoint textOnlyContainerCenter(SBCPUTextPoint p, SBCPUTextGeometry g) {
+    p = SBCPUTextFromLogical(p, g.bounds.size.width, g.bounds.size.height, g.rotation);
+    return CGPointMake(p.x+g.bounds.origin.x,p.y+g.bounds.origin.y);
+}
+static void saveLockedTextAnchor(void) {
+    if (!lockedTextAnchorValid) return;
+    [[NSUserDefaults standardUserDefaults] setObject:@{@"version":@1, @"right":@(lockedTextAnchor.right), @"bottom":@(lockedTextAnchor.bottom),
+        @"x":@(lockedTextAnchor.xMargin), @"y":@(lockedTextAnchor.yMargin)} forKey:@"SBCPU.LockedTextAnchor"];
+}
+static void captureLockedTextAnchor(CGPoint center) {
+    SBCPUTextGeometry g = textOnlyGeometry();
+    lockedTextAnchor = SBCPUTextCaptureAnchor(textOnlyLogicalCenter(center,g),g.width,g.height,
+        floatingView.bounds.size.width/2,floatingView.bounds.size.height/2,g.left,g.top,g.right,g.bottom);
+    lockedTextAnchorValid = YES;
+    saveLockedTextAnchor();
+}
+static CGPoint resolveLockedTextCenter(void) {
+    SBCPUTextGeometry g = textOnlyGeometry();
+    SBCPUTextPoint p = SBCPUTextResolveAnchor(lockedTextAnchor,g.width,g.height,
+        floatingView.bounds.size.width/2,floatingView.bounds.size.height/2,g.left,g.top,g.right,g.bottom);
+    return textOnlyContainerCenter(p,g);
+}
+
 static CGFloat floatingTopSafeMargin(UIView *container) {
     CGFloat safeTop = 0.0f;
     if (@available(iOS 11.0, *)) safeTop = container.safeAreaInsets.top;
@@ -2525,7 +2583,9 @@ static void applyTextOnlyMode(void) {
     CGRect container = floatingView.superview.bounds;
     UIInterfaceOrientation orientation = getEffectiveFloatingOrientation();
     BOOL rotated = UIInterfaceOrientationIsLandscape(orientation);
-    CGFloat available = SBCPUTextOnlyAvailableWidth(container.size.width, container.size.height, rotated);
+    SBCPUTextGeometry textGeometry = textOnlyGeometry();
+    CGFloat available = floatingTextOnlyMode ? MAX(1, textGeometry.width-textGeometry.left-textGeometry.right) :
+        SBCPUTextOnlyAvailableWidth(container.size.width, container.size.height, rotated);
     CGFloat naturalWidth = ceil([textOnlyLabel.text sizeWithAttributes:@{NSFontAttributeName:textOnlyLabel.font}].width);
     textOnlyLabel.minimumScaleFactor = SBCPUTextOnlyMinimumScale(naturalWidth, available);
     // Single physical row; retain every selected value even on narrow screens.
@@ -2629,14 +2689,27 @@ static void updateFloatingSize(void) {
         case UIInterfaceOrientationPortrait: default: rotationAngle = 0.0; break;
     }
 
+    if (floatingTextOnlyMode) {
+        int r = textOnlyGeometry().rotation;
+        rotationAngle = r == 2 ? M_PI : r * M_PI_2;
+    }
     CGAffineTransform finalTransform = CGAffineTransformConcat(CGAffineTransformMakeScale(floatingTextOnlyMode ? 1 : floatingScale, floatingTextOnlyMode ? 1 : floatingScale), CGAffineTransformMakeRotation(rotationAngle));
     floatingView.transform = finalTransform;
     if (floatingTextOnlyMode && !textOnlyDragging) {
-        CGRect bounds = floatingView.superview.bounds;
-        CGFloat halfW = floatingView.frame.size.width * 0.5;
-        CGFloat halfH = floatingView.frame.size.height * 0.5;
-        CGFloat anchorX = SBCPUTextOnlyAnchorX((int)floatingTextOnlyPreset, bounds.size.width, halfW);
-        floatingView.center = CGPointMake(anchorX + floatingTextOnlyX, halfH + 2 + floatingTextOnlyY);
+        if (floatingView.positionLocked) {
+            // Legacy centers are migrated only after text bounds/rotation exist.
+            if (!lockedTextAnchorValid) captureLockedTextAnchor(floatingView.lockedCenter);
+            floatingView.center = resolveLockedTextCenter();
+        } else {
+            SBCPUTextGeometry g = textOnlyGeometry();
+            CGFloat halfW = floatingView.bounds.size.width * 0.5;
+            CGFloat halfH = floatingView.bounds.size.height * 0.5;
+            CGFloat x = SBCPUTextOnlyAnchorX((int)floatingTextOnlyPreset, g.width, halfW) + floatingTextOnlyX;
+            SBCPUTextPoint p = SBCPUTextPointMake(SBCPUTextSafeCoordinate(x,g.left+halfW,g.width-g.right-halfW),
+                SBCPUTextSafeCoordinate(halfH+2+floatingTextOnlyY,g.top+halfH,g.height-g.bottom-halfH));
+            floatingView.center = textOnlyContainerCenter(p,g);
+        }
+        return; // Do not clamp logical text a second time with physical capsule geometry.
     }
     clampAndPositionFloatingView(floatingView.center, NO);
 }
@@ -2670,6 +2743,17 @@ static void createCPUWindow(void) {
 
     // Dedicated SpringBoard defaults, like LastFrame; independent of rememberPositionEnable.
     NSUserDefaults *positionDefaults = [NSUserDefaults standardUserDefaults];
+    NSDictionary *textAnchor = [positionDefaults dictionaryForKey:@"SBCPU.LockedTextAnchor"];
+    lockedTextAnchorValid = [textAnchor[@"version"] isKindOfClass:NSNumber.class] &&
+        [textAnchor[@"version"] integerValue] == 1 &&
+        [textAnchor[@"right"] isKindOfClass:NSNumber.class] && [textAnchor[@"bottom"] isKindOfClass:NSNumber.class] &&
+        [textAnchor[@"x"] isKindOfClass:NSNumber.class] && [textAnchor[@"y"] isKindOfClass:NSNumber.class] &&
+        isfinite([textAnchor[@"x"] doubleValue]) && isfinite([textAnchor[@"y"] doubleValue]) &&
+        [textAnchor[@"x"] doubleValue] >= 0 && [textAnchor[@"y"] doubleValue] >= 0;
+    if (lockedTextAnchorValid) {
+        lockedTextAnchor = { [textAnchor[@"right"] boolValue], [textAnchor[@"bottom"] boolValue],
+            [textAnchor[@"x"] doubleValue], [textAnchor[@"y"] doubleValue] };
+    }
     NSString *lockedPoint = [positionDefaults stringForKey:@"SBCPU.LockedCenter"];
     if ([positionDefaults boolForKey:@"SBCPU.PositionLocked"] && lockedPoint.length) {
         CGPoint point = CGPointFromString(lockedPoint);
@@ -3742,6 +3826,10 @@ return self;
 // Keep the anchor unchanged; only constrain the rendered center when geometry would hide it.
 - (void)setCenter:(CGPoint)center {
     if (self.positionLocked) {
+        if (floatingTextOnlyMode && lockedTextAnchorValid) {
+            [super setCenter:resolveLockedTextCenter()];
+            return;
+        }
         center = self.lockedCenter;
         if (self.superview) {
             CGRect bounds = self.superview.bounds;
@@ -3761,6 +3849,11 @@ return self;
         [self.layer removeAllAnimations];
         self.layoutTransitionAnimating = NO;
         self.lockedCenter = anchor;
+        if (floatingTextOnlyMode) captureLockedTextAnchor(anchor);
+        else {
+            lockedTextAnchorValid = NO;
+            [[NSUserDefaults standardUserDefaults] removeObjectForKey:@"SBCPU.LockedTextAnchor"];
+        }
         self.positionLocked = YES;
         self.center = anchor;
         [self.statusDockReturnTimer invalidate];
@@ -3770,6 +3863,15 @@ return self;
         keyboardMoved = NO; // Never restore a stale pre-lock keyboard frame.
     } else {
         self.positionLocked = NO;
+        if (floatingTextOnlyMode) {
+            SBCPUTextGeometry g = textOnlyGeometry();
+            SBCPUTextPoint p = textOnlyLogicalCenter(self.center,g);
+            floatingTextOnlyX = p.x-SBCPUTextOnlyAnchorX((int)floatingTextOnlyPreset,g.width,self.bounds.size.width/2);
+            floatingTextOnlyY = p.y-self.bounds.size.height/2-2;
+            setFloatPref(CFSTR("floatingTextOnlyX"), floatingTextOnlyX);
+            setFloatPref(CFSTR("floatingTextOnlyY"), floatingTextOnlyY);
+            CFPreferencesAppSynchronize(kPrefAppID);
+        }
         if (sbcpuStatusBarDockEffective() && self.isCollapsed) [self scheduleStatusDockReturn];
     }
     NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
@@ -3912,6 +4014,14 @@ return self;
         CGPoint translation = [pan translationInView:self.superview];
         CGPoint targetCenter = CGPointMake(self.lastPoint.x + translation.x, self.lastPoint.y + translation.y);
 
+        if (floatingTextOnlyMode) {
+            SBCPUTextGeometry g = textOnlyGeometry();
+            SBCPUTextPoint p = textOnlyLogicalCenter(targetCenter,g);
+            p.x = SBCPUTextSafeCoordinate(p.x,g.left+self.bounds.size.width/2,g.width-g.right-self.bounds.size.width/2);
+            p.y = SBCPUTextSafeCoordinate(p.y,g.top+self.bounds.size.height/2,g.height-g.bottom-self.bounds.size.height/2);
+            self.center = textOnlyContainerCenter(p,g);
+            return;
+        }
         UIView *parent = self.superview;
         CGRect containerBounds = parent ? parent.bounds : [UIScreen mainScreen].bounds;
         CGRect realFrame = self.frame;
@@ -3935,9 +4045,10 @@ return self;
     } else if (pan.state == UIGestureRecognizerStateEnded || pan.state == UIGestureRecognizerStateCancelled) {
         if (floatingTextOnlyMode) {
             textOnlyDragging = NO;
-            CGPoint translation = CGPointMake(self.center.x - self.lastPoint.x, self.center.y - self.lastPoint.y);
-            floatingTextOnlyX = MAX(-1000, MIN(1000, floatingTextOnlyX + translation.x));
-            floatingTextOnlyY = MAX(-1000, MIN(1000, floatingTextOnlyY + translation.y));
+            SBCPUTextGeometry g = textOnlyGeometry();
+            SBCPUTextPoint p = textOnlyLogicalCenter(self.center,g);
+            floatingTextOnlyX = MAX(-1000, MIN(1000, p.x-SBCPUTextOnlyAnchorX((int)floatingTextOnlyPreset,g.width,self.bounds.size.width/2)));
+            floatingTextOnlyY = MAX(-1000, MIN(1000, p.y-self.bounds.size.height/2-2));
             setFloatPref(CFSTR("floatingTextOnlyX"), floatingTextOnlyX);
             setFloatPref(CFSTR("floatingTextOnlyY"), floatingTextOnlyY);
             CFPreferencesAppSynchronize(kPrefAppID);
@@ -6093,7 +6204,15 @@ static NSString *bandItemDisplayName(NSInteger g, NSInteger v) {
     [coordinator animateAlongsideTransition:^(id<UIViewControllerTransitionCoordinatorContext> context) {
         (void)context;
         if (floatingView) updateFloatingSize();
-    } completion:nil];
+    } completion:^(id<UIViewControllerTransitionCoordinatorContext> context) {
+        (void)context;
+        if (floatingView) updateFloatingSize(); // final scene/container/safe area, not old transition bounds
+    }];
+}
+
+- (void)viewSafeAreaInsetsDidChange {
+    [super viewSafeAreaInsetsDidChange];
+    if (floatingView && floatingTextOnlyMode) updateFloatingSize();
 }
 
 @end
