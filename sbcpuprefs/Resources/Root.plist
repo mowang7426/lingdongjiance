@@ -115,6 +115,30 @@
 			<string>setPreferenceValue:specifier:</string>
 		</dict>
 		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
+			<string>显示刷新率（实验性）</string>
+			<key>footerText</key>
+			<string>尝试请求系统及动画使用 120Hz。系统可能忽略请求，不能保证全局固定 120Hz；若出现异常请关闭此项。默认关闭。</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSSwitchCell</string>
+			<key>label</key>
+			<string>120Hz 高刷新率（实验性）</string>
+			<key>key</key>
+			<string>system120HzEnabled</string>
+			<key>defaults</key>
+			<string>com.yourname.sbcpufloating</string>
+			<key>default</key>
+			<false/>
+			<key>get</key>
+			<string>getPreferenceValue:</string>
+			<key>set</key>
+			<string>setPreferenceValue:specifier:</string>
+		</dict>
+		<dict>
 			<key>label</key>
 			<string>CPU</string>
 			<key>cell</key>
