@@ -22,6 +22,8 @@ static BOOL SBCPURefreshSetterABI(SEL sel, const char *argument) {
 #import "SBCPUDynamicRangeHooks.h"
 
 @interface SBCPURefreshRuntime : NSObject {
+    SBCPUHiddenTextExperiment *_textExperiment;
+    BOOL _textEnabled;
     CADisplayLink *_link;
     BOOL _dynamicEnabled, _probeRequested;
     NSUInteger _probeGeneration;
@@ -65,6 +67,7 @@ static BOOL SBCPURefreshSetterABI(SEL sel, const char *argument) {
     _displayOn = _displayKnown && state != 0;
 }
 - (void)start {
+    _textExperiment = [SBCPUHiddenTextExperiment new];
     _capability = UIScreen.mainScreen.maximumFramesPerSecond; // NEVER hook/fake capability
     char model[128] = {0}; size_t modelSize = sizeof(model)-1;
     if (sysctlbyname("hw.machine",model,&modelSize,NULL,0) != 0) model[0] = 0;
@@ -110,6 +113,12 @@ static BOOL SBCPURefreshSetterABI(SEL sel, const char *argument) {
             (void)n; [self updateRequest];
         }];
     }
+    for (NSString *name in @[UIWindowDidBecomeVisibleNotification, UIWindowDidBecomeHiddenNotification]) {
+        [nc addObserverForName:name object:nil queue:NSOperationQueue.mainQueue usingBlock:^(NSNotification *n) {
+            (void)n;
+            dispatch_async(dispatch_get_main_queue(), ^{ [self updateRequest]; });
+        }];
+    }
     _enabled = SBCPU120HzEnabled();
     _dynamicEnabled = SBCPUDynamic120HzEnabled();
     SBCPUInstallDynamicHooks(_hardware120 && _capability >= 120, ^NSString *{ return [self dynamicGuard]; });
@@ -147,6 +156,16 @@ static BOOL SBCPURefreshSetterABI(SEL sel, const char *argument) {
     });
 }
 - (void)updateRequest {
+    [self readLock]; [self readDisplay];
+    _enabled = SBCPU120HzEnabled();
+    _dynamicEnabled = SBCPUDynamic120HzEnabled();
+    _textEnabled = SBCPURefreshEnabledForKey(@"hiddenText120HzEnabled");
+    NSString *textGuard = [NSString stringWithUTF8String:SBCPURefreshPauseReason(_textEnabled,
+        (int)_capability,YES,_lockKnown,_locked,_displayKnown,_displayOn,
+        NSProcessInfo.processInfo.lowPowerModeEnabled,(int)NSProcessInfo.processInfo.thermalState)];
+    if (!_hardware120) textGuard = @"真实120硬件未确认";
+    if (_enabled || _dynamicEnabled) textGuard = @"隔离拒绝：请关闭旧system120和dynamicSource120并注销";
+    [_textExperiment updateEnabled:_textEnabled guard:textGuard];
     const char *reason = SBCPURefreshPauseReason(_enabled || _probeRequested,(int)_capability,_rangeABI || _fpsABI,
         _lockKnown,_locked,_displayKnown,_displayOn,NSProcessInfo.processInfo.lowPowerModeEnabled,
         (int)NSProcessInfo.processInfo.thermalState);
@@ -211,7 +230,7 @@ static BOOL SBCPURefreshSetterABI(SEL sel, const char *argument) {
     BOOL fresh = _sampleAt > 0 && CACurrentMediaTime()-_sampleAt <= 5 && _sampleSeconds >= 2;
     NSString *limitation = !_link && !fresh ? @"请求已暂停，参见暂停原因" : (!fresh ? @"有效采样不足2秒或样本超过5秒，不能判断当前调度结果" : (_callbackHz < 90 ? @"120请求已提交，但本displaylink回调低于90Hz；系统未按请求调度，宿主资格/CA仲裁/主线程负载的具体原因未确认" : @"回调超过90Hz仍不等于面板120Hz，亦非全App资格"));
     NSDictionary *snapshot = @{@"generatedAt":@([NSDate date].timeIntervalSince1970), @"pid":@(getpid()),
-        @"loaded":@YES, @"enabled":@(_enabled || _dynamicEnabled), @"legacyContinuousEnabled":@(_enabled),
+        @"loaded":@YES, @"textEnabled":@(_textEnabled), @"hiddenTextExperiment":[_textExperiment snapshot], @"enabled":@(_enabled || _dynamicEnabled || _textEnabled), @"legacyContinuousEnabled":@(_enabled),
         @"dynamicEnabled":@(_dynamicEnabled), @"dynamicExperiment":SBCPUDynamicSnapshot(),
         @"dynamicGuard":[self dynamicGuard], @"probeStatus":_probeStatus ?: @"未启动", @"originalCapability":@(_capability),
         @"hardwareModel":_model ?: @"unknown", @"hardware120":@(_hardware120),

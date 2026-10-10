@@ -21,6 +21,7 @@ static BOOL SBCPURefreshEnabledForKey(NSString *key) {
 }
 static BOOL SBCPU120HzEnabled(void) { return SBCPURefreshEnabledForKey(kSBCPURefreshKey); }
 static BOOL SBCPUDynamic120HzEnabled(void) { return SBCPURefreshEnabledForKey(@"dynamicSource120HzEnabled"); }
+#import "SBCPUHiddenTextExperiment.h"
 #import "SBCPURefreshRuntime.h"
 
 %ctor {

@@ -148,6 +148,18 @@
             <key>cell</key><string>PSGroupCell</string>
             <key>footerText</key><string>动态实验默认关闭，仅SpringBoard已有动态源和DisplayLink主线程新范围请求；保留系统pause/reason。诊断手动采样3秒。旧120开关建议关闭以隔离变量。关闭后新请求透传，旧请求无安全即时重放保证；关闭后respring彻底回退。不保证真实120。</string>
         </dict>
+        <dict>
+            <key>cell</key><string>PSSwitchCell</string>
+            <key>label</key><string>隐藏文本120资格（短时实验）</string>
+            <key>key</key><string>hiddenText120HzEnabled</string>
+            <key>default</key><false/>
+            <key>get</key><string>getPreferenceValue:</string>
+            <key>set</key><string>setPreferenceValue:specifier:</string>
+        </dict>
+        <dict>
+            <key>cell</key><string>PSGroupCell</string>
+            <key>footerText</key><string>仅现有UIStatusBarWindow挂载隐藏零尺寸UIView+UITextView；找不到明确失败，不使用浮窗替代。旧120和动态源必须OFF。仅主线程创建一次；关闭、锁屏/AOD、低电量、高温或未知状态释放，恢复不自动重建，需注销。初始化可能有全局副作用，OFF/ON组均先注销再用相同3秒诊断；不要长期常开。未证实达到120。</string>
+        </dict>
 		<dict>
 			<key>cell</key>
 			<string>PSButtonCell</string>

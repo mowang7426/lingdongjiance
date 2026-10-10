@@ -20,6 +20,7 @@ jobs:
           python3 tests/floating_lock.py
           python3 tests/lock_feedback.py
           python3 tests/refresh_limitations.py
+          python3 tests/hidden_text_experiment.py
           TMP_LOCK=$(mktemp -d)
           clang -std=c11 -Wall -Wextra -Werror -pedantic tests/floating_lock_policy.c -lm -o "$TMP_LOCK/lock"
           "$TMP_LOCK/lock"

@@ -127,7 +127,7 @@ static BOOL InsulationWritePref(NSString *key, id value) {
         id value = stored ? CFBridgingRelease(stored) : nil;
         return [value isKindOfClass:[NSNumber class]] ? @([value boolValue]) : @NO;
     }
-    if (([key isEqualToString:@"system120HzEnabled"] || [key isEqualToString:@"dynamicSource120HzEnabled"])) {
+    if (([key isEqualToString:@"system120HzEnabled"] || [key isEqualToString:@"dynamicSource120HzEnabled"] || [key isEqualToString:@"hiddenText120HzEnabled"])) {
         // Use the same explicit scope as MotionX; no direct jbroot plist writes
         // or PreferenceLoader/AppValue fallback domains can shadow this value.
         CFPreferencesSynchronize(CFSTR("com.yourname.sbcpufloating"), kCFPreferencesCurrentUser, kCFPreferencesAnyHost);
@@ -171,7 +171,7 @@ static BOOL InsulationWritePref(NSString *key, id value) {
         }
         return;
     }
-    if (([key isEqualToString:@"system120HzEnabled"] || [key isEqualToString:@"dynamicSource120HzEnabled"])) {
+    if (([key isEqualToString:@"system120HzEnabled"] || [key isEqualToString:@"dynamicSource120HzEnabled"] || [key isEqualToString:@"hiddenText120HzEnabled"])) {
         CFStringRef domain = CFSTR("com.yourname.sbcpufloating");
         CFStringRef preferenceKey = (__bridge CFStringRef)key;
         CFPreferencesSynchronize(domain, kCFPreferencesCurrentUser, kCFPreferencesAnyHost);
@@ -262,6 +262,10 @@ static BOOL InsulationWritePref(NSString *key, id value) {
                 d[@"originalCapability"],d[@"requestedHz"],d[@"requestSelector"],
                 [d[@"pauseReason"] length] ? d[@"pauseReason"] : @"无（请求中）",
                 [d[@"callbackHz"] doubleValue],[d[@"sampleSeconds"] doubleValue],d[@"installedHooks"]];
+            NSDictionary *text = d[@"hiddenTextExperiment"];
+            [m appendFormat:@"隐藏文本开关: %@ / 已挂载: %@ / 创建次数: %@\nwindow: %@\n状态: %@\nguard: %@\n初始化尝试: %@（关闭后必须注销隔离）\n",
+                [d[@"textEnabled"] boolValue] ? @"ON" : @"OFF", text[@"mounted"], text[@"createdCount"],
+                text[@"windowClass"], text[@"status"], text[@"guard"], text[@"initializationAttempted"]];
             [m appendFormat:@"机型: %@ / 真实120硬件核对: %@\n",d[@"hardwareModel"], [d[@"hardware120"] boolValue] ? @"是" : @"否/未知（拒绝请求）"];
             [m appendFormat:@"宿主bundle: %@\nCADisableMinimumFrameDurationOnPhone: %@（只读，不改系统plist）\n调度限制: %@\n低电量: %@ / 热状态: %@\n私有策略: %@\n", d[@"hostBundle"] ?: @"未提供", d[@"phoneHighFrameRateGate"] ?: @"未提供", d[@"limitation"] ?: @"旧诊断未提供", d[@"lowPowerMode"], d[@"thermalState"], d[@"privatePolicy"] ?: @"未提供"];
             NSDictionary *audit = d[@"selectorABI"];
