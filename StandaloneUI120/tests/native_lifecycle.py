@@ -44,9 +44,12 @@ int main(void) { @autoreleasepool {
     Enabled=YES; SetRange(a,cmd,CAFrameRateRangeMake(0,60,60));
     SetRange(a,cmd,CAFrameRateRangeMake(20,30,30)); Restore(); assert(a.range.maximum==30);
     SetRange(a,cmd,CAFrameRateRangeMake(0,60,60));
-    dispatch_sync(dispatch_get_global_queue(QOS_CLASS_DEFAULT,0), ^{
+    dispatch_semaphore_t done=dispatch_semaphore_create(0);
+    dispatch_async(dispatch_get_global_queue(QOS_CLASS_DEFAULT,0), ^{
         assert(!NSThread.isMainThread); SetRange(a,cmd,CAFrameRateRangeMake(10,30,30));
+        dispatch_semaphore_signal(done);
     });
+    assert(dispatch_semaphore_wait(done,dispatch_time(DISPATCH_TIME_NOW,5*NSEC_PER_SEC))==0);
     Restore(); assert(a.range.maximum==30 && a.range.minimum==10);
     __weak CADisplayLink *weakLink;
     @autoreleasepool {
