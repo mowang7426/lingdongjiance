@@ -81,7 +81,7 @@ SBCPURefreshRuntime.h 在已有手动快照中增加 dynamic120Investigation；�
 4. 可逆策略必须在低电量/锁屏AOD/熄屏/高温/未知状态下恢复原始行为、释放自有对象；不能复制原包永久全局hook且无保护的行为。还需处理initializer返回nil、self替换、状态栏重建、多窗口及其他tweak hook链。
 
 ## 回归与真机验收
-本地已执行所有 tests/*.py（22项）与7个C策略测试，均通过；本地Linux无UIKit，原生ObjC/UI运行、arm64e装载与系统兼容依赖CI和真机，不能由文本回归证明。CI复用原流程构建完整灵动监测rootless/roothide而非独立包；CI结果及下载真实deb校验在交付中单独记录。
+本地已执行所有 tests/*.py（20项）与7个C策略测试，均通过；本地Linux无UIKit，原生ObjC/UI运行、arm64e装载与系统兼容依赖CI和真机，不能由文本回归证明。CI复用原流程构建完整灵动监测rootless/roothide而非独立包；CI结果及下载真实deb校验在交付中单独记录。
 
 真机验收步骤：
 1. 卸载/禁用 standalone-ui120 与原动态120/其他强刷tweak，避免双hook和污染；记录插件名单与设备/系统/jailbreak。新分支覆盖同包名 com.sbcpu.floating，先备份基线deb与prefs，切勿同时安装两种架构产物。
