@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>title</key>
+	<string>UI120 独立强刷</string>
+	<key>items</key>
+	<array>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
+			<string>安全实验：默认关闭</string>
+			<key>footerText</key>
+			<string>仅三个系统UI宿主；解锁、非低电量、温度nominal且原始硬件≥120才修改主线程新请求。退出保护不会主动重新强刷，等待宿主的新请求。不能保证实际120Hz。禁用灵动监测刷新模块，不与MotionX/其他强刷插件混装。</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSSwitchCell</string>
+			<key>label</key>
+			<string>启用120/120/120请求</string>
+			<key>key</key>
+			<string>Enabled</string>
+			<key>defaults</key>
+			<string>com.mowang.ui120</string>
+			<key>default</key>
+			<false/>
+			<key>PostNotification</key>
+			<string>com.mowang.ui120.changed</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
+			<string>按需实测</string>
+			<key>footerText</key>
+			<string>关闭/保护触发时尽力恢复仍存活且未被其他线程重新设置的link的最近原请求。main线程恢复；宿主迁移link线程、其他插件或系统后续策略仍可能改变结果。最彻底回退是禁用后重新加载三个宿主（重启用户空间）。锁屏/AOD不强刷，不绕过系统热限制。</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSButtonCell</string>
+			<key>label</key>
+			<string>启动一次3秒探针</string>
+			<key>action</key>
+			<string>diagnose</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSButtonCell</string>
+			<key>label</key>
+			<string>读取诊断（等待5秒）</string>
+			<key>action</key>
+			<string>result</string>
+		</dict>
+	</array>
+</dict>
+</plist>

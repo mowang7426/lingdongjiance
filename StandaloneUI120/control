@@ -1,0 +1,10 @@
+Package: com.mowang.ui120
+Name: Standalone UI120 (Experimental)
+Version: 0.1.0
+Architecture: iphoneos-arm
+Description: Opt-in guarded 120Hz display-link requests for three system UI hosts; no hardware rate guarantee.
+Maintainer: mowang7426
+Author: mowang7426
+Section: Tweaks
+Depends: mobilesubstrate, preferenceloader, firmware (>= 15.0)
+Conflicts: com.hx.120
