@@ -1,0 +1,182 @@
+/tmp/dynamic120-new/var/jb/Library/MobileSubstrate/DynamicLibraries/0fix120hz.dylib:
+(__TEXT,__text) section
+    7960:	7f 23 03 d5	pacibsp
+    7964:	ff 03 01 d1	sub	sp, sp, #0x40
+    7968:	f6 57 01 a9	stp	x22, x21, [sp, #0x10]
+    796c:	f4 4f 02 a9	stp	x20, x19, [sp, #0x20]
+    7970:	fd 7b 03 a9	stp	x29, x30, [sp, #0x30]
+    7974:	fd c3 00 91	add	x29, sp, #0x30
+    7978:	1f 20 03 d5	nop
+    797c:	a8 3c 02 58	ldr	x8, #0x4794 ; Objc class ref: bad class ref
+    7980:	e0 23 00 a9	stp	x0, x8, [sp]
+    7984:	1f 20 03 d5	nop
+    7988:	c1 3a 02 58	ldr	x1, #0x4758
+    798c:	15 00 80 d2	mov	x21, #0x0
+    7990:	e0 03 00 91	mov	x0, sp
+    7994:	c7 00 00 94	bl	0x7cb0 ; symbol stub for: _objc_msgSendSuper2
+    7998:	f3 03 00 aa	mov	x19, x0
+    799c:	80 04 00 b4	cbz	x0, 0x7a2c
+    79a0:	f5 03 13 aa	mov	x21, x19
+    79a4:	e0 03 13 aa	mov	x0, x19
+    79a8:	22 00 80 52	mov	w2, #0x1
+    79ac:	e5 00 00 94	bl	0x7d40
+    79b0:	1f 20 03 d5	nop
+    79b4:	60 3a 02 58	ldr	x0, #0x474c ; Objc class ref: bad class ref
+    79b8:	f5 03 13 aa	mov	x21, x19
+    79bc:	b5 00 00 94	bl	0x7c90 ; symbol stub for: _objc_alloc_init
+    79c0:	f4 03 00 aa	mov	x20, x0
+    79c4:	e0 03 13 aa	mov	x0, x19
+    79c8:	e2 03 14 aa	mov	x2, x20
+    79cc:	e5 00 00 94	bl	0x7d60
+    79d0:	e0 03 14 aa	mov	x0, x20
+    79d4:	bb 00 00 94	bl	0x7cc0 ; symbol stub for: _objc_release
+    79d8:	f5 03 13 aa	mov	x21, x19
+    79dc:	e0 03 13 aa	mov	x0, x19
+    79e0:	e8 00 00 94	bl	0x7d80
+    79e4:	fd 03 1d aa	mov	x29, x29
+    79e8:	be 00 00 94	bl	0x7ce0 ; symbol stub for: _objc_retainAutoreleasedReturnValue
+    79ec:	f4 03 00 aa	mov	x20, x0
+    79f0:	22 00 80 52	mov	w2, #0x1
+    79f4:	d3 00 00 94	bl	0x7d40
+    79f8:	e0 03 14 aa	mov	x0, x20
+    79fc:	b1 00 00 94	bl	0x7cc0 ; symbol stub for: _objc_release
+    7a00:	f5 03 13 aa	mov	x21, x19
+    7a04:	e0 03 13 aa	mov	x0, x19
+    7a08:	de 00 00 94	bl	0x7d80
+    7a0c:	fd 03 1d aa	mov	x29, x29
+    7a10:	b4 00 00 94	bl	0x7ce0 ; symbol stub for: _objc_retainAutoreleasedReturnValue
+    7a14:	f4 03 00 aa	mov	x20, x0
+    7a18:	e0 03 13 aa	mov	x0, x19
+    7a1c:	e2 03 14 aa	mov	x2, x20
+    7a20:	b8 00 00 94	bl	0x7d00
+    7a24:	e0 03 14 aa	mov	x0, x20
+    7a28:	a6 00 00 94	bl	0x7cc0 ; symbol stub for: _objc_release
+    7a2c:	e0 03 13 aa	mov	x0, x19
+    7a30:	fd 7b 43 a9	ldp	x29, x30, [sp, #0x30]
+    7a34:	f4 4f 42 a9	ldp	x20, x19, [sp, #0x20]
+    7a38:	f6 57 41 a9	ldp	x22, x21, [sp, #0x10]
+    7a3c:	ff 03 01 91	add	sp, sp, #0x40
+    7a40:	ff 0f 5f d6	retab
+    7a44:	02 00 00 14	b	0x7a4c
+    7a48:	01 00 00 14	b	0x7a4c
+    7a4c:	e1 03 14 aa	mov	x1, x20
+    7a50:	f4 03 00 aa	mov	x20, x0
+    7a54:	e0 03 01 aa	mov	x0, x1
+    7a58:	9a 00 00 94	bl	0x7cc0 ; symbol stub for: _objc_release
+    7a5c:	03 00 00 14	b	0x7a68
+    7a60:	f4 03 00 aa	mov	x20, x0
+    7a64:	f3 03 15 aa	mov	x19, x21
+    7a68:	e0 03 13 aa	mov	x0, x19
+    7a6c:	95 00 00 94	bl	0x7cc0 ; symbol stub for: _objc_release
+    7a70:	e0 03 14 aa	mov	x0, x20
+    7a74:	7f 00 00 94	bl	0x7c70 ; symbol stub for: __Unwind_Resume
+    7a78:	1f 20 03 d5	nop
+    7a7c:	e8 34 02 98	ldrsw	x8, 0xc118
+    7a80:	00 68 68 f8	ldr	x0, [x0, x8]
+    7a84:	c0 03 5f d6	ret
+    7a88:	e1 03 02 aa	mov	x1, x2
+    7a8c:	1f 20 03 d5	nop
+    7a90:	48 34 02 98	ldrsw	x8, 0xc118
+    7a94:	00 00 08 8b	add	x0, x0, x8
+    7a98:	96 00 00 14	b	0x7cf0 ; symbol stub for: _objc_storeStrong
+    7a9c:	1f 20 03 d5	nop
+    7aa0:	c8 33 02 98	ldrsw	x8, 0xc118
+    7aa4:	00 00 08 8b	add	x0, x0, x8
+    7aa8:	01 00 80 d2	mov	x1, #0x0
+    7aac:	91 00 00 14	b	0x7cf0 ; symbol stub for: _objc_storeStrong
+    7ab0:	7f 23 03 d5	pacibsp
+    7ab4:	fd 7b bf a9	stp	x29, x30, [sp, #-0x10]!
+    7ab8:	fd 03 00 91	mov	x29, sp
+    7abc:	60 22 00 50	adr	x0, #1102 ; literal pool for: "/System/Library/Frameworks/QuartzCore.framework/QuartzCore"
+    7ac0:	1f 20 03 d5	nop
+    7ac4:	5f 00 00 94	bl	0x7c40 ; symbol stub for: _MSGetImageByName
+    7ac8:	e1 23 00 30	adr	x1, #1149 ; literal pool for: "_CADeviceDisableMinimumFrameDuration"
+    7acc:	1f 20 03 d5	nop
+    7ad0:	58 00 00 94	bl	0x7c30 ; symbol stub for: _MSFindSymbol
+    7ad4:	28 00 00 b0	adrp	x8, 5 ; 0xc000
+    7ad8:	00 bd 00 f9	str	x0, [x8, #0x178]
+    7adc:	22 35 02 10	adr	x2, #18084
+    7ae0:	1f 20 03 d5	nop
+    7ae4:	d0 02 00 10	adr	x16, #88
+    7ae8:	1f 20 03 d5	nop
+    7aec:	f0 23 c1 da	paciza	x16
+    7af0:	e1 03 10 aa	mov	x1, x16
+    7af4:	57 00 00 94	bl	0x7c50 ; symbol stub for: _MSHookFunction
+    7af8:	80 23 00 50	adr	x0, #1138 ; literal pool for: "UIStatusBarWindow"
+    7afc:	1f 20 03 d5	nop
+    7b00:	68 00 00 94	bl	0x7ca0 ; symbol stub for: _objc_getClass
+    7b04:	1f 20 03 d5	nop
+    7b08:	c1 2e 02 58	ldr	x1, #0x45d8
+    7b0c:	e3 33 02 10	adr	x3, #18044
+    7b10:	1f 20 03 d5	nop
+    7b14:	90 01 00 10	adr	x16, #48
+    7b18:	1f 20 03 d5	nop
+    7b1c:	f0 23 c1 da	paciza	x16
+    7b20:	e2 03 10 aa	mov	x2, x16
+    7b24:	fd 7b c1 a8	ldp	x29, x30, [sp], #0x10
+    7b28:	ff 23 03 d5	autibsp
+    7b2c:	d0 07 1e ca	eor	x16, x30, x30, lsl #1
+    7b30:	50 00 f0 b6	tbz	x16, #0x3e, 0x7b38
+    7b34:	20 8e 38 d4	brk	#0xc471
+    7b38:	4a 00 00 14	b	0x7c60 ; symbol stub for: _MSHookMessageEx
+    7b3c:	00 00 80 52	mov	w0, #0x0
+    7b40:	c0 03 5f d6	ret
+    7b44:	7f 23 03 d5	pacibsp
+    7b48:	eb 2b bb 6d	stp	d11, d10, [sp, #-0x50]!
+    7b4c:	e9 23 01 6d	stp	d9, d8, [sp, #0x10]
+    7b50:	f6 57 02 a9	stp	x22, x21, [sp, #0x20]
+    7b54:	f4 4f 03 a9	stp	x20, x19, [sp, #0x30]
+    7b58:	fd 7b 04 a9	stp	x29, x30, [sp, #0x40]
+    7b5c:	fd 03 01 91	add	x29, sp, #0x40
+    7b60:	68 40 60 1e	fmov	d8, d3
+    7b64:	49 40 60 1e	fmov	d9, d2
+    7b68:	2a 40 60 1e	fmov	d10, d1
+    7b6c:	0b 40 60 1e	fmov	d11, d0
+    7b70:	f4 03 01 aa	mov	x20, x1
+    7b74:	1f 20 03 d5	nop
+    7b78:	95 30 02 58	ldr	x21, #0x4610
+    7b7c:	55 00 00 94	bl	0x7cd0 ; symbol stub for: _objc_retain
+    7b80:	f3 03 00 aa	mov	x19, x0
+    7b84:	e1 03 14 aa	mov	x1, x20
+    7b88:	60 41 60 1e	fmov	d0, d11
+    7b8c:	41 41 60 1e	fmov	d1, d10
+    7b90:	22 41 60 1e	fmov	d2, d9
+    7b94:	03 41 60 1e	fmov	d3, d8
+    7b98:	bf 0a 3f d6	blraaz	x21
+    7b9c:	f4 03 00 aa	mov	x20, x0
+    7ba0:	35 00 00 b0	adrp	x21, 5 ; 0xc000
+    7ba4:	a8 ba 40 f9	ldr	x8, [x21, #0x170]
+    7ba8:	08 02 00 b5	cbnz	x8, 0x7be8
+    7bac:	1f 20 03 d5	nop
+    7bb0:	c0 2a 02 58	ldr	x0, #0x4558 ; Objc class ref: bad class ref
+    7bb4:	33 00 00 94	bl	0x7c80 ; symbol stub for: _objc_alloc
+    7bb8:	00 e4 00 2f	movi	d0, #0000000000000000
+    7bbc:	01 e4 00 2f	movi	d1, #0000000000000000
+    7bc0:	02 e4 00 2f	movi	d2, #0000000000000000
+    7bc4:	03 e4 00 2f	movi	d3, #0000000000000000
+    7bc8:	56 00 00 94	bl	0x7d20
+    7bcc:	a8 ba 40 f9	ldr	x8, [x21, #0x170]
+    7bd0:	a0 ba 00 f9	str	x0, [x21, #0x170]
+    7bd4:	e0 03 08 aa	mov	x0, x8
+    7bd8:	3a 00 00 94	bl	0x7cc0 ; symbol stub for: _objc_release
+    7bdc:	a2 ba 40 f9	ldr	x2, [x21, #0x170]
+    7be0:	e0 03 13 aa	mov	x0, x19
+    7be4:	47 00 00 94	bl	0x7d00
+    7be8:	e0 03 13 aa	mov	x0, x19
+    7bec:	35 00 00 94	bl	0x7cc0 ; symbol stub for: _objc_release
+    7bf0:	e0 03 14 aa	mov	x0, x20
+    7bf4:	fd 7b 44 a9	ldp	x29, x30, [sp, #0x40]
+    7bf8:	f4 4f 43 a9	ldp	x20, x19, [sp, #0x30]
+    7bfc:	f6 57 42 a9	ldp	x22, x21, [sp, #0x20]
+    7c00:	e9 23 41 6d	ldp	d9, d8, [sp, #0x10]
+    7c04:	eb 2b c5 6c	ldp	d11, d10, [sp], #0x50
+    7c08:	ff 0f 5f d6	retab
+    7c0c:	f5 03 00 aa	mov	x21, x0
+    7c10:	e0 03 14 aa	mov	x0, x20
+    7c14:	2b 00 00 94	bl	0x7cc0 ; symbol stub for: _objc_release
+    7c18:	02 00 00 14	b	0x7c20
+    7c1c:	f5 03 00 aa	mov	x21, x0
+    7c20:	e0 03 13 aa	mov	x0, x19
+    7c24:	27 00 00 94	bl	0x7cc0 ; symbol stub for: _objc_release
+    7c28:	e0 03 15 aa	mov	x0, x21
+    7c2c:	11 00 00 94	bl	0x7c70 ; symbol stub for: __Unwind_Resume

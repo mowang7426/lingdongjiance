@@ -19,6 +19,8 @@ static BOOL SBCPURefreshSetterABI(SEL sel, const char *argument) {
         strcmp([sig getArgumentTypeAtIndex:2],argument) == 0;
 }
 
+#import "SBCPURefreshDynamic120Audit.h"
+
 @interface SBCPURefreshRuntime : NSObject {
     CADisplayLink *_link;
     BOOL _enabled, _lockKnown, _locked, _displayKnown, _displayOn, _rangeABI, _fpsABI;
@@ -161,7 +163,7 @@ static BOOL SBCPURefreshSetterABI(SEL sel, const char *argument) {
     NSDictionary *snapshot = @{@"generatedAt":@([NSDate date].timeIntervalSince1970), @"pid":@(getpid()),
         @"loaded":@YES, @"enabled":@(_enabled), @"originalCapability":@(_capability),
         @"hardwareModel":_model ?: @"unknown", @"hardware120":@(_hardware120),
-        @"selectorABI":_audit ?: @{}, @"installedHooks":@"none; no UIScreen/private getter spoofing",
+        @"selectorABI":_audit ?: @{}, @"dynamic120Investigation":SBCPURefreshDynamic120Audit(), @"installedHooks":@"none; no UIScreen/private getter spoofing",
         @"requestSelector":_requestSelector ?: @"none", @"requestedHz":@(_link ? 120 : 0),
         @"callbackHz":@(_callbackHz), @"sampleSeconds":@(_sampleSeconds), @"pauseReason":_reason ?: @"初始化中",
         @"sampleFresh":@(fresh), @"sampleAgeSeconds":@(_sampleAt > 0 ? CACurrentMediaTime()-_sampleAt : -1),

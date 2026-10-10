@@ -264,6 +264,12 @@ static BOOL InsulationWritePref(NSString *key, id value) {
                 [d[@"callbackHz"] doubleValue],[d[@"sampleSeconds"] doubleValue],d[@"installedHooks"]];
             [m appendFormat:@"机型: %@ / 真实120硬件核对: %@\n",d[@"hardwareModel"], [d[@"hardware120"] boolValue] ? @"是" : @"否/未知（拒绝请求）"];
             [m appendFormat:@"宿主bundle: %@\nCADisableMinimumFrameDurationOnPhone: %@（只读，不改系统plist）\n调度限制: %@\n低电量: %@ / 热状态: %@\n私有策略: %@\n", d[@"hostBundle"] ?: @"未提供", d[@"phoneHighFrameRateGate"] ?: @"未提供", d[@"limitation"] ?: @"旧诊断未提供", d[@"lowPowerMode"], d[@"thermalState"], d[@"privatePolicy"] ?: @"未提供"];
+            NSDictionary *dynamicAudit = d[@"dynamic120Investigation"];
+            if ([dynamicAudit isKindOfClass:NSDictionary.class]) {
+                [m appendString:@"\n动态120 1.1 调查（未移植私有hook，不是120生效证据）：\n"];
+                for (NSString *key in [[dynamicAudit allKeys] sortedArrayUsingSelector:@selector(compare:)])
+                    [m appendFormat:@"%@ = %@\n", key, dynamicAudit[key]];
+            }
             NSDictionary *audit = d[@"selectorABI"];
             for (NSString *key in [[audit allKeys] sortedArrayUsingSelector:@selector(compare:)])
                 [m appendFormat:@"%@ = %@\n",key,audit[key]];

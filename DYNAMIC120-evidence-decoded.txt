@@ -1,0 +1,15 @@
+init offset @7da0: 0x7ab0
+selector ref 0xc0d0 raw 0x8000000007e74 target 0x7e74 .cxx_destruct
+selector ref 0xc0d8 raw 0x8000000007e38 target 0x7e38 addSubview:
+selector ref 0xc0e0 raw 0x8000000007e4f target 0x7e4f initWithFrame:
+selector ref 0xc0e8 raw 0x8000000007e44 target 0x7e44 setHidden:
+selector ref 0xc0f0 raw 0x8000000007e67 target 0x7e67 setTextView:
+selector ref 0xc0f8 raw 0x8000000007e5e target 0x7e5e textView
+method list flags/count 0x8000000c 4
+method 0x7db0 initWithFrame: @48@0:8{CGRect={CGPoint=dd}{CGSize=dd}}16 IMP 0x7960
+method 0x7dbc textView @16@0:8 IMP 0x7a78
+method 0x7dc8 setTextView: v24@0:8@16 IMP 0x7a88
+method 0x7dd4 .cxx_destruct v16@0:8 IMP 0x7a9c
+classref 0xc100 0x400800000000000f
+classref 0xc108 0x800000000c120
+classref 0xc110 0x1000000000c120
