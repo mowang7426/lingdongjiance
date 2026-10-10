@@ -100,5 +100,6 @@ __attribute__((constructor)) static void SB120Initialize(void) {
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 3 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
         static SB120Keeper *keeper;
         keeper = [SB120Keeper new];
+        (void)keeper; // Retain the controller for the SpringBoard process lifetime.
     });
 }
