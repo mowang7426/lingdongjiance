@@ -57,7 +57,7 @@ static BOOL InsulationWritePref(NSString *key, id value) {
     if (!saveOK) return NO;
     store[key] = value; return YES;
 }
-#define CFNotificationCenterPostNotification(center, name, object, info, immediately) (++posts)
+#define CFNotificationCenterPostNotification(center, name, object, info, immediately) ((void)(center), ++posts)
 #define dispatch_async(queue, block) block()
 #define UIAlertControllerStyleAlert 0
 #define UIAlertActionStyleDefault 0
