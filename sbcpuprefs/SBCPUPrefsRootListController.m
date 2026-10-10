@@ -31,11 +31,6 @@ static NSString *InsulationMode(NSDictionary *prefs) {
     return [mode isKindOfClass:[NSString class]] &&
         [@[@"off", @"lowPower", @"fullPower"] containsObject:mode] ? mode : @"off";
 }
-static NSString *InsulationModeTitle(NSString *mode) {
-    NSDictionary *titles = @{@"off": @"苹果原生温控", @"lowPower": @"模拟低电频率",
-        @"fullPower": @"防止温控降频"};
-    return titles[mode];
-}
 static BOOL InsulationWritePref(NSString *key, id value) {
     NSString *path = InsulationPrefsFilePath();
     if (!path || !key || !value) return NO;
@@ -121,7 +116,7 @@ static BOOL InsulationWritePref(NSString *key, id value) {
     if (InsulationKey(key)) {
         NSDictionary *prefs = InsulationReadPrefs();
         if ([key isEqualToString:@"thermalPowerMode"]) {
-            return InsulationModeTitle(InsulationMode(prefs));
+            return InsulationMode(prefs);
         }
         return prefs[key] ?: [specifier propertyForKey:@"default"];
     }
@@ -155,6 +150,15 @@ static BOOL InsulationWritePref(NSString *key, id value) {
             if ([key isEqualToString:@"thermalPowerMode"]) {
                 CFNotificationCenterPostNotification(center, CFSTR("com.be-huge.insulation-restartThermalMonitor"), NULL, NULL, YES);
             }
+        } else {
+            dispatch_async(dispatch_get_main_queue(), ^{
+                [self reloadSpecifier:specifier];
+                UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"温控设置保存失败"
+                    message:@"未能确认偏好文件写入成功，已重新读取当前状态。请检查偏好文件访问权限后重试。"
+                    preferredStyle:UIAlertControllerStyleAlert];
+                [alert addAction:[UIAlertAction actionWithTitle:@"好" style:UIAlertActionStyleDefault handler:nil]];
+                [self presentViewController:alert animated:YES completion:nil];
+            });
         }
         return;
     }

@@ -23,6 +23,22 @@ def check_resources(entry, info, settings):
     assert info['CFBundleExecutable'] == 'SBCPUPrefs'
     assert settings['title'] == '灵动监测'
     rows = settings['items']
+    for row in rows:
+        if row.get('key') and row.get('cell') and not row.get('defaults'):
+            assert row.get('get') == 'getPreferenceValue:', row
+            assert row.get('set') == 'setPreferenceValue:specifier:', row
+    insulation_keys = {'thermalPowerMode', 'thermalPreventDimmingEnabled',
+                       'thermalSuppressNotificationsEnabled', 'thermalDisablePocketSunlightEnabled',
+                       'thermalSunlightLockedEnabled', 'cpuMinPowerValue', 'thermalPuppetValue'}
+    for row in rows:
+        if row.get('key') in insulation_keys:
+            assert 'defaults' not in row, row
+            assert row['get'] == 'getPreferenceValue:' and row['set'] == 'setPreferenceValue:specifier:'
+    mode = next(row for row in rows if row.get('key') == 'thermalPowerMode')
+    assert mode['cell'] == 'PSTitleValueCell'
+    assert mode['validValues'] == ['off', 'lowPower', 'fullPower']
+    assert mode['validTitles'] == ['苹果原生温控', '模拟低电频率', '防止温控降频']
+    assert mode['default'] == 'off'
     text_only = [r for r in rows if r.get('detail') == 'SBCPUTextOnlyController']
     assert len(text_only) == 1 and text_only[0]['cell'] == 'PSLinkCell' and text_only[0]['isController'] is True
 

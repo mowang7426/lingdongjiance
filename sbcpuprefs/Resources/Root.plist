@@ -161,6 +161,10 @@
 			<string>CPU 模式</string>
 			<key>key</key>
 			<string>thermalPowerMode</string>
+			<key>get</key>
+			<string>getPreferenceValue:</string>
+			<key>set</key>
+			<string>setPreferenceValue:specifier:</string>
 			<key>PostNotification</key>
 			<string>com.be-huge.insulation-executePuppetEvent</string>
 			<key>default</key>
@@ -181,6 +185,10 @@
 			<false/>
 			<key>key</key>
 			<string>thermalPreventDimmingEnabled</string>
+			<key>get</key>
+			<string>getPreferenceValue:</string>
+			<key>set</key>
+			<string>setPreferenceValue:specifier:</string>
 		</dict>
 		<dict>
 			<key>label</key>
@@ -197,6 +205,10 @@
 			<false/>
 			<key>key</key>
 			<string>thermalSuppressNotificationsEnabled</string>
+			<key>get</key>
+			<string>getPreferenceValue:</string>
+			<key>set</key>
+			<string>setPreferenceValue:specifier:</string>
 		</dict>
 		<dict>
 			<key>cell</key>
@@ -207,6 +219,10 @@
 			<false/>
 			<key>key</key>
 			<string>thermalDisablePocketSunlightEnabled</string>
+			<key>get</key>
+			<string>getPreferenceValue:</string>
+			<key>set</key>
+			<string>setPreferenceValue:specifier:</string>
 		</dict>
 		<dict>
 			<key>cell</key>
@@ -217,6 +233,10 @@
 			<false/>
 			<key>key</key>
 			<string>thermalSunlightLockedEnabled</string>
+			<key>get</key>
+			<string>getPreferenceValue:</string>
+			<key>set</key>
+			<string>setPreferenceValue:specifier:</string>
 		</dict>
 		<dict>
 			<key>cell</key>

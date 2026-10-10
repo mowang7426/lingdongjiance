@@ -48,6 +48,12 @@ jobs:
         run: |
           python3 tests/thermal_removed.py
           python3 tests/preferences_navigation.py
+          python3 tests/insulation_sync.py
+          TMP_THERMAL=$(mktemp -d)
+          python3 tests/thermal_specifier_binding.py --emit-native "$TMP_THERMAL/thermal.m"
+          clang -fobjc-arc -framework Foundation -Wall -Wextra -Werror \
+            "$TMP_THERMAL/thermal.m" -o "$TMP_THERMAL/thermal"
+          "$TMP_THERMAL/thermal" "$GITHUB_WORKSPACE/sbcpuprefs/Resources/Root.plist"
 
       - name: Native respring policy regression
         run: python3 tests/respring_native_policy.py
