@@ -19,6 +19,9 @@ jobs:
           /tmp/ui120-test
           clang++ -x c++ -std=c++11 -Wall -Wextra -Werror -pedantic StandaloneUI120/tests/policy.c -o /tmp/ui120-test-cxx
           /tmp/ui120-test-cxx
+          python3 StandaloneUI120/tests/native_lifecycle.py /tmp/ui120-lifecycle.m
+          clang -fobjc-arc -fblocks -framework Foundation -Wall -Wextra -Werror -IStandaloneUI120 /tmp/ui120-lifecycle.m -o /tmp/ui120-lifecycle
+          /tmp/ui120-lifecycle
       - name: Dependencies
         run: brew install make dpkg ldid xz
       - name: Theos and SDK
