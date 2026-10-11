@@ -32,13 +32,17 @@ static inline BOOL SBCPUNetworkDelta(NSDictionary *previous, NSDictionary *curre
     return YES;
 }
 static inline NSString *SBCPUNetworkRate(double bytesPerSecond) {
-    if (!isfinite(bytesPerSecond) || bytesPerSecond < 0) return @"-- B/s";
-    if (bytesPerSecond < 1024) return [NSString stringWithFormat:@"%.0f B/s", bytesPerSecond];
-    if (bytesPerSecond < 1024 * 1024) return [NSString stringWithFormat:@"%.1f KB/s", bytesPerSecond / 1024];
-    return [NSString stringWithFormat:@"%.1f MB/s", bytesPerSecond / (1024 * 1024)];
+    if (!isfinite(bytesPerSecond) || bytesPerSecond < 0) return @"--";
+    // Select units using the raw rate, then truncate display precision. Rounding
+    // 1023.99K upwards would incorrectly show 1024K below the M threshold.
+    if (bytesPerSecond < 1024) return [NSString stringWithFormat:@"%.0fB/s", floor(bytesPerSecond)];
+    double divisor = bytesPerSecond < 1024 * 1024 ? 1024 : 1024 * 1024;
+    double value = bytesPerSecond / divisor;
+    if (value < 1e15) value = floor(value * 10) / 10;
+    return [NSString stringWithFormat:@"%.1f%@/s", value, divisor == 1024 ? @"K" : @"M"];
 }
 static inline NSString *SBCPUNetworkText(BOOL valid, double download, double upload) {
-    return [NSString stringWithFormat:@"上传 %@ · 下载 %@", SBCPUNetworkRate(valid ? upload : NAN),
+    return [NSString stringWithFormat:@"↑%@ ↓%@", SBCPUNetworkRate(valid ? upload : NAN),
         SBCPUNetworkRate(valid ? download : NAN)];
 }
 #endif

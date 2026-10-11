@@ -29,7 +29,7 @@ for suffix in keys:
 assert 'notify_post("com.yourname.sbcpufloating.prefschanged")' in controller
 assert 'SBCPUTextOnlyRow(fields,' in text
 assert 'textOnlyLabel.numberOfLines = 1' in text
-assert 'SBCPUTextOnlyMinimumScale(naturalWidth, available)' in text
+assert 'SBCPUTextOnlyFitFont(naturalWidth, available, floatingTextOnlyFontSize)' in text
 assert 'textOnlyLabel.hidden = (textOnlyLabel.text.length == 0)' in text
 assert 'textOnlySignals = (textOnlyShowSIM1 || textOnlyShowSIM2) ? readAllSimSignals() : @[];' in text
 assert '(floatingTextOnlyMode && textOnlyShowFPS)' in text

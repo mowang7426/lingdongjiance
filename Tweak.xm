@@ -2626,8 +2626,8 @@ static void applyTextOnlyMode(void) {
         [textOnlyLabel removeFromSuperview];
         textOnlyLabel = [[SBCPUTextBackdropLabel alloc] initWithFrame:CGRectZero];
         textOnlyLabel.numberOfLines = 1;
-        textOnlyLabel.lineBreakMode = NSLineBreakByClipping;
-        textOnlyLabel.adjustsFontSizeToFitWidth = YES;
+        textOnlyLabel.lineBreakMode = NSLineBreakByCharWrapping;
+        textOnlyLabel.adjustsFontSizeToFitWidth = NO;
         textOnlyLabel.baselineAdjustment = UIBaselineAdjustmentAlignCenters;
         textOnlyLabel.textAlignment = NSTextAlignmentCenter;
         textOnlyLabel.backgroundColor = UIColor.clearColor;
@@ -2651,23 +2651,35 @@ static void applyTextOnlyMode(void) {
         floatingView.tempValueLabel.text, netCurrent, textOnlySignals);
     if (textOnlyShowNetwork) {
         NSString *network = textNetworkRow ?: SBCPUNetworkText(NO, 0, 0);
-        textOnlyLabel.text = textOnlyLabel.text.length ? [textOnlyLabel.text stringByAppendingFormat:@" · %@", network] : network;
+        textOnlyLabel.text = textOnlyLabel.text.length ? [textOnlyLabel.text stringByAppendingFormat:@" %@", network] : network;
     }
     textOnlyLabel.hidden = (textOnlyLabel.text.length == 0);
     textOnlyLabel.font = [UIFont monospacedSystemFontOfSize:floatingTextOnlyFontSize weight:UIFontWeightMedium];
-    CGRect container = floatingView.superview.bounds;
-    UIInterfaceOrientation orientation = getEffectiveFloatingOrientation();
-    BOOL rotated = UIInterfaceOrientationIsLandscape(orientation);
     SBCPUTextGeometry textGeometry = textOnlyGeometry();
-    CGFloat available = floatingTextOnlyMode ? MAX(1, textGeometry.width-textGeometry.left-textGeometry.right) :
-        SBCPUTextOnlyAvailableWidth(container.size.width, container.size.height, rotated);
+    CGFloat available = MAX(1, textGeometry.width-textGeometry.left-textGeometry.right);
     CGFloat naturalWidth = ceil([textOnlyLabel.text sizeWithAttributes:@{NSFontAttributeName:textOnlyLabel.font}].width);
-    textOnlyLabel.minimumScaleFactor = SBCPUTextOnlyMinimumScale(naturalWidth, available);
-    // Single physical row; retain every selected value even on narrow screens.
-    CGFloat rowWidth = textOnlyLabel.hidden ? 1 : MAX(1, MIN(available, naturalWidth + 2));
-    CGFloat rowHeight = textOnlyLabel.hidden ? 1 : ceil(textOnlyLabel.font.lineHeight);
+    CGFloat fittedFont = SBCPUTextOnlyFitFont(naturalWidth, available, floatingTextOnlyFontSize);
+    textOnlyLabel.font = [UIFont monospacedSystemFontOfSize:fittedFont weight:UIFontWeightMedium];
+    CGFloat fittedWidth = ceil([textOnlyLabel.text sizeWithAttributes:@{NSFontAttributeName:textOnlyLabel.font}].width);
+    BOOL wrap = fittedWidth + 2 > available;
+    textOnlyLabel.numberOfLines = wrap ? 0 : 1;
+    // At 8pt use additional rows instead of infinitely small text or ellipsis.
+    // Character wrapping also bounds a single exceptionally long metric token.
+    CGFloat rowWidth = textOnlyLabel.hidden ? 1 : MAX(1, MIN(available, fittedWidth + 2));
+    CGSize measured = [textOnlyLabel sizeThatFits:CGSizeMake(rowWidth, CGFLOAT_MAX)];
+    CGFloat maxHeight = MAX(1, textGeometry.height-textGeometry.top-textGeometry.bottom);
+    CGFloat rowHeight = textOnlyLabel.hidden ? 1 : MIN(maxHeight, ceil(MAX(textOnlyLabel.font.lineHeight, measured.height)));
     floatingView.bounds = CGRectMake(0, 0, rowWidth, rowHeight);
     textOnlyLabel.frame = floatingView.bounds;
+    // Resize can happen mid-drag or during a locked refresh, before updateFloatingSize.
+    // Re-clamp now as well, in logical display coordinates; do not rewrite saved anchors.
+    SBCPUTextPoint p = floatingView.positionLocked && lockedTextAnchorValid
+        ? SBCPUTextResolveAnchor(lockedTextAnchor,textGeometry.width,textGeometry.height,rowWidth/2,rowHeight/2,
+            textGeometry.left,textGeometry.top,textGeometry.right,textGeometry.bottom)
+        : textOnlyLogicalCenter(floatingView.center,textGeometry);
+    p.x = SBCPUTextSafeCoordinate(p.x,textGeometry.left+rowWidth/2,textGeometry.width-textGeometry.right-rowWidth/2);
+    p.y = SBCPUTextSafeCoordinate(p.y,textGeometry.top+rowHeight/2,textGeometry.height-textGeometry.bottom-rowHeight/2);
+    floatingView.center = textOnlyContainerCenter(p,textGeometry);
     applyTextOnlyTextFilter();
 }
 

@@ -20,7 +20,7 @@ assert 'NSTimer' not in sampler and 'CADisplayLink' not in sampler
 assert s.count('    sampleTextNetwork();') == 1
 assert s.index('    sampleTextNetwork();') > s.index('- (void)updateDataWithCPU:(double)cpu\n')
 assert 'wasNetwork != textOnlyShowNetwork' in s and 'resetTextNetwork();' in s
-assert 'textOnlyLabel.text stringByAppendingFormat:@" · %@", network' in s
+assert 'textOnlyLabel.text stringByAppendingFormat:@" %@", network' in s
 assert 'textOnlyLabel.numberOfLines = 1' in s
-assert 'SBCPUTextOnlyMinimumScale(naturalWidth, available)' in s
+assert 'SBCPUTextOnlyFitFont(naturalWidth, available, floatingTextOnlyFontSize)' in s
 print('network OFF default, shared durable preferences, gated refresh and isolated layout: passed')

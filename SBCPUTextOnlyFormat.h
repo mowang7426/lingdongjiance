@@ -48,6 +48,6 @@ static inline NSString *SBCPUTextOnlyRow(SBCPUTextOnlyFields fields,
     if (fields.current) [parts addObject:SBCPUTextOnlyCompactValue(current, @"mA", YES)];
     if (fields.sim1) [parts addObject:SBCPUTextOnlySignal(signals, 1)];
     if (fields.sim2) [parts addObject:SBCPUTextOnlySignal(signals, 2)];
-    return [parts componentsJoinedByString:@" · "];
+    return [parts componentsJoinedByString:@" "];
 }
 #endif

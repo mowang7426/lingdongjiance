@@ -19,9 +19,11 @@ static inline double SBCPUTextOnlyAvailableWidth(double width, double height, in
     double logicalWidth = rotated ? height : width;
     return fmax(1, logicalWidth - 8);
 }
-static inline double SBCPUTextOnlyMinimumScale(double naturalWidth, double available) {
-    if (!isfinite(naturalWidth) || naturalWidth <= 0) return 1;
-    // Extra 5% headroom avoids rounding truncation. No hard floor hides fields.
-    return fmin(1, fmax(0.0001, available / naturalWidth * 0.95));
+static inline double SBCPUTextOnlyFitFont(double naturalWidth, double available, double configured) {
+    configured = SBCPUTextOnlyBound(configured, 8, 24, 13);
+    if (!isfinite(naturalWidth) || naturalWidth <= 0) return configured;
+    // Small padding protects the last glyph; never shrink below readable 8pt.
+    // If the row still does not fit, the caller wraps rather than drops fields.
+    return fmax(8, fmin(configured, configured * fmax(1, available - 2) / naturalWidth));
 }
 #endif

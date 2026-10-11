@@ -22,10 +22,12 @@ int main(void) {
     assert(SBCPUTextOnlyBound(-2000, -1000, 1000, 0) == -1000);
     assert(SBCPUTextOnlyAvailableWidth(320, 568, 0) == 312);
     assert(SBCPUTextOnlyAvailableWidth(320, 568, 1) == 560);
-    assert(SBCPUTextOnlyMinimumScale(800, 312) < 0.4);
-    assert(SBCPUTextOnlyMinimumScale(100, 312) == 1);
-    assert(SBCPUTextOnlyMinimumScale(NAN, 312) == 1);
-    assert(SBCPUTextOnlyMinimumScale(10000, 120) > 0);
+    assert(SBCPUTextOnlyFitFont(800, 312, 13) == 8);
+    assert(SBCPUTextOnlyFitFont(100, 312, 13) == 13);
+    assert(SBCPUTextOnlyFitFont(NAN, 312, 13) == 13);
+    assert(SBCPUTextOnlyFitFont(10000, 120, 24) == 8);
+    assert(SBCPUTextOnlyFitFont(400, 312, 13) > 8);
+    assert(SBCPUTextOnlyFitFont(400, 312, 13) < 13);
     puts("PASS: text-only dock, Island margin, three anchors, narrow layout and font bounds");
     return 0;
 }
