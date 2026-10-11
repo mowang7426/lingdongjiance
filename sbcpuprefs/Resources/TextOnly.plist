@@ -36,7 +36,7 @@
 			<key>label</key>
 			<string>独立显示项目</string>
 			<key>footerText</key>
-			<string>以下开关只影响纯文字浮窗，初始默认全部开启，不继承或改写普通浮窗开关。◉ 为 CPU 占用，▰ 为电量；MHz / fps / °C / mA 为频率、帧率、温度、电流；S1 / S2 为各卡 dBm 信号强度，不显示运营商、频段或制式。-- 表示未取得数值。不显示温控运行和充电状态；全关则不显示文字。</string>
+			<string>以下开关只影响纯文字浮窗，原有项目默认开启，上传/下载网速默认关闭，不继承或改写普通浮窗开关。网速按真实 Wi-Fi/蜂窝接口字节差分显示，单位 B/s、KB/s、MB/s（1024 进制），不重复计入回环或 VPN 隧道；复用原有低频刷新，隐藏/关闭时不采样。初次采样、网络切换、休眠恢复或数据不可用显示 --。◉ 为 CPU 占用，▰ 为电量；MHz / fps / °C / mA 为频率、帧率、温度、电流；S1 / S2 为各卡 dBm 信号强度，不显示运营商、频段或制式。-- 表示未取得数值。不显示温控运行和充电状态；全关则不显示文字。</string>
 		</dict>
 		<dict>
 			<key>defaults</key><string>com.yourname.sbcpufloating</string>
@@ -47,6 +47,15 @@
 			<key>key</key><string>floatingTextOnlyShowCPU</string>
 			<key>default</key><true/>
 		</dict>
+        <dict>
+            <key>defaults</key><string>com.yourname.sbcpufloating</string>
+            <key>get</key><string>getPreferenceValue:</string>
+            <key>set</key><string>setPreferenceValue:specifier:</string>
+            <key>cell</key><string>PSSwitchCell</string>
+            <key>label</key><string>上传 / 下载网速</string>
+            <key>key</key><string>floatingTextOnlyShowNetwork</string>
+            <key>default</key><false/>
+        </dict>
 		<dict>
 			<key>defaults</key><string>com.yourname.sbcpufloating</string>
 			<key>get</key><string>getPreferenceValue:</string>

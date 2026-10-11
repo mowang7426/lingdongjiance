@@ -5,6 +5,8 @@
 #import "SBCPUCapsuleTextPolicy.h"
 #import "SBCPUTextOnlyFormat.h"
 #import "SBCPUTextOnlyCurrent.h"
+#import "SBCPUTextNetwork.h"
+#import <net/if_dl.h>
 
 #import <Foundation/Foundation.h>
 #import <UIKit/UIKit.h>
@@ -355,7 +357,54 @@ static SBCPUTextRGBA textOnlyCustomRGBA = {0, 122.0/255.0, 1, 1};
 static BOOL textOnlyShowCPU = YES, textOnlyShowFrequency = YES, textOnlyShowFPS = YES;
 static BOOL textOnlyShowBattery = YES, textOnlyShowTemperature = YES, textOnlyShowCurrent = YES;
 static BOOL textOnlyShowSIM1 = YES, textOnlyShowSIM2 = YES;
+static BOOL textOnlyShowNetwork = NO;
+static NSDictionary *textNetworkPrevious = nil;
+static double textNetworkUptime = 0;
+static NSString *textNetworkRow = nil;
 static NSArray<NSDictionary *> *textOnlySignals = nil;
+
+static void resetTextNetwork(void) {
+    textNetworkPrevious = nil;
+    textNetworkUptime = 0;
+    textNetworkRow = nil;
+}
+
+// Called only by the existing low-frequency data refresh, never by layout or FPS.
+static void sampleTextNetwork(void) {
+    BOOL needed = isEnabled && floatingTextOnlyMode && textOnlyShowNetwork &&
+        cpuWindow && !cpuWindow.hidden && cpuWindow.alpha > 0.01 &&
+        floatingView && floatingView.window && !floatingView.hidden && floatingView.alpha > 0.01;
+    if (!needed) { resetTextNetwork(); return; }
+    static int blankToken = -1;
+    if (blankToken == -1) {
+        int token = -1;
+        if (notify_register_check("com.apple.springboard.hasBlankedScreen", &token) == NOTIFY_STATUS_OK)
+            blankToken = token;
+    }
+    uint64_t blanked = 0;
+    if (blankToken != -1 && notify_get_state(blankToken, &blanked) == NOTIFY_STATUS_OK && blanked) {
+        resetTextNetwork(); return;
+    }
+    struct ifaddrs *interfaces = NULL;
+    NSMutableDictionary *snapshot = [NSMutableDictionary dictionary];
+    if (getifaddrs(&interfaces) != 0) { resetTextNetwork(); return; }
+    for (struct ifaddrs *p = interfaces; p; p = p->ifa_next) {
+        if (!p->ifa_addr || p->ifa_addr->sa_family != AF_LINK || !p->ifa_data ||
+            !(p->ifa_flags & IFF_UP) || !(p->ifa_flags & IFF_RUNNING) ||
+            (p->ifa_flags & IFF_LOOPBACK) || !SBCPUNetworkInterface(p->ifa_name)) continue;
+        struct sockaddr_dl *link = (struct sockaddr_dl *)p->ifa_addr;
+        struct if_data *data = (struct if_data *)p->ifa_data;
+        NSString *key = [NSString stringWithFormat:@"%s:%u", p->ifa_name, (unsigned)link->sdl_index];
+        // Dictionary identity deduplicates link records; IPv4/IPv6 are not counted again.
+        snapshot[key] = @[@((uint64_t)data->ifi_ibytes), @((uint64_t)data->ifi_obytes)];
+    }
+    freeifaddrs(interfaces);
+    double now = NSProcessInfo.processInfo.systemUptime, download = 0, upload = 0;
+    BOOL valid = SBCPUNetworkDelta(textNetworkPrevious, snapshot, now - textNetworkUptime, &download, &upload);
+    textNetworkRow = SBCPUNetworkText(valid, download, upload);
+    textNetworkPrevious = snapshot.count ? snapshot : nil;
+    textNetworkUptime = now;
+}
 // Updated on the existing UI sampling tick; never reuse the ordinary label's
 // smart-stop zero or the legacy 150 mA fallback.
 static NSNumber *textOnlyBatteryCurrent = nil;
@@ -1051,6 +1100,10 @@ static void LoadPreferences(void) {
     textOnlyShowCurrent = getBoolPref(CFSTR("floatingTextOnlyShowCurrent"), YES);
     textOnlyShowSIM1 = getBoolPref(CFSTR("floatingTextOnlyShowSIM1"), YES);
     textOnlyShowSIM2 = getBoolPref(CFSTR("floatingTextOnlyShowSIM2"), YES);
+    BOOL wasNetwork = textOnlyShowNetwork;
+    textOnlyShowNetwork = getBoolPref(CFSTR("floatingTextOnlyShowNetwork"), NO);
+    if (wasNetwork != textOnlyShowNetwork || wasTextOnly != floatingTextOnlyMode || !isEnabled)
+        resetTextNetwork();
     statusDockReturnDelay = MAX(1, MIN(30, getIntPref(CFSTR("statusDockReturnDelay"), 5)));
     floatingValueRefreshInterval = MAX(1.0, MIN(2.0, getFloatPref(CFSTR("floatingValueRefreshInterval"), 1.0f)));
     statusDockShowCPU = getBoolPref(CFSTR("statusDockShowCPU"), YES);
@@ -2596,6 +2649,10 @@ static void applyTextOnlyMode(void) {
     textOnlyLabel.text = SBCPUTextOnlyRow(fields, floatingView.cpuValueLabel.text,
         floatingView.cpuFreqLabel.text, floatingView.fpsValueLabel.text, floatingView.batteryValueLabel.text,
         floatingView.tempValueLabel.text, netCurrent, textOnlySignals);
+    if (textOnlyShowNetwork) {
+        NSString *network = textNetworkRow ?: SBCPUNetworkText(NO, 0, 0);
+        textOnlyLabel.text = textOnlyLabel.text.length ? [textOnlyLabel.text stringByAppendingFormat:@" · %@", network] : network;
+    }
     textOnlyLabel.hidden = (textOnlyLabel.text.length == 0);
     textOnlyLabel.font = [UIFont monospacedSystemFontOfSize:floatingTextOnlyFontSize weight:UIFontWeightMedium];
     CGRect container = floatingView.superview.bounds;
@@ -5141,6 +5198,7 @@ return self;
     double displayCurrent = gSmartChargeHoldDisplay ? 0.0 : current;
     _currentValueLabel.text = [NSString stringWithFormat:@"%.0f mA", displayCurrent];
 
+    sampleTextNetwork();
     // Reuse the existing refresh tick. Pure-text signals ignore ordinary flags
     // and never parse the long carrier/status label.
     if (floatingTextOnlyMode) {
