@@ -28,5 +28,5 @@ assert 'wasUploadNetwork != textOnlyShowUploadNetwork' in s
 assert 'wasDownloadNetwork != textOnlyShowDownloadNetwork' in s and 'resetTextNetwork();' in s
 assert 'textNetworkDownloadRate,textNetworkUploadRate,i==8,i==9' in s
 assert 'textOnlyLabel.numberOfLines = 1' in s
-assert 'SBCPUTextSlotsLayout(mask,fs,available,second?floatingTextOnly2DataGap:floatingTextOnlyDataGap,frames)' in s
+assert 'SBCPUTextSlotsLayoutRows(mask,fs,available,second?floatingTextOnly2DataGap:floatingTextOnlyDataGap,second?textOnly2DualLine:textOnlyDualLine,frames)' in s
 print('network OFF default, shared durable preferences, gated refresh and isolated layout: passed')

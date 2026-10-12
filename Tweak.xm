@@ -365,6 +365,7 @@ static NSInteger floatingTextOnlyPreset = 1;
 static CGFloat floatingTextOnlyX = 0, floatingTextOnlyY = 0;
 static CGFloat floatingTextOnlyFontSize = 13;
 static CGFloat floatingTextOnlyDataGap = 4, floatingTextOnly2DataGap = 4;
+static BOOL textOnlyDualLine = NO, textOnly2DualLine = NO;
 static NSInteger floatingTextOnlyColor = 0; // 0 system appearance, 1 white, 2 black, 3 custom, 4 realtime invert
 static SBCPUTextRGBA textOnlyCustomRGBA = {0, 122.0/255.0, 1, 1};
 static BOOL textOnlyShowCPU = YES, textOnlyShowFrequency = YES, textOnlyShowFPS = YES;
@@ -1123,6 +1124,8 @@ static void LoadPreferences(void) {
     statusBarDockEnable = getBoolPref(CFSTR("statusBarDockEnable"), NO);
     floatingTextOnlyMode = getBoolPref(CFSTR("floatingTextOnlyMode"), NO);
     floatingTextOnlyMode2 = getBoolPref(CFSTR("floatingTextOnlyMode2"), NO);
+    textOnlyDualLine = getBoolPref(CFSTR("floatingTextOnlyDualLine"), NO);
+    textOnly2DualLine = getBoolPref(CFSTR("floatingTextOnly2DualLine"), NO);
     floatingTextOnly2Preset = MAX(0, MIN(2, getIntPref(CFSTR("floatingTextOnly2Preset"), 1)));
     floatingTextOnly2X = SBCPUTextOnlyBound(getFloatPref(CFSTR("floatingTextOnly2X"), 0), -1000, 1000, 0);
     floatingTextOnly2Y = SBCPUTextOnlyBound(getFloatPref(CFSTR("floatingTextOnly2Y"), 70), -1000, 1000, 70);
@@ -2505,8 +2508,7 @@ typedef struct {
     int rotation;
     double width, height, left, top, right, bottom;
 } SBCPUTextGeometry;
-static SBCPUTextGeometry textOnlyGeometry(void) {
-    UIView *parent = floatingView.superview;
+static SBCPUTextGeometry textOnlyGeometryForView(UIView *parent, BOOL second) {
     SBCPUTextGeometry g = {};
     g.bounds = parent.bounds;
     if (CGRectIsEmpty(g.bounds)) g.bounds = UIScreen.mainScreen.bounds;
@@ -2524,12 +2526,18 @@ static SBCPUTextGeometry textOnlyGeometry(void) {
     // Transform safe rect exactly once into display-direction coordinates.
     SBCPUTextPoint a = SBCPUTextToLogical(SBCPUTextPointMake(safe.left, safe.top), g.bounds.size.width, g.bounds.size.height, g.rotation);
     SBCPUTextPoint b = SBCPUTextToLogical(SBCPUTextPointMake(g.bounds.size.width-safe.right, g.bounds.size.height-safe.bottom), g.bounds.size.width, g.bounds.size.height, g.rotation);
-    g.left = MAX(4, MIN(a.x,b.x));
-    g.right = MAX(4, g.width-MAX(a.x,b.x)); g.bottom = MAX(10, g.height-MAX(a.y,b.y));
+    g.left = MAX(second?0:4, MIN(a.x,b.x));
+    g.right = MAX(second?0:4, g.width-MAX(a.x,b.x)); g.bottom = MAX(10, g.height-MAX(a.y,b.y));
     // Display top is ALWAYS reachable for pure text, including locked rotation.
     // Retain transformed side/bottom bounds; never feed status-bar top back in.
     g.top = SBCPUFloatingProtectedTop(1, dynamicIslandProtectionEnable, 0);
     return g;
+}
+static SBCPUTextGeometry textOnlyGeometry(void) {
+    return textOnlyGeometryForView(floatingView.superview, NO);
+}
+static SBCPUTextGeometry textOnlySecondGeometry(void) {
+    return textOnlyGeometryForView(cpuWindow.rootViewController.view, YES);
 }
 static SBCPUTextPoint textOnlyLogicalCenter(CGPoint center, SBCPUTextGeometry g) {
     return SBCPUTextToLogical(SBCPUTextPointMake(center.x-g.bounds.origin.x, center.y-g.bounds.origin.y), g.bounds.size.width, g.bounds.size.height, g.rotation);
@@ -2710,7 +2718,7 @@ static CGSize layoutTextSlots(SBCPUTextBackdropLabel *host, BOOL second, SBCPUTe
     UIFont *font=[UIFont monospacedDigitSystemFontOfSize:fs weight:(second?textOnly2Bold:textOnlyBold)?UIFontWeightBold:UIFontWeightRegular];
     CGFloat available=MAX(1,g.width-g.left-g.right);
     SBCPUTextSlot frames[10];
-    CGFloat height=SBCPUTextSlotsLayout(mask,fs,available,second?floatingTextOnly2DataGap:floatingTextOnlyDataGap,frames);
+    CGFloat height=SBCPUTextSlotsLayoutRows(mask,fs,available,second?floatingTextOnly2DataGap:floatingTextOnlyDataGap,second?textOnly2DualLine:textOnlyDualLine,frames);
     NSMutableArray *parts=[NSMutableArray array];
     for (int i=0;i<10;i++) {
         SBCPUTextBackdropLabel *slot=(id)[host viewWithTag:4950+i];
@@ -2722,7 +2730,10 @@ static CGSize layoutTextSlots(SBCPUTextBackdropLabel *host, BOOL second, SBCPUTe
             floatingView.fpsValueLabel.text,floatingView.batteryValueLabel.text,floatingView.tempValueLabel.text,
             SBCPUTextOnlyCurrentText(textOnlyBatteryCurrent,textOnlyCurrentUptime,NSProcessInfo.processInfo.systemUptime),textOnlySignals):
             SBCPUNetworkTextDirections(textNetworkSampleValid,textNetworkDownloadRate,textNetworkUploadRate,i==8,i==9);
-        slot.font=font; slot.text=value; slot.numberOfLines=1; slot.adjustsFontSizeToFitWidth=NO;
+        UIFont *slotFont=font;
+        if (second?textOnly2DualLine:textOnlyDualLine)
+            slotFont=[UIFont monospacedDigitSystemFontOfSize:frames[i].height/1.4 weight:(second?textOnly2Bold:textOnlyBold)?UIFontWeightBold:UIFontWeightRegular];
+        slot.font=slotFont; slot.text=value; slot.numberOfLines=1; slot.adjustsFontSizeToFitWidth=NO;
         slot.lineBreakMode=NSLineBreakByClipping; slot.textAlignment=NSTextAlignmentLeft;
         slot.clipsToBounds=YES;
         slot.frame=CGRectMake(frames[i].x,frames[i].y,frames[i].width,frames[i].height);
@@ -2743,7 +2754,7 @@ static BOOL textOnly2Dragging=NO;
 @implementation SBCPURootViewController (SBCPUSecondTextHUD)
 - (void)sbcpu_secondTextPan:(UIPanGestureRecognizer *)pan {
     if (textOnly2Locked || !textOnly2Label) return;
-    SBCPUTextGeometry g=textOnlyGeometry();
+    SBCPUTextGeometry g=textOnlySecondGeometry();
     CGPoint d=[pan translationInView:self.view];
     if (pan.state==UIGestureRecognizerStateBegan) textOnly2Dragging=YES;
     if (pan.state==UIGestureRecognizerStateChanged) {
@@ -2781,7 +2792,7 @@ static void updateTextOnlySecond(void) {
     }
     if (textOnly2Locked) textOnly2Dragging=NO;
     textOnly2Label.userInteractionEnabled=!textOnly2Locked;
-    SBCPUTextGeometry g=textOnlyGeometry();
+    SBCPUTextGeometry g=textOnlySecondGeometry();
     CGSize size=layoutTextSlots(textOnly2Label,YES,g);
     textOnly2Label.bounds=(CGRect){CGPointZero,size};
     int r=g.rotation;
@@ -2790,7 +2801,7 @@ static void updateTextOnlySecond(void) {
         CGFloat hw=size.width/2,hh=size.height/2;
         SBCPUTextPoint p=SBCPUTextPointMake(SBCPUTextOnlyAnchorX((int)floatingTextOnly2Preset,g.width,hw)+floatingTextOnly2X,hh+floatingTextOnly2Y);
         NSDictionary *saved=[[NSUserDefaults standardUserDefaults] dictionaryForKey:@"SBCPU.SecondTextAnchor"];
-        if (saved && [saved[@"offsetX"] doubleValue]==floatingTextOnly2X && [saved[@"offsetY"] doubleValue]==floatingTextOnly2Y && [saved[@"preset"] integerValue]==floatingTextOnly2Preset) {
+        if (saved && SBCPUTextAnchorOffsetsMatch([saved[@"offsetX"] doubleValue],[saved[@"offsetY"] doubleValue],floatingTextOnly2X,floatingTextOnly2Y) && [saved[@"preset"] integerValue]==floatingTextOnly2Preset) {
             SBCPUTextAnchor anchor={[saved[@"right"] intValue],[saved[@"bottom"] intValue],
                 [saved[@"x"] doubleValue],[saved[@"y"] doubleValue]};
             p=SBCPUTextResolveAnchor(anchor,g.width,g.height,hw,hh,g.left,g.top,g.right,g.bottom);

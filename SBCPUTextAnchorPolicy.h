@@ -30,6 +30,11 @@ static inline SBCPUTextAnchor SBCPUTextCaptureAnchor(SBCPUTextPoint p, double w,
     a.yMargin = fmax(0, a.bottom ? h-bottom-hh-p.y : p.y-top-hh);
     return a;
 }
+static inline int SBCPUTextAnchorOffsetsMatch(double savedX, double savedY, double x, double y) {
+    /* CFPreferences float values round to float32; compare in that storage domain. */
+    return isfinite(savedX) && isfinite(savedY) && isfinite(x) && isfinite(y) &&
+        (float)savedX == (float)x && (float)savedY == (float)y;
+}
 static inline double SBCPUTextSafeCoordinate(double p, double lo, double hi) {
     return hi < lo ? (lo+hi)/2 : fmax(lo, fmin(hi, p));
 }

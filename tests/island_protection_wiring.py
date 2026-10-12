@@ -19,7 +19,8 @@ assert any(r.get('detail')=='SBCPUFloatingAdvancedController' and r.get('label')
 assert 'dynamicIslandProtectionEnable = getBoolPref(CFSTR("dynamicIslandProtectionEnable"), YES)' in s
 geom=s[s.index('static SBCPUTextGeometry textOnlyGeometry'):s.index('static SBCPUTextPoint textOnlyLogicalCenter')]
 assert 'g.top = SBCPUFloatingProtectedTop(1, dynamicIslandProtectionEnable, 0);' in geom
-assert 'g.left = MAX(4,' in geom and 'g.bottom = MAX(10,' in geom
+assert 'g.left = MAX(second?0:4,' in geom and 'g.bottom = MAX(10,' in geom
+assert 'textOnlyGeometryForView(floatingView.superview, NO)' in geom
 assert 'g.top = MAX' not in geom
 margin=s[s.index('static CGFloat floatingTopSafeMargin'):s.index('// 状态栏胶囊尺寸')]
 assert 'SBCPUFloatingProtectedTop(floatingTextOnlyMode, dynamicIslandProtectionEnable,' in margin

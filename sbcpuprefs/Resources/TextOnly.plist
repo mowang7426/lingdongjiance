@@ -91,6 +91,20 @@
 			<key>default</key>
 			<false/>
 		</dict>
+        <dict>
+            <key>cell</key><string>PSGroupCell</string>
+            <key>label</key><string>窗口1 双行布局</string>
+            <key>footerText</key><string>默认关闭。开启后按 CPU、频率、FPS、电量、温度、电流、SIM1、SIM2、上传、下载的顺序，将已开启项目分为前半/后半两行；上下行网速始终同组。只有显示项目开关改变会重新分组，数值刷新与旋转不改变分组。每行固定槽位和数据间距；宽度不足时统一缩小文字以保持两行，异常长值在槽位内裁切。</string>
+        </dict>
+        <dict>
+            <key>cell</key><string>PSSwitchCell</string>
+            <key>label</key><string>窗口1 双行显示</string>
+            <key>key</key><string>floatingTextOnlyDualLine</string>
+            <key>defaults</key><string>com.yourname.sbcpufloating</string>
+            <key>get</key><string>getPreferenceValue:</string>
+            <key>set</key><string>setPreferenceValue:specifier:</string>
+            <key>default</key><false/>
+        </dict>
 		<dict>
 			<key>cell</key>
 			<string>PSGroupCell</string>
@@ -475,6 +489,20 @@
 			<key>defaults</key>
 			<string>com.yourname.sbcpufloating</string>
 		</dict>
+        <dict>
+            <key>cell</key><string>PSGroupCell</string>
+            <key>label</key><string>窗口2 双行布局</string>
+            <key>footerText</key><string>默认关闭。开启后按 CPU、频率、FPS、电量、温度、电流、SIM1、SIM2、上传、下载的顺序，将已开启项目分为前半/后半两行；上下行网速始终同组。只有显示项目开关改变会重新分组，数值刷新与旋转不改变分组。每行固定槽位和数据间距；宽度不足时统一缩小文字以保持两行，异常长值在槽位内裁切。</string>
+        </dict>
+        <dict>
+            <key>cell</key><string>PSSwitchCell</string>
+            <key>label</key><string>窗口2 双行显示</string>
+            <key>key</key><string>floatingTextOnly2DualLine</string>
+            <key>defaults</key><string>com.yourname.sbcpufloating</string>
+            <key>get</key><string>getPreferenceValue:</string>
+            <key>set</key><string>setPreferenceValue:specifier:</string>
+            <key>default</key><false/>
+        </dict>
 		<dict>
 			<key>cell</key>
 			<string>PSSwitchCell</string>
