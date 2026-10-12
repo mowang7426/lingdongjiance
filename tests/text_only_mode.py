@@ -27,17 +27,17 @@ for suffix in keys:
     assert entry['get'] == 'getPreferenceValue:' and entry['set'] == 'setPreferenceValue:specifier:'
     assert f'getBoolPref(CFSTR("{key}"), YES)' in text
 assert 'notify_post("com.yourname.sbcpufloating.prefschanged")' in controller
-assert 'SBCPUTextOnlyRow(fields,' in text
+assert 'SBCPUTextOnlyRow(f,' in text
 assert 'textOnlyLabel.numberOfLines = 1' in text
-assert 'SBCPUTextOnlyFitFont(naturalWidth, available, floatingTextOnlyFontSize)' in text
-assert 'textOnlyLabel.hidden = (textOnlyLabel.text.length == 0)' in text
+assert 'SBCPUTextSlotsLayout(mask,fs,available,frames)' in text
+assert 'host.hidden=mask==0' in text
 assert 'textOnlySignals = (textOnlyShowSIM1 || textOnlyShowSIM2) ? readAllSimSignals() : @[];' in text
 assert '(floatingTextOnlyMode && textOnlyShowFPS)' in text
-assert 'if (floatingTextOnlyMode) {' in text[text.index('// Reuse the existing refresh tick.'):][:260]
+assert 'if (floatingTextOnlyMode || floatingTextOnlyMode2)' in text[text.index('// Reuse the existing refresh tick.'):][:300]
 assert 'if (floatingTextOnlyMode)' in text[text.index('- (void)updateLayoutWithShowCpuFreq:'):]
 assert 'SBCPUTextOnlyDockEffective(statusBarDockEnable, floatingTextOnlyMode)' in text
 assert 'SBCPUTextOnlyTop(floatingTextOnlyMode, safeTop, sbcpuStatusBarDockEffective())' in text
-start = text.index('static void applyTextOnlyTextFilter(void) {')
+start = text.index('static unsigned textSlotMask(BOOL second) {')
 end = text.index('static void updateFloatingSize(void) {', start)
 mode = text[start:end]
 assert 'differenceBlendMode' not in text
@@ -59,8 +59,7 @@ assert colors[0]['label'] == '自动模式' and colors[1]['label'] == '实时反
 assert colors[2]['label'] == '自定义文字颜色'
 assert 'SBCPUTextColorMode(getIntPref(CFSTR("floatingTextOnlyColor"), 0))' in text
 assert 'mode = SBCPUTextColorMode(mode)' in controller
-assert 'systemFontOfSize:floatingTextOnlyFontSize' in mode
-assert 'boldSystemFontOfSize' in mode
+assert 'monospacedDigitSystemFontOfSize:fs' in mode and 'UIFontWeightBold' in mode
 assert 'SBCPUTextOnlyAttributedRow' in mode
 assert 'NSTimer' not in mode and 'snapshotView' not in mode and 'sampleBackgroundLuminance' not in mode
 assert 'textOnlySnapshotCenter' in mode and 'textOnlyHiddenSnapshot' in mode

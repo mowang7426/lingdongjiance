@@ -19,14 +19,14 @@ controller = (r/'sbcpuprefs/SBCPUTextOnlyController.m').read_text()
 for api in ('CFPreferencesSetValue', 'CFPreferencesSynchronize', 'CFPreferencesCopyValue', 'notify_post'):
     assert api in controller
 sampler = s[s.index('static void sampleTextNetwork(void) {'):s.index('static NSNumber *textOnlyBatteryCurrent')]
-for required in ('floatingTextOnlyMode &&', '(textOnlyShowUploadNetwork || textOnlyShowDownloadNetwork)', '!cpuWindow.hidden', '!floatingView.hidden', 'AF_LINK', 'IFF_UP', 'IFF_RUNNING', 'IFF_LOOPBACK', 'freeifaddrs', 'systemUptime', 'hasBlankedScreen'):
+for required in ('SBCPUTextNetworkNeeded', 'floatingTextOnlyMode2 ? textSlotMask(YES) : 0', '!cpuWindow.hidden', '!floatingView.hidden', 'AF_LINK', 'IFF_UP', 'IFF_RUNNING', 'IFF_LOOPBACK', 'freeifaddrs', 'systemUptime', 'hasBlankedScreen'):
     assert required in sampler, required
 assert 'NSTimer' not in sampler and 'CADisplayLink' not in sampler
 assert s.count('    sampleTextNetwork();') == 1
 assert s.index('    sampleTextNetwork();') > s.index('- (void)updateDataWithCPU:(double)cpu\n')
 assert 'wasUploadNetwork != textOnlyShowUploadNetwork' in s
 assert 'wasDownloadNetwork != textOnlyShowDownloadNetwork' in s and 'resetTextNetwork();' in s
-assert 'textOnlyLabel.text stringByAppendingFormat:@" %@", network' in s
+assert 'textNetworkDownloadRate,textNetworkUploadRate,i==8,i==9' in s
 assert 'textOnlyLabel.numberOfLines = 1' in s
-assert 'SBCPUTextOnlyFitFont(naturalWidth, available, floatingTextOnlyFontSize)' in s
+assert 'SBCPUTextSlotsLayout(mask,fs,available,frames)' in s
 print('network OFF default, shared durable preferences, gated refresh and isolated layout: passed')

@@ -54,6 +54,12 @@ jobs:
         run: |
           set -e
           python3 tests/text_fit_wiring.py
+          python3 tests/text_slots_wiring.py
+          TMP_SLOTS=$(mktemp -d)
+          clang -std=c11 -Wall -Wextra -Werror -pedantic tests/text_slots_policy.c -o "$TMP_SLOTS/slots"
+          "$TMP_SLOTS/slots"
+          clang++ -x c++ -std=c++11 -Wall -Wextra -Werror -pedantic tests/text_slots_policy.c -o "$TMP_SLOTS/slots-cxx"
+          "$TMP_SLOTS/slots-cxx"
           python3 tests/text_only_mode.py
           TMP_TEXT=$(mktemp -d)
           clang -std=c11 -Wall -Wextra -Werror -pedantic tests/text_fit_policy.c -lm -o "$TMP_TEXT/fit"

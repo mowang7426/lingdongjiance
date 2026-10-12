@@ -12,7 +12,7 @@ header = (root / 'SBCPUTextBackdropLabel.h').read_text()
 tweak = (root / 'Tweak.xm').read_text()
 make = (root / 'Makefile').read_text()
 policy = (root / 'SBCPUTextOnlyColor.h').read_text()
-mode = tweak[tweak.index('static void applyTextOnlyTextFilter(void) {'):tweak.index('static void updateFloatingSize(void) {')]
+mode = tweak[tweak.index('static unsigned textSlotMask(BOOL second) {'):tweak.index('static void updateFloatingSize(void) {')]
 assert ': UILabel' in header and ': CATextLayer' in source
 assert 'NSClassFromString(@"CABackdropLayer")' in source
 assert 'NSClassFromString(@"CAFilter")' in source
@@ -45,7 +45,7 @@ for token in ('removeFromSuperlayer', '_backdrop.mask = nil', '_backdrop.filters
 assert '[[SBCPUTextBackdropLabel alloc] initWithFrame:CGRectZero]' in mode
 assert '[floatingView addSubview:textOnlyLabel]' in mode
 assert 'view.hidden = (view != textOnlyLabel)' in mode
-assert 'floatingTextOnlyColor == 4 && textOnlyLabel.text.length > 0' in mode
+assert 'floatingTextOnlyColor == 4 && slot.text.length > 0' in mode
 assert 'textOnlyLabel.realtimeInvertEnabled = NO' in mode
 assert 'SBCPUFloating_FILES = Tweak.xm SBCPUTextBackdropLabel.m' in make
 assert 'CoreGraphics CoreText' in make and 'QuartzCore' in make

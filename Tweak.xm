@@ -5,6 +5,7 @@
 #import "SBCPUCapsuleTextPolicy.h"
 #import "SBCPUTextOnlyFormat.h"
 #import "SBCPUTextOnlyTypography.h"
+#import "SBCPUTextSlotPolicy.h"
 #import "SBCPUTextOnlyCurrent.h"
 #import "SBCPUTextNetwork.h"
 #import <net/if_dl.h>
@@ -394,14 +395,15 @@ static void resetTextNetwork(void) {
     textNetworkRow = nil;
     textNetworkSampleValid = NO;
     textNetworkDownloadRate = textNetworkUploadRate = 0;
+}
 
 // Called only by the existing low-frequency data refresh, never by layout or FPS.
+static unsigned textSlotMask(BOOL second);
 static void sampleTextNetwork(void) {
-    BOOL needed = isEnabled && (floatingTextOnlyMode || floatingTextOnlyMode2) &&
-        ((floatingTextOnlyMode && (textOnlyShowUploadNetwork || textOnlyShowDownloadNetwork)) ||
-         (floatingTextOnlyMode2 && (textOnly2ShowUploadNetwork || textOnly2ShowDownloadNetwork))) &&
-        cpuWindow && !cpuWindow.hidden && cpuWindow.alpha > 0.01 &&
+    BOOL visible = cpuWindow && !cpuWindow.hidden && cpuWindow.alpha > 0.01 &&
         floatingView && floatingView.window && !floatingView.hidden && floatingView.alpha > 0.01;
+    BOOL needed = SBCPUTextNetworkNeeded(isEnabled, visible,
+        floatingTextOnlyMode ? textSlotMask(NO) : 0, floatingTextOnlyMode2 ? textSlotMask(YES) : 0);
     if (!needed) { resetTextNetwork(); return; }
     static int blankToken = -1;
     if (blankToken == -1) {
@@ -1245,8 +1247,9 @@ static void LoadPreferences(void) {
         applyVisibility();
         if (floatingView && wasTextOnly != floatingTextOnlyMode) handleTextOnlyModeTransition(wasTextOnly);
         if (floatingView) applyTextOnlyMode();
+        if (!SBCPUTextNetworkNeeded(isEnabled, YES, floatingTextOnlyMode?textSlotMask(NO):0, floatingTextOnlyMode2?textSlotMask(YES):0)) resetTextNetwork();
         [floatingView applyCapsuleTextFilter]; // preference changes do not wait for the metric tick
-        if (showFps || collapsedDisplayMode == 1 || (floatingTextOnlyMode && textOnlyShowFPS)) {
+        if (showFps || collapsedDisplayMode == 1 || ((floatingTextOnlyMode && textOnlyShowFPS) || (floatingTextOnlyMode2 && textOnly2ShowFPS))) {
             [[SBCPUFPSHelper sharedInstance] startMonitoring];
         } else {
             [[SBCPUFPSHelper sharedInstance] stopMonitoring];
@@ -1317,7 +1320,7 @@ static void SavePreferencesAndNotify(void) {
 
     CFPreferencesSynchronize(kPrefAppID, kCFPreferencesCurrentUser, kCFPreferencesAnyHost);
 
-    if (showFps || collapsedDisplayMode == 1 || (floatingTextOnlyMode && textOnlyShowFPS)) {
+    if (showFps || collapsedDisplayMode == 1 || ((floatingTextOnlyMode && textOnlyShowFPS) || (floatingTextOnlyMode2 && textOnly2ShowFPS))) {
         [[SBCPUFPSHelper sharedInstance] startMonitoring];
     } else {
         [[SBCPUFPSHelper sharedInstance] stopMonitoring];
@@ -1779,7 +1782,7 @@ static NSDictionary *getRealBatteryDetails(void) {
             dict[@"CycleCount"] = pDict[@"CycleCount"];
             dict[@"Temperature"] = pDict[@"Temperature"];
             dict[@"Amperage"] = pDict[@"Amperage"] ?: pDict[@"InstantAmperage"];
-            if (floatingTextOnlyMode && textOnlyShowCurrent)
+            if ((floatingTextOnlyMode && textOnlyShowCurrent) || (floatingTextOnlyMode2 && textOnly2ShowCurrent))
                 dict[@"SBCPUTextOnlyCurrentMA"] = SBCPUTextOnlyBatteryCurrent(pDict);
             dict[@"Voltage"] = pDict[@"Voltage"];
             dict[@"Manufacturer"] = SBCPUBatteryManufacturerFromProperties(pDict);
@@ -2665,88 +2668,138 @@ static void clampAndPositionFloatingView(CGPoint targetCenter, BOOL animate) {
     } else layoutBlock();
 }
 
-static void applyTextOnlyTextFilter(void) {
-    if (!textOnlyLabel) return;
-    // Always clear the obsolete compositor filter, including fixed/custom modes.
-    textOnlyLabel.layer.compositingFilter = nil;
-    if (!floatingTextOnlyMode) {
-        textOnlyLabel.realtimeInvertEnabled = NO;
-        return;
+static unsigned textSlotMask(BOOL second) {
+    BOOL flags[10] = {second?textOnly2ShowCPU:textOnlyShowCPU, second?textOnly2ShowFrequency:textOnlyShowFrequency,
+        second?textOnly2ShowFPS:textOnlyShowFPS, second?textOnly2ShowBattery:textOnlyShowBattery,
+        second?textOnly2ShowTemperature:textOnlyShowTemperature, second?textOnly2ShowCurrent:textOnlyShowCurrent,
+        second?textOnly2ShowSIM1:textOnlyShowSIM1, second?textOnly2ShowSIM2:textOnlyShowSIM2,
+        second?textOnly2ShowUploadNetwork:textOnlyShowUploadNetwork, second?textOnly2ShowDownloadNetwork:textOnlyShowDownloadNetwork};
+    unsigned mask=0; for (int i=0;i<10;i++) if(flags[i]) mask |= 1u<<i;
+    return mask;
+}
+static void clearTextSlots(SBCPUTextBackdropLabel *host) {
+    host.realtimeInvertEnabled = NO;
+    for (SBCPUTextBackdropLabel *slot in host.subviews.copy) {
+        if (![slot isKindOfClass:SBCPUTextBackdropLabel.class]) continue;
+        slot.realtimeInvertEnabled = NO; [slot removeFromSuperview];
     }
-    // SpringBoard's main-screen environment is authoritative, not foreground-app
-    // traits or sampled pixels. Its own overlay window is the unspecified fallback.
+}
+static UIColor *textSlotColor(void) {
     int style = SBCPUTextSystemStyle((int)UIScreen.mainScreen.traitCollection.userInterfaceStyle,
                                     (int)cpuWindow.traitCollection.userInterfaceStyle);
-    if (floatingTextOnlyColor == 3) {
-        textOnlyLabel.textColor = [UIColor colorWithRed:textOnlyCustomRGBA.red green:textOnlyCustomRGBA.green
-                                                  blue:textOnlyCustomRGBA.blue alpha:textOnlyCustomRGBA.alpha];
-    } else {
-        textOnlyLabel.textColor = SBCPUTextUsesWhite((int)floatingTextOnlyColor, style) ? UIColor.whiteColor : UIColor.blackColor;
-    }
-    if (textOnlyPlainText.length) textOnlyLabel.attributedText = SBCPUTextOnlyAttributedRow(textOnlyPlainText, textOnlyLabel.font, textOnlyLabel.textColor);
-    textOnlyLabel.realtimeInvertEnabled = (floatingTextOnlyColor == 4 && textOnlyLabel.text.length > 0);
+    if (floatingTextOnlyColor == 3) return [UIColor colorWithRed:textOnlyCustomRGBA.red green:textOnlyCustomRGBA.green
+        blue:textOnlyCustomRGBA.blue alpha:textOnlyCustomRGBA.alpha];
+    return SBCPUTextUsesWhite((int)floatingTextOnlyColor, style) ? UIColor.whiteColor : UIColor.blackColor;
 }
-
-// Second HUD uses the same lightweight pan path, with an independent saved offset.
+static void colorTextSlots(SBCPUTextBackdropLabel *host) {
+    for (SBCPUTextBackdropLabel *slot in host.subviews) {
+        if (![slot isKindOfClass:SBCPUTextBackdropLabel.class]) continue;
+        slot.layer.compositingFilter = nil; slot.textColor = textSlotColor();
+        slot.attributedText = SBCPUTextOnlyAttributedRow(slot.text,slot.font,slot.textColor);
+        slot.realtimeInvertEnabled = isEnabled && !cpuWindow.hidden && floatingTextOnlyColor == 4 && slot.text.length > 0;
+    }
+}
+static CGSize layoutTextSlots(SBCPUTextBackdropLabel *host, BOOL second, SBCPUTextGeometry g) {
+    unsigned mask=textSlotMask(second);
+    CGFloat fs=SBCPUTextOnlyBound(second?floatingTextOnly2FontSize:floatingTextOnlyFontSize,8,24,13);
+    UIFont *font=[UIFont monospacedDigitSystemFontOfSize:fs weight:(second?textOnly2Bold:textOnlyBold)?UIFontWeightBold:UIFontWeightRegular];
+    CGFloat available=MAX(1,g.width-g.left-g.right);
+    SBCPUTextSlot frames[10];
+    CGFloat height=SBCPUTextSlotsLayout(mask,fs,available,frames);
+    NSMutableArray *parts=[NSMutableArray array];
+    for (int i=0;i<10;i++) {
+        SBCPUTextBackdropLabel *slot=(id)[host viewWithTag:4950+i];
+        if (!(mask&(1u<<i))) { slot.realtimeInvertEnabled=NO; [slot removeFromSuperview]; continue; }
+        if (!slot) { slot=[[SBCPUTextBackdropLabel alloc] initWithFrame:CGRectZero]; slot.tag=4950+i;
+            slot.userInteractionEnabled=NO; slot.backgroundColor=UIColor.clearColor; [host addSubview:slot]; }
+        SBCPUTextOnlyFields f={i==0,i==1,i==2,i==3,i==4,i==5,i==6,i==7};
+        NSString *value=i<8?SBCPUTextOnlyRow(f,floatingView.cpuValueLabel.text,floatingView.cpuFreqLabel.text,
+            floatingView.fpsValueLabel.text,floatingView.batteryValueLabel.text,floatingView.tempValueLabel.text,
+            SBCPUTextOnlyCurrentText(textOnlyBatteryCurrent,textOnlyCurrentUptime,NSProcessInfo.processInfo.systemUptime),textOnlySignals):
+            SBCPUNetworkTextDirections(textNetworkSampleValid,textNetworkDownloadRate,textNetworkUploadRate,i==8,i==9);
+        slot.font=font; slot.text=value; slot.numberOfLines=1; slot.adjustsFontSizeToFitWidth=NO;
+        slot.lineBreakMode=NSLineBreakByClipping; slot.textAlignment=NSTextAlignmentLeft;
+        slot.clipsToBounds=YES;
+        slot.frame=CGRectMake(frames[i].x,frames[i].y,frames[i].width,frames[i].height);
+        [parts addObject:value];
+    }
+    host.text=@""; host.hidden=mask==0;
+    if (!second) textOnlyPlainText=[parts componentsJoinedByString:@" "];
+    colorTextSlots(host);
+    CGFloat width=1; for (int i=0;i<10;i++) width=MAX(width,frames[i].x+frames[i].width);
+    return CGSizeMake(width,height);
+}
+static void applyTextOnlyTextFilter(void) {
+    if (!floatingTextOnlyMode) clearTextSlots(textOnlyLabel);
+    else colorTextSlots(textOnlyLabel);
+    colorTextSlots(textOnly2Label);
+}
+static BOOL textOnly2Dragging=NO;
 @implementation SBCPURootViewController (SBCPUSecondTextHUD)
 - (void)sbcpu_secondTextPan:(UIPanGestureRecognizer *)pan {
     if (textOnly2Locked || !textOnly2Label) return;
-    CGPoint d = [pan translationInView:self.view];
-    if (pan.state == UIGestureRecognizerStateChanged) {
-        textOnly2Label.center = CGPointMake(textOnly2Label.center.x + d.x, textOnly2Label.center.y + d.y);
+    SBCPUTextGeometry g=textOnlyGeometry();
+    CGPoint d=[pan translationInView:self.view];
+    if (pan.state==UIGestureRecognizerStateBegan) textOnly2Dragging=YES;
+    if (pan.state==UIGestureRecognizerStateChanged) {
+        textOnly2Label.center=CGPointMake(textOnly2Label.center.x+d.x,textOnly2Label.center.y+d.y);
         [pan setTranslation:CGPointZero inView:self.view];
-    } else if (pan.state == UIGestureRecognizerStateEnded || pan.state == UIGestureRecognizerStateCancelled) {
-        CGFloat w = self.view.bounds.size.width, h = self.view.bounds.size.height;
-        floatingTextOnly2X = SBCPUTextOnlyBound(textOnly2Label.center.x - w * .5, -1000, 1000, 0);
-        floatingTextOnly2Y = SBCPUTextOnlyBound(textOnly2Label.center.y - 8, -1000, 1000, 70);
-        setFloatPref(CFSTR("floatingTextOnly2X"), floatingTextOnly2X);
-        setFloatPref(CFSTR("floatingTextOnly2Y"), floatingTextOnly2Y);
+    }
+    if (pan.state==UIGestureRecognizerStateEnded || pan.state==UIGestureRecognizerStateCancelled) {
+        SBCPUTextPoint p=textOnlyLogicalCenter(textOnly2Label.center,g);
+        CGFloat hw=textOnly2Label.bounds.size.width/2,hh=textOnly2Label.bounds.size.height/2;
+        p.x=SBCPUTextSafeCoordinate(p.x,g.left+hw,g.width-g.right-hw);
+        p.y=SBCPUTextSafeCoordinate(p.y,g.top+hh,g.height-g.bottom-hh);
+        floatingTextOnly2X=p.x-SBCPUTextOnlyAnchorX((int)floatingTextOnly2Preset,g.width,hw);
+        floatingTextOnly2Y=p.y-hh;
+        setFloatPref(CFSTR("floatingTextOnly2X"),floatingTextOnly2X);
+        setFloatPref(CFSTR("floatingTextOnly2Y"),floatingTextOnly2Y);
         CFPreferencesSynchronize(kPrefAppID,kCFPreferencesCurrentUser,kCFPreferencesAnyHost);
+        SBCPUTextAnchor anchor=SBCPUTextCaptureAnchor(p,g.width,g.height,hw,hh,g.left,g.top,g.right,g.bottom);
+        [[NSUserDefaults standardUserDefaults] setObject:@{@"right":@(anchor.right),@"bottom":@(anchor.bottom),
+            @"x":@(anchor.xMargin),@"y":@(anchor.yMargin),@"offsetX":@(floatingTextOnly2X),@"offsetY":@(floatingTextOnly2Y),@"preset":@(floatingTextOnly2Preset)} forKey:@"SBCPU.SecondTextAnchor"];
+        textOnly2Dragging=NO; updateTextOnlySecond();
     }
 }
 @end
-
 static void updateTextOnlySecond(void) {
-    if (!cpuWindow || !cpuWindow.rootViewController) return;
-    UIView *host = cpuWindow.rootViewController.view;
-    if (!floatingTextOnlyMode2) { [textOnly2Label removeFromSuperview]; textOnly2Label = nil; return; }
-    if (!textOnly2Label || textOnly2Label.superview != host) {
-        [textOnly2Label removeFromSuperview];
-        textOnly2Label = [[SBCPUTextBackdropLabel alloc] initWithFrame:CGRectZero];
-        textOnly2Label.numberOfLines = 0; textOnly2Label.textAlignment = NSTextAlignmentCenter;
-        textOnly2Label.backgroundColor = UIColor.clearColor; textOnly2Label.userInteractionEnabled = YES;
-        UIPanGestureRecognizer *pan = [[UIPanGestureRecognizer alloc] initWithTarget:host.nextResponder action:@selector(sbcpu_secondTextPan:)];
-        [textOnly2Label addGestureRecognizer:pan];
-        [host addSubview:textOnly2Label];
+    if (!floatingTextOnlyMode2 || !isEnabled || !cpuWindow || !cpuWindow.rootViewController) {
+        clearTextSlots(textOnly2Label); [textOnly2Label removeFromSuperview]; textOnly2Label=nil; textOnly2Dragging=NO; return;
     }
-    SBCPUTextOnlyFields f = {textOnly2ShowCPU,textOnly2ShowFrequency,textOnly2ShowFPS,textOnly2ShowBattery,
-        textOnly2ShowTemperature,textOnly2ShowCurrent,textOnly2ShowSIM1,textOnly2ShowSIM2};
-    NSString *row = SBCPUTextOnlyRow(f, floatingView.cpuValueLabel.text, floatingView.cpuFreqLabel.text,
-        floatingView.fpsValueLabel.text, floatingView.batteryValueLabel.text, floatingView.tempValueLabel.text,
-        SBCPUTextOnlyCurrentText(textOnlyBatteryCurrent,textOnlyCurrentUptime,[NSProcessInfo processInfo].systemUptime), textOnlySignals);
-    if (textOnly2ShowUploadNetwork || textOnly2ShowDownloadNetwork) {
-        NSString *n = SBCPUNetworkTextDirections(textNetworkSampleValid, textNetworkDownloadRate, textNetworkUploadRate,
-            textOnly2ShowDownloadNetwork, textOnly2ShowUploadNetwork);
-        // textNetworkRow is already sampled once; filter the shared row by requested directions.
-        if (textNetworkRow.length) n = textNetworkRow;
-        if (n.length) row = row.length ? [row stringByAppendingFormat:@" %@",n] : n;
+    UIView *host=cpuWindow.rootViewController.view;
+    if (!textOnly2Label || textOnly2Label.superview!=host) {
+        clearTextSlots(textOnly2Label); [textOnly2Label removeFromSuperview];
+        textOnly2Label=[[SBCPUTextBackdropLabel alloc] initWithFrame:CGRectZero];
+        textOnly2Label.backgroundColor=UIColor.clearColor;
+        UIPanGestureRecognizer *pan=[[UIPanGestureRecognizer alloc] initWithTarget:cpuWindow.rootViewController action:@selector(sbcpu_secondTextPan:)];
+        [textOnly2Label addGestureRecognizer:pan]; [host addSubview:textOnly2Label];
     }
-    textOnly2Label.text = row; textOnly2Label.hidden = row.length == 0;
-    CGFloat fs = SBCPUTextOnlyBound(floatingTextOnly2FontSize,8,24,13);
-    textOnly2Label.font = textOnly2Bold ? [UIFont monospacedDigitSystemFontOfSize:fs weight:UIFontWeightBold] : [UIFont monospacedDigitSystemFontOfSize:fs weight:UIFontWeightRegular];
-    textOnly2Label.textColor = UIColor.labelColor;
-    textOnly2Label.attributedText = SBCPUTextOnlyAttributedRow(row,textOnly2Label.font,textOnly2Label.textColor);
-    // Fixed slot width: never resize as values change. Re-layout only when settings/orientation changes.
-    CGFloat width = MIN(MAX(120, host.bounds.size.width - 16), 420);
-    CGFloat height = MIN(48, MAX(22, textOnly2Label.font.lineHeight * 2.0));
-    textOnly2Label.frame = CGRectMake(SBCPUTextOnlyBound((host.bounds.size.width-width)/2 + floatingTextOnly2X,8,host.bounds.size.width-width-8,0),
-        SBCPUTextOnlyBound(8+floatingTextOnly2Y,8,MAX(8,host.bounds.size.height-height-8),70),width,height);
-    textOnly2Label.realtimeInvertEnabled = NO;
+    textOnly2Label.userInteractionEnabled=!textOnly2Locked;
+    SBCPUTextGeometry g=textOnlyGeometry();
+    CGSize size=layoutTextSlots(textOnly2Label,YES,g);
+    textOnly2Label.bounds=(CGRect){CGPointZero,size};
+    int r=g.rotation;
+    textOnly2Label.transform=CGAffineTransformMakeRotation(r==2?M_PI:r*M_PI_2);
+    if (!textOnly2Dragging) {
+        CGFloat hw=size.width/2,hh=size.height/2;
+        SBCPUTextPoint p=SBCPUTextPointMake(SBCPUTextOnlyAnchorX((int)floatingTextOnly2Preset,g.width,hw)+floatingTextOnly2X,hh+floatingTextOnly2Y);
+        NSDictionary *saved=[[NSUserDefaults standardUserDefaults] dictionaryForKey:@"SBCPU.SecondTextAnchor"];
+        if (saved && [saved[@"offsetX"] doubleValue]==floatingTextOnly2X && [saved[@"offsetY"] doubleValue]==floatingTextOnly2Y && [saved[@"preset"] integerValue]==floatingTextOnly2Preset) {
+            SBCPUTextAnchor anchor={[saved[@"right"] intValue],[saved[@"bottom"] intValue],
+                [saved[@"x"] doubleValue],[saved[@"y"] doubleValue]};
+            p=SBCPUTextResolveAnchor(anchor,g.width,g.height,hw,hh,g.left,g.top,g.right,g.bottom);
+        }
+        p.x=SBCPUTextSafeCoordinate(p.x,g.left+hw,g.width-g.right-hw);
+        p.y=SBCPUTextSafeCoordinate(p.y,g.top+hh,g.height-g.bottom-hh);
+        textOnly2Label.center=textOnlyContainerCenter(p,g);
+    }
+    textOnly2Label.hidden=textOnly2Label.hidden || floatingView.hidden;
 }
 
 static void applyTextOnlyMode(void) {
-    updateTextOnlySecond();
     [floatingView applyCapsuleTextFilter]; // entering text-only clears every capsule mask
+    updateTextOnlySecond();
+    if (!isEnabled) { clearTextSlots(textOnlyLabel); return; }
     if (!floatingView || !floatingTextOnlyMode) return;
     if (!textOnlyLabel || textOnlyLabel.superview != floatingView) {
         [textOnlyLabel removeFromSuperview];
@@ -2768,42 +2821,11 @@ static void applyTextOnlyMode(void) {
     floatingView.layer.borderWidth = 0;
     floatingView.alpha = 1;
     floatingView.isCollapsed = NO;
-    SBCPUTextOnlyFields fields = {textOnlyShowCPU, textOnlyShowFrequency, textOnlyShowFPS,
-        textOnlyShowBattery, textOnlyShowTemperature, textOnlyShowCurrent, textOnlyShowSIM1, textOnlyShowSIM2};
-    NSString *netCurrent = SBCPUTextOnlyCurrentText(textOnlyBatteryCurrent,
-        textOnlyCurrentUptime, [NSProcessInfo processInfo].systemUptime);
-    textOnlyLabel.text = SBCPUTextOnlyRow(fields, floatingView.cpuValueLabel.text,
-        floatingView.cpuFreqLabel.text, floatingView.fpsValueLabel.text, floatingView.batteryValueLabel.text,
-        floatingView.tempValueLabel.text, netCurrent, textOnlySignals);
-    if (textOnlyShowUploadNetwork || textOnlyShowDownloadNetwork) {
-        NSString *network = textNetworkRow ?: SBCPUNetworkTextDirections(NO, 0, 0,
-            textOnlyShowUploadNetwork, textOnlyShowDownloadNetwork);
-        if (network.length) textOnlyLabel.text = textOnlyLabel.text.length ? [textOnlyLabel.text stringByAppendingFormat:@" %@", network] : network;
-    }
-    textOnlyLabel.hidden = (textOnlyLabel.text.length == 0);
-    textOnlyPlainText = [textOnlyLabel.text copy];
-    textOnlyLabel.hidden = (textOnlyPlainText.length == 0);
-    textOnlyLabel.font = textOnlyBold ? [UIFont boldSystemFontOfSize:floatingTextOnlyFontSize] : [UIFont systemFontOfSize:floatingTextOnlyFontSize];
-    textOnlyLabel.attributedText = SBCPUTextOnlyAttributedRow(textOnlyPlainText, textOnlyLabel.font, textOnlyLabel.textColor);
     SBCPUTextGeometry textGeometry = textOnlyGeometry();
-    CGFloat available = MAX(1, textGeometry.width-textGeometry.left-textGeometry.right);
-    CGFloat naturalWidth = ceil([textOnlyLabel.attributedText boundingRectWithSize:CGSizeMake(CGFLOAT_MAX, CGFLOAT_MAX)
-        options:NSStringDrawingUsesLineFragmentOrigin | NSStringDrawingUsesFontLeading context:nil].size.width);
-    CGFloat fittedFont = SBCPUTextOnlyBound(floatingTextOnlyFontSize, 8, 24, 13);
-    textOnlyLabel.font = textOnlyBold ? [UIFont monospacedDigitSystemFontOfSize:fittedFont weight:UIFontWeightBold] : [UIFont monospacedDigitSystemFontOfSize:fittedFont weight:UIFontWeightRegular];
-    textOnlyLabel.attributedText = SBCPUTextOnlyAttributedRow(textOnlyPlainText, textOnlyLabel.font, textOnlyLabel.textColor);
-    CGFloat fittedWidth = ceil([textOnlyLabel.attributedText boundingRectWithSize:CGSizeMake(CGFLOAT_MAX, CGFLOAT_MAX)
-        options:NSStringDrawingUsesLineFragmentOrigin | NSStringDrawingUsesFontLeading context:nil].size.width);
-    BOOL wrap = fittedWidth + 2 > available;
-    textOnlyLabel.numberOfLines = wrap ? 0 : 1;
-    // At 8pt use additional rows instead of infinitely small text or ellipsis.
-    // Character wrapping also bounds a single exceptionally long metric token.
-    CGFloat rowWidth = textOnlyLabel.hidden ? 1 : available;
-    CGSize measured = [textOnlyLabel sizeThatFits:CGSizeMake(rowWidth, CGFLOAT_MAX)];
-    CGFloat maxHeight = MAX(1, textGeometry.height-textGeometry.top-textGeometry.bottom);
-    CGFloat rowHeight = textOnlyLabel.hidden ? 1 : MIN(maxHeight, ceil(MAX(textOnlyLabel.font.lineHeight, measured.height)));
-    floatingView.bounds = CGRectMake(0, 0, rowWidth, rowHeight);
-    textOnlyLabel.frame = floatingView.bounds;
+    CGSize slotSize=layoutTextSlots(textOnlyLabel,NO,textGeometry);
+    CGFloat rowWidth=slotSize.width,rowHeight=slotSize.height;
+    floatingView.bounds=CGRectMake(0,0,rowWidth,rowHeight);
+    textOnlyLabel.frame=floatingView.bounds;
     // Resize can happen mid-drag or during a locked refresh, before updateFloatingSize.
     // Re-clamp now as well, in logical display coordinates; do not rewrite saved anchors.
     SBCPUTextPoint p = floatingView.positionLocked && lockedTextAnchorValid
@@ -2839,11 +2861,12 @@ static void handleTextOnlyModeTransition(BOOL wasEnabled) {
         floatingView.isCollapsed = NO;
         applyTextOnlyMode();
     } else {
+        clearTextSlots(textOnlyLabel);
         textOnlyLabel.realtimeInvertEnabled = NO;
         textOnlyLabel.layer.compositingFilter = nil;
         [textOnlyLabel removeFromSuperview];
         textOnlyLabel = nil;
-        textOnlySignals = nil;
+        if (!floatingTextOnlyMode2) textOnlySignals = nil;
         for (UIView *view in floatingView.subviews) {
             NSNumber *hidden = [textOnlyHiddenSnapshot objectForKey:view];
             if (hidden) view.hidden = hidden.boolValue;
@@ -2865,6 +2888,7 @@ static void handleTextOnlyModeTransition(BOOL wasEnabled) {
 }
 
 static void updateFloatingSize(void) {
+    updateTextOnlySecond();
     if (!floatingView) return;
     // 展开/收起动画自己管理 bounds/transform；每秒刷新不能在中途抢回布局。
     if (floatingView.layoutTransitionAnimating) return;
@@ -3119,8 +3143,8 @@ static void updateCPU(void) {
         NSDictionary *chargeInfo = getRealBatteryDetails();
         // Same registry sample as charge-power display; cache before updateData
         // builds the text row. Missing data invalidates the previous sample.
-        if (floatingTextOnlyMode) {
-            textOnlyBatteryCurrent = textOnlyShowCurrent ? chargeInfo[@"SBCPUTextOnlyCurrentMA"] : nil;
+        if (floatingTextOnlyMode || floatingTextOnlyMode2) {
+            textOnlyBatteryCurrent = ((floatingTextOnlyMode && textOnlyShowCurrent) || (floatingTextOnlyMode2 && textOnly2ShowCurrent)) ? chargeInfo[@"SBCPUTextOnlyCurrentMA"] : nil;
             textOnlyCurrentUptime = [NSProcessInfo processInfo].systemUptime;
         }
         double chargeWatts = [chargeInfo[@"CalculatedWatts"] doubleValue];
@@ -5347,9 +5371,10 @@ return self;
     sampleTextNetwork();
     // Reuse the existing refresh tick. Pure-text signals ignore ordinary flags
     // and never parse the long carrier/status label.
-    if (floatingTextOnlyMode) {
-        textOnlySignals = (textOnlyShowSIM1 || textOnlyShowSIM2) ? readAllSimSignals() : @[];
-    } else if (showSignalStrength && !fastChargeStartupAnimating) {
+    if (floatingTextOnlyMode || floatingTextOnlyMode2) {
+        textOnlySignals = ((floatingTextOnlyMode && (textOnlyShowSIM1 || textOnlyShowSIM2)) || (floatingTextOnlyMode2 && (textOnly2ShowSIM1 || textOnly2ShowSIM2))) ? readAllSimSignals() : @[];
+    }
+    if (!floatingTextOnlyMode && showSignalStrength && !fastChargeStartupAnimating) {
         _signalLabel.text = getSignalInfoString();
     }
     if (floatingTextOnlyMode) applyTextOnlyMode();
@@ -6502,7 +6527,7 @@ static NSString *bandItemDisplayName(NSInteger g, NSInteger v) {
 
 - (void)viewSafeAreaInsetsDidChange {
     [super viewSafeAreaInsetsDidChange];
-    if (floatingView && floatingTextOnlyMode) updateFloatingSize();
+    if (floatingView && (floatingTextOnlyMode || floatingTextOnlyMode2)) updateFloatingSize();
 }
 
 @end
@@ -6517,6 +6542,10 @@ static NSString *bandItemDisplayName(NSInteger g, NSInteger v) {
         return [super hitTest:point withEvent:event];
     }
 
+    if (textOnly2Label && !textOnly2Label.hidden && !textOnly2Locked && textOnly2Label.alpha > 0.01) {
+        CGPoint p=[self convertPoint:point toView:textOnly2Label];
+        if ([textOnly2Label pointInside:p withEvent:event]) return textOnly2Label;
+    }
     if (floatingView && !floatingView.hidden && floatingView.alpha > 0.01) {
         CGPoint p = [self convertPoint:point toView:floatingView];
         if ([floatingView pointInside:p withEvent:event]) return floatingView;
