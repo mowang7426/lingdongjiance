@@ -37,7 +37,7 @@
 @property UIViewController *presentedViewController;
 @end
 @interface UIWindow : UIView
-@property UIViewController *rootViewController;
+@property(nonatomic) UIViewController *rootViewController;
 @end
 @interface SBCPUWindow : UIWindow @end
 @interface SBCPUTextBackdropLabel : UIView @end
