@@ -364,6 +364,7 @@ static BOOL dynamicIslandProtectionEnable = YES;
 static NSInteger floatingTextOnlyPreset = 1;
 static CGFloat floatingTextOnlyX = 0, floatingTextOnlyY = 0;
 static CGFloat floatingTextOnlyFontSize = 13;
+static CGFloat floatingTextOnlyLetterSpacing = 0;
 static NSInteger floatingTextOnlyColor = 0; // 0 system appearance, 1 white, 2 black, 3 custom, 4 realtime invert
 static SBCPUTextRGBA textOnlyCustomRGBA = {0, 122.0/255.0, 1, 1};
 static BOOL textOnlyShowCPU = YES, textOnlyShowFrequency = YES, textOnlyShowFPS = YES;
@@ -375,7 +376,7 @@ static BOOL textOnlyShowUploadNetwork = NO;
 static BOOL textOnlyShowDownloadNetwork = NO;
 // Independent second text HUD. It shares the sampled label values/network snapshot.
 static BOOL floatingTextOnlyMode2 = NO, textOnly2Bold = NO, textOnly2Locked = NO;
-static CGFloat floatingTextOnly2FontSize = 13, floatingTextOnly2X = 0, floatingTextOnly2Y = 70;
+static CGFloat floatingTextOnly2FontSize = 13, floatingTextOnly2LetterSpacing = 0, floatingTextOnly2X = 0, floatingTextOnly2Y = 70;
 static NSInteger floatingTextOnly2Preset = 1;
 static BOOL textOnly2ShowCPU = YES, textOnly2ShowFrequency = YES, textOnly2ShowFPS = YES;
 static BOOL textOnly2ShowBattery = YES, textOnly2ShowTemperature = YES, textOnly2ShowCurrent = YES;
@@ -1126,6 +1127,7 @@ static void LoadPreferences(void) {
     floatingTextOnly2X = SBCPUTextOnlyBound(getFloatPref(CFSTR("floatingTextOnly2X"), 0), -1000, 1000, 0);
     floatingTextOnly2Y = SBCPUTextOnlyBound(getFloatPref(CFSTR("floatingTextOnly2Y"), 70), -1000, 1000, 70);
     floatingTextOnly2FontSize = SBCPUTextOnlyBound(getFloatPref(CFSTR("floatingTextOnly2FontSize"), 13), 8, 24, 13);
+    floatingTextOnly2LetterSpacing = SBCPUTextOnlyBound(getFloatPref(CFSTR("floatingTextOnly2LetterSpacing"), 0), 0, 12, 0);
     textOnly2Bold = getBoolPref(CFSTR("floatingTextOnly2Bold"), NO);
     textOnly2Locked = getBoolPref(CFSTR("floatingTextOnly2Locked"), NO);
     textOnly2ShowCPU = getBoolPref(CFSTR("floatingTextOnly2ShowCPU"), YES);
@@ -1143,6 +1145,7 @@ static void LoadPreferences(void) {
     floatingTextOnlyX = SBCPUTextOnlyBound(getFloatPref(CFSTR("floatingTextOnlyX"), 0), -1000, 1000, 0);
     floatingTextOnlyY = SBCPUTextOnlyBound(getFloatPref(CFSTR("floatingTextOnlyY"), 0), -1000, 1000, 0);
     floatingTextOnlyFontSize = SBCPUTextOnlyBound(getFloatPref(CFSTR("floatingTextOnlyFontSize"), 13), 8, 24, 13);
+    floatingTextOnlyLetterSpacing = SBCPUTextOnlyBound(getFloatPref(CFSTR("floatingTextOnlyLetterSpacing"), 0), 0, 12, 0);
     floatingTextOnlyColor = SBCPUTextColorMode(getIntPref(CFSTR("floatingTextOnlyColor"), 0));
     textOnlyCustomRGBA = SBCPUTextDecodeRGBA(getArrayPref(CFSTR("floatingTextOnlyRGBA"), nil));
     textOnlyBold = getBoolPref(CFSTR("floatingTextOnlyBold"), NO);
@@ -2697,7 +2700,8 @@ static void colorTextSlots(SBCPUTextBackdropLabel *host) {
     for (SBCPUTextBackdropLabel *slot in host.subviews) {
         if (![slot isKindOfClass:SBCPUTextBackdropLabel.class]) continue;
         slot.layer.compositingFilter = nil; slot.textColor = textSlotColor();
-        slot.attributedText = SBCPUTextOnlyAttributedRow(slot.text,slot.font,slot.textColor);
+        slot.attributedText = SBCPUTextOnlyAttributedRow(slot.text,slot.font,slot.textColor,
+            second ? floatingTextOnly2LetterSpacing : floatingTextOnlyLetterSpacing);
         slot.realtimeInvertEnabled = isEnabled && !cpuWindow.hidden && floatingTextOnlyColor == 4 && slot.text.length > 0;
     }
 }
