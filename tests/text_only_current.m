@@ -18,8 +18,8 @@ int main(void) {
         assert([SBCPUTextOnlyCurrentText(nil, 10, 11) isEqual:@"--mA"]);
         assert([SBCPUTextOnlyCurrentText(@(200), 10, 14) isEqual:@"--mA"]);
         SBCPUTextOnlyFields fields = {0}; fields.current = YES;
-        assert([SBCPUTextOnlyRow(fields, nil,nil,nil,nil,nil,@"-387mA",nil) isEqual:@"-387mA"]);
-        assert([SBCPUTextOnlyRow(fields, nil,nil,nil,nil,nil,@"--mA",nil) isEqual:@"--mA"]);
+        assert([SBCPUTextOnlyRow(fields, nil,nil,nil,nil,nil,@"-387mA",nil) isEqual:@"↯-387mA"]);
+        assert([SBCPUTextOnlyRow(fields, nil,nil,nil,nil,nil,@"--mA",nil) isEqual:@"↯--mA"]);
         puts("PASS: pure-text signed net battery current and missing/stale handling");
     }
     return 0;
