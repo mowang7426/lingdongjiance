@@ -2696,7 +2696,7 @@ static UIColor *textSlotColor(void) {
         blue:textOnlyCustomRGBA.blue alpha:textOnlyCustomRGBA.alpha];
     return SBCPUTextUsesWhite((int)floatingTextOnlyColor, style) ? UIColor.whiteColor : UIColor.blackColor;
 }
-static void colorTextSlots(SBCPUTextBackdropLabel *host) {
+static void colorTextSlots(SBCPUTextBackdropLabel *host, BOOL second) {
     for (SBCPUTextBackdropLabel *slot in host.subviews) {
         if (![slot isKindOfClass:SBCPUTextBackdropLabel.class]) continue;
         slot.layer.compositingFilter = nil; slot.textColor = textSlotColor();
@@ -2731,14 +2731,14 @@ static CGSize layoutTextSlots(SBCPUTextBackdropLabel *host, BOOL second, SBCPUTe
     }
     host.text=@""; host.hidden=mask==0;
     if (!second) textOnlyPlainText=[parts componentsJoinedByString:@" "];
-    colorTextSlots(host);
+    colorTextSlots(host, second);
     CGFloat width=1; for (int i=0;i<10;i++) width=MAX(width,frames[i].x+frames[i].width);
     return CGSizeMake(width,height);
 }
 static void applyTextOnlyTextFilter(void) {
     if (!floatingTextOnlyMode) clearTextSlots(textOnlyLabel);
-    else colorTextSlots(textOnlyLabel);
-    colorTextSlots(textOnly2Label);
+    else colorTextSlots(textOnlyLabel, NO);
+    colorTextSlots(textOnly2Label, YES);
 }
 static BOOL textOnly2Dragging=NO;
 @implementation SBCPURootViewController (SBCPUSecondTextHUD)
