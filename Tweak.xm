@@ -286,9 +286,6 @@ typedef struct {
 @end
 @interface SBCPUWindow : UIWindow
 @end
-// Window 2 must be independently non-interactive without disabling window 1.
-@interface SBCPUSecondTextWindow : UIWindow
-@end
 @interface SBCPUValuePickerController : UITableViewController
 @end
 @interface SBCPUTimePickerController : UITableViewController
@@ -322,7 +319,6 @@ typedef struct {
 #pragma mark - 3. 全局状态变量与所有 C 函数前置声明
 
 static UIWindow *cpuWindow = nil;
-static SBCPUSecondTextWindow *textOnly2Window = nil;
 static SBCPUFloatingView *floatingView = nil;
 static SBCPUDetailViewController *detailVC = nil;
 
@@ -1091,7 +1087,6 @@ static void setArrayPref(CFStringRef key, NSArray *value) {
 static void applyVisibility(void) {
     dispatch_async(dispatch_get_main_queue(), ^{
         if (cpuWindow) cpuWindow.hidden = !isEnabled;
-        if (textOnly2Window) textOnly2Window.hidden = !isEnabled || !floatingTextOnlyMode2 || textOnly2Label.hidden;
     });
 }
 
@@ -2542,7 +2537,7 @@ static SBCPUTextGeometry textOnlyGeometry(void) {
     return textOnlyGeometryForView(floatingView.superview, NO);
 }
 static SBCPUTextGeometry textOnlySecondGeometry(void) {
-    return textOnlyGeometryForView(textOnly2Window.rootViewController.view, YES);
+    return textOnlyGeometryForView(cpuWindow.rootViewController.view, YES);
 }
 static SBCPUTextPoint textOnlyLogicalCenter(CGPoint center, SBCPUTextGeometry g) {
     return SBCPUTextToLogical(SBCPUTextPointMake(center.x-g.bounds.origin.x, center.y-g.bounds.origin.y), g.bounds.size.width, g.bounds.size.height, g.rotation);
@@ -2754,17 +2749,26 @@ static void applyTextOnlyTextFilter(void) {
     colorTextSlots(textOnly2Label, YES);
 }
 static BOOL textOnly2Dragging=NO;
+static void syncSecondTextInteraction(void) {
+    // Re-enable the SAME recognizer on OFF; cancellation on ON must not keep
+    // the layout in dragging mode. Never disable the shared window/root view.
+    if (textOnly2Locked) textOnly2Dragging=NO;
+    textOnly2Label.userInteractionEnabled=!textOnly2Locked;
+    for (UIGestureRecognizer *gesture in textOnly2Label.gestureRecognizers)
+        gesture.enabled=!textOnly2Locked;
+}
 @implementation SBCPURootViewController (SBCPUSecondTextHUD)
 - (void)sbcpu_secondTextPan:(UIPanGestureRecognizer *)pan {
-    if (textOnly2Locked || !textOnly2Label) return;
+    if (textOnly2Locked || !textOnly2Label || pan.view!=textOnly2Label || textOnly2Label.window!=cpuWindow) return;
     SBCPUTextGeometry g=textOnlySecondGeometry();
-    CGPoint d=[pan translationInView:self.view];
+    UIView *host=textOnly2Label.superview;
+    CGPoint d=[pan translationInView:host];
     if (pan.state==UIGestureRecognizerStateBegan) {
-        textOnly2Dragging=YES; [pan setTranslation:CGPointZero inView:self.view];
+        textOnly2Dragging=YES; [pan setTranslation:CGPointZero inView:host];
     }
     if (pan.state==UIGestureRecognizerStateChanged) {
         textOnly2Label.center=CGPointMake(textOnly2Label.center.x+d.x,textOnly2Label.center.y+d.y);
-        [pan setTranslation:CGPointZero inView:self.view];
+        [pan setTranslation:CGPointZero inView:host];
     }
     if (pan.state==UIGestureRecognizerStateEnded || pan.state==UIGestureRecognizerStateCancelled) {
         SBCPUTextPoint p=textOnlyLogicalCenter(textOnly2Label.center,g);
@@ -2788,30 +2792,19 @@ static void updateTextOnlySecond(void) {
         dispatch_async(dispatch_get_main_queue(), ^{ updateTextOnlySecond(); }); return;
     }
     if (!SBCPUTextHUDShouldExist(isEnabled,floatingTextOnlyMode2,cpuWindow!=nil,cpuWindow.rootViewController!=nil)) {
-        clearTextSlots(textOnly2Label); [textOnly2Label removeFromSuperview]; textOnly2Label=nil; textOnly2Dragging=NO;
-        textOnly2Window.hidden=YES; textOnly2Window.userInteractionEnabled=NO; return;
+        clearTextSlots(textOnly2Label); [textOnly2Label removeFromSuperview]; textOnly2Label=nil; textOnly2Dragging=NO; return;
     }
-    if (!textOnly2Window) {
-        textOnly2Window=[[SBCPUSecondTextWindow alloc] initWithFrame:cpuWindow.bounds];
-        textOnly2Window.windowScene=cpuWindow.windowScene;
-        textOnly2Window.windowLevel=cpuWindow.windowLevel+0.5;
-        textOnly2Window.backgroundColor=UIColor.clearColor; textOnly2Window.opaque=NO;
-        textOnly2Window.rootViewController=[[SBCPURootViewController alloc] init];
-    }
-    UIView *host=textOnly2Window.rootViewController.view;
+    // Reuse the proven 5.01 SpringBoard window/event context. A second visible
+    // UIWindow is not evidence that BackBoard routes cross-app touches to it.
+    UIView *host=cpuWindow.rootViewController.view;
     if (!textOnly2Label || textOnly2Label.superview!=host) {
         clearTextSlots(textOnly2Label); [textOnly2Label removeFromSuperview];
         textOnly2Label=[[SBCPUTextBackdropLabel alloc] initWithFrame:CGRectZero];
         textOnly2Label.backgroundColor=UIColor.clearColor;
-        UIPanGestureRecognizer *pan=[[UIPanGestureRecognizer alloc] initWithTarget:textOnly2Window.rootViewController action:@selector(sbcpu_secondTextPan:)];
+        UIPanGestureRecognizer *pan=[[UIPanGestureRecognizer alloc] initWithTarget:cpuWindow.rootViewController action:@selector(sbcpu_secondTextPan:)];
         [textOnly2Label addGestureRecognizer:pan]; [host addSubview:textOnly2Label];
     }
-    if (textOnly2Locked) textOnly2Dragging=NO;
-    // Disabling the whole dedicated window leaves text visible and withdraws it
-    // from event delivery; hit-test gates below also reject every locked point.
-    textOnly2Window.userInteractionEnabled=!textOnly2Locked;
-    for (UIGestureRecognizer *gesture in textOnly2Label.gestureRecognizers) gesture.enabled=!textOnly2Locked;
-    textOnly2Label.userInteractionEnabled=!textOnly2Locked;
+    syncSecondTextInteraction();
     SBCPUTextGeometry g=textOnlySecondGeometry();
     CGSize size=layoutTextSlots(textOnly2Label,YES,g);
     textOnly2Label.bounds=(CGRect){CGPointZero,size};
@@ -2831,7 +2824,6 @@ static void updateTextOnlySecond(void) {
         textOnly2Label.center=textOnlyContainerCenter(p,g);
     }
     textOnly2Label.hidden=textOnly2Label.hidden || floatingView.hidden;
-    textOnly2Window.hidden=cpuWindow.hidden || textOnly2Label.hidden;
 }
 
 static void applyTextOnlyMode(void) {
@@ -6580,30 +6572,17 @@ static NSString *bandItemDisplayName(NSInteger g, NSInteger v) {
         return [super hitTest:point withEvent:event];
     }
 
+    if (!SBCPUSecondTouchIgnored(textOnly2Locked,isEnabled && floatingTextOnlyMode2,
+        textOnly2Label && textOnly2Label.window==self && !textOnly2Label.hidden &&
+        textOnly2Label.alpha>0.01 && textOnly2Label.userInteractionEnabled, NO)) {
+        CGPoint p=[self convertPoint:point toView:textOnly2Label];
+        if ([textOnly2Label pointInside:p withEvent:event]) return textOnly2Label;
+    }
     if (floatingView && !floatingView.hidden && floatingView.alpha > 0.01) {
         CGPoint p = [self convertPoint:point toView:floatingView];
         if ([floatingView pointInside:p withEvent:event]) return floatingView;
     }
     return nil;
-}
-@end
-
-@implementation SBCPUSecondTextWindow
-// UIKit's window-level routing gate, not just a disabled pan or label.
-- (BOOL)_ignoresHitTest {
-    BOOL modal=settingsShowing || detailShowing || cpuWindow.rootViewController.presentedViewController!=nil;
-    return SBCPUSecondTouchIgnored(textOnly2Locked,isEnabled && floatingTextOnlyMode2,
-        textOnly2Label && !textOnly2Label.hidden && textOnly2Label.alpha>0.01,
-        modal) || self.hidden || !self.userInteractionEnabled;
-}
-- (BOOL)pointInside:(CGPoint)point withEvent:(UIEvent *)event {
-    if ([self _ignoresHitTest]) return NO;
-    CGPoint p=[self convertPoint:point toView:textOnly2Label];
-    return [textOnly2Label pointInside:p withEvent:event];
-}
-- (UIView *)hitTest:(CGPoint)point withEvent:(UIEvent *)event {
-    if (![self pointInside:point withEvent:event]) return nil;
-    return textOnly2Label;
 }
 @end
 

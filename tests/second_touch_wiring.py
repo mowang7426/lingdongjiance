@@ -1,43 +1,44 @@
 from pathlib import Path
-import plistlib
-import subprocess
-r = Path(__file__).resolve().parents[1]
-s = (r/'Tweak.xm').read_text()
-base = subprocess.check_output(['git','show','281bc6adeadcfebf1c2a2cbd56845f8a66d9031e:Tweak.xm'],cwd=r,text=True)
-second = s[s.index('@implementation SBCPUSecondTextWindow'):s.index('@implementation SBCPUValuePickerController')]
-assert '- (BOOL)_ignoresHitTest' in second
-assert '- (BOOL)pointInside:' in second and 'if ([self _ignoresHitTest]) return NO;' in second
-assert 'if (![self pointInside:point withEvent:event]) return nil;' in second
-assert 'return textOnly2Label;' in second and '[super hitTest:' not in second
-assert 'SBCPUSecondTouchIgnored(textOnly2Locked' in second
-update = s[s.index('static void updateTextOnlySecond(void) {'):s.index('static void applyTextOnlyMode(void) {')]
-assert 'UIView *host=textOnly2Window.rootViewController.view;' in update
-assert 'textOnly2Window.userInteractionEnabled=!textOnly2Locked;' in update
-assert 'gesture.enabled=!textOnly2Locked' in update
-assert 'textOnly2Window.hidden=cpuWindow.hidden || textOnly2Label.hidden;' in update
-assert 'textOnly2Window.windowScene=cpuWindow.windowScene;' in update
-assert 'makeKey' not in update
+import plistlib, subprocess, sys
+r=Path(__file__).resolve().parents[1]
+s=(r/'Tweak.xm').read_text()
+base=subprocess.check_output(['git','show','281bc6adeadcfebf1c2a2cbd56845f8a66d9031e:Tweak.xm'],cwd=r,text=True)
+def between(a,b): return s[s.index(a):s.index(b,s.index(a))]
+update=between('static void updateTextOnlySecond(void) {','static void applyTextOnlyMode(void) {')
+primary=between('@implementation SBCPUWindow','@implementation SBCPUValuePickerController')
+assert 'SBCPUSecondTextWindow' not in s and 'textOnly2Window' not in s
+assert '_ignoresHitTest' not in s
+assert 'UIView *host=cpuWindow.rootViewController.view;' in update
+assert 'initWithTarget:cpuWindow.rootViewController action:@selector(sbcpu_secondTextPan:)' in update
+assert '[textOnly2Label addGestureRecognizer:pan]; [host addSubview:textOnly2Label];' in update
+assert 'syncSecondTextInteraction();' in update
+sync=between('static void syncSecondTextInteraction(void)', '@implementation SBCPURootViewController (SBCPUSecondTextHUD)')
+assert 'gesture.enabled=!textOnly2Locked' in sync and 'textOnly2Label.userInteractionEnabled=!textOnly2Locked' in sync
+assert 'if (textOnly2Locked) textOnly2Dragging=NO;' in sync
+assert 'textOnly2Label.window==self' in primary
+assert primary.index('return textOnly2Label;') < primary.index('return floatingView;')
+assert 'settingsShowing' not in sync+update and 'detailShowing' not in sync+update
 assert 'cpuWindow.userInteractionEnabled' not in s
-primary = s[s.index('@implementation SBCPUWindow'):s.index('@implementation SBCPUSecondTextWindow')]
-old_primary = base[base.index('@implementation SBCPUWindow'):base.index('@implementation SBCPUValuePickerController')]
-removed = '''    if (textOnly2Label && !textOnly2Label.hidden && !textOnly2Locked && textOnly2Label.alpha > 0.01) {
-        CGPoint p=[self convertPoint:point toView:textOnly2Label];
-        if ([textOnly2Label pointInside:p withEvent:event]) return textOnly2Label;
-    }
-'''
-assert primary.rstrip() == old_primary.replace(removed,'').rstrip()
-# Window 1 implementation and all sampling/control logic remain byte-identical.
-for start,end in [('@implementation SBCPUFloatingView','@implementation SBCPUSecondTextWindow'),]:
-    # Restrict to the FloatingView implementation, before following classes.
-    a = s.index(start); b = base.index(start)
-    assert s[a:s.index('\n@end',a)+5] == base[b:base.index('\n@end',b)+5]
-load = s[s.index('static void LoadPreferences(void) {'):s.index('static void SavePreferencesAndNotify(void) {')]
-assert 'getBoolPref(CFSTR("floatingTextOnly2Locked"), NO)' in load
-assert 'if (floatingView) applyTextOnlyMode();' in load
-controller = (r/'sbcpuprefs/SBCPUTextOnlyController.m').read_text()
-assert 'CFPreferencesSynchronize' in controller and 'notify_post("com.yourname.sbcpufloating.prefschanged")' in controller
-rows = plistlib.loads((r/'sbcpuprefs/Resources/TextOnly.plist').read_bytes())['items']
-assert len([row for row in rows if row.get('key')=='floatingTextOnly2Locked']) == 1
-assert next(row for row in rows if row.get('key')=='floatingTextOnly2NetworkDualLine')['default'] is False
-assert s.count('scheduledTimer') == base.count('scheduledTimer')
-print('PASS independent window2 / whole-window rejection / cancellation / immediate preferences / unchanged window1 / no new timer')
+pan=between('- (void)sbcpu_secondTextPan:', '\n@end')
+assert 'UIView *host=textOnly2Label.superview;' in pan and 'translationInView:host' in pan
+assert 'pan.view!=textOnly2Label || textOnly2Label.window!=cpuWindow' in pan
+# Preserve the production anchor capture/end implementation, not merely formulas.
+end='    if (pan.state==UIGestureRecognizerStateEnded'
+oldpan=base[base.index('- (void)sbcpu_secondTextPan:'):base.index('\n@end',base.index('- (void)sbcpu_secondTextPan:'))]
+assert pan[pan.index(end):]==oldpan[oldpan.index(end):]
+a=s.index('@implementation SBCPUFloatingView'); b=base.index('@implementation SBCPUFloatingView')
+assert s[a:s.index('\n@end',a)+5]==base[b:base.index('\n@end',b)+5]
+assert s.count('scheduledTimer')==base.count('scheduledTimer')
+rows=plistlib.loads((r/'sbcpuprefs/Resources/TextOnly.plist').read_bytes())['items']
+assert len([v for v in rows if v.get('key')=='floatingTextOnly2Locked'])==1
+assert next(v for v in rows if v.get('key')=='floatingTextOnly2NetworkDualLine')['default'] is False
+assert 'getBoolPref(CFSTR("floatingTextOnly2Locked"), NO)' in s
+print('PASS actual host/target/coordinates/lock restore wiring; unchanged window1 and drag anchors')
+if '--emit-native' in sys.argv:
+    # Execute production method bodies against an Objective-C event-tree double.
+    # The layout tail remains covered by existing anchor/layout regressions.
+    prefix=update[update.index('    if (!SBCPUTextHUDShouldExist'):update.index('    SBCPUTextGeometry g=textOnlySecondGeometry();')]
+    panprefix=pan[:pan.index(end)].replace('SBCPUTextGeometry g=textOnlySecondGeometry();','SBCPUTextGeometry g=textOnlySecondGeometry(); (void)g;')+'}\n'
+    template=(r/'tests/second_touch_event_tree.m.in').read_text()
+    template=template.replace('/*SYNC*/',sync).replace('/*UPDATE*/','static void updateTextOnlySecond(void) {\n'+prefix+'}\n').replace('/*PAN*/',panprefix).replace('/*WINDOW*/',primary)
+    Path(sys.argv[sys.argv.index('--emit-native')+1]).write_text(template)

@@ -17,11 +17,13 @@ assert clear.index('slot.realtimeInvertEnabled = NO') < clear.index('[slot remov
 second=s[s.index('static void updateTextOnlySecond(void) {'):s.index('static void applyTextOnlyMode(void) {')]
 assert '!SBCPUTextHUDShouldExist(isEnabled,floatingTextOnlyMode2,cpuWindow!=nil,cpuWindow.rootViewController!=nil)' in second
 assert 'clearTextSlots(textOnly2Label); [textOnly2Label removeFromSuperview]; textOnly2Label=nil' in second
-assert 'textOnly2Label.userInteractionEnabled=!textOnly2Locked' in second
+interaction=s[s.index('static void syncSecondTextInteraction(void)'):s.index('@implementation SBCPURootViewController (SBCPUSecondTextHUD)')]
+assert 'syncSecondTextInteraction();' in second
+assert 'textOnly2Label.userInteractionEnabled=!textOnly2Locked' in interaction
 assert 'textOnly2Label.hidden=textOnly2Label.hidden || floatingView.hidden' in second
 assert 'SBCPUTextResolveAnchor(anchor,g.width,g.height' in second
 assert 'textOnlyContainerCenter(p,g)' in second
-hit=s[s.index('@implementation SBCPUSecondTextWindow'):s.index('@implementation SBCPUValuePickerController')]
+hit=s[s.index('@implementation SBCPUWindow'):s.index('@implementation SBCPUValuePickerController')]
 assert 'SBCPUSecondTouchIgnored(textOnly2Locked' in hit and 'return textOnly2Label' in hit and 'return nil;' in hit
 for suffix in ['CPU','Frequency','FPS','Battery','Temperature','Current','SIM1','SIM2','UploadNetwork','DownloadNetwork']:
     rows=plistlib.loads((r/'sbcpuprefs/Resources/TextOnly.plist').read_bytes())['items']
