@@ -4,6 +4,7 @@
 #import "SBCPUTextBackdropLabel.h"
 #import "SBCPUCapsuleTextPolicy.h"
 #import "SBCPUTextOnlyFormat.h"
+#import "SBCPUTextOnlyTypography.h"
 #import "SBCPUTextOnlyCurrent.h"
 #import "SBCPUTextNetwork.h"
 #import <net/if_dl.h>
@@ -2691,14 +2692,14 @@ static void applyTextOnlyMode(void) {
     textOnlyPlainText = [textOnlyLabel.text copy];
     textOnlyLabel.hidden = (textOnlyPlainText.length == 0);
     textOnlyLabel.font = textOnlyBold ? [UIFont boldSystemFontOfSize:floatingTextOnlyFontSize] : [UIFont systemFontOfSize:floatingTextOnlyFontSize];
-    textOnlyLabel.attributedText = SBCPUTextOnlyAttributedRow(textOnlyLabel.text, textOnlyLabel.font, textOnlyLabel.textColor);
+    textOnlyLabel.attributedText = SBCPUTextOnlyAttributedRow(textOnlyPlainText, textOnlyLabel.font, textOnlyLabel.textColor);
     SBCPUTextGeometry textGeometry = textOnlyGeometry();
     CGFloat available = MAX(1, textGeometry.width-textGeometry.left-textGeometry.right);
     CGFloat naturalWidth = ceil([textOnlyLabel.attributedText boundingRectWithSize:CGSizeMake(CGFLOAT_MAX, CGFLOAT_MAX)
         options:NSStringDrawingUsesLineFragmentOrigin | NSStringDrawingUsesFontLeading context:nil].size.width);
     CGFloat fittedFont = SBCPUTextOnlyFitFont(naturalWidth, available, floatingTextOnlyFontSize);
     textOnlyLabel.font = textOnlyBold ? [UIFont boldSystemFontOfSize:fittedFont] : [UIFont systemFontOfSize:fittedFont];
-    textOnlyLabel.attributedText = SBCPUTextOnlyAttributedRow(textOnlyLabel.text, textOnlyLabel.font, textOnlyLabel.textColor);
+    textOnlyLabel.attributedText = SBCPUTextOnlyAttributedRow(textOnlyPlainText, textOnlyLabel.font, textOnlyLabel.textColor);
     CGFloat fittedWidth = ceil([textOnlyLabel.attributedText boundingRectWithSize:CGSizeMake(CGFLOAT_MAX, CGFLOAT_MAX)
         options:NSStringDrawingUsesLineFragmentOrigin | NSStringDrawingUsesFontLeading context:nil].size.width);
     BOOL wrap = fittedWidth + 2 > available;

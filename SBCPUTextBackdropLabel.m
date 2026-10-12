@@ -128,7 +128,7 @@ static BOOL SBCPUBackdropUnavailable = NO;
         _alphaMask.contentsScale = scale;
         _alphaMask.string = [[NSAttributedString alloc] initWithString:self.text attributes:@{
             NSFontAttributeName:fittedFont, NSForegroundColorAttributeName:UIColor.whiteColor}];
-        if ([self isKindOfClass:SBCPUCapsuleBackdropLabel.class]) {
+        if ([self isKindOfClass:SBCPUCapsuleBackdropLabel.class] || self.attributedText.length) {
             UILabel *glyph = _alphaMask.glyphLabel;
             if (!glyph) {
                 glyph = [[UILabel alloc] initWithFrame:self.bounds];
@@ -139,6 +139,21 @@ static BOOL SBCPUBackdropUnavailable = NO;
             glyph.bounds = self.bounds;
             glyph.font = font;
             glyph.text = self.text;
+            if (self.attributedText.length) {
+                NSMutableAttributedString *maskText = [self.attributedText mutableCopy];
+                [maskText addAttribute:NSForegroundColorAttributeName value:UIColor.whiteColor range:NSMakeRange(0, maskText.length)];
+                [self.attributedText enumerateAttribute:NSAttachmentAttributeName inRange:NSMakeRange(0, self.attributedText.length)
+                    options:0 usingBlock:^(id value, NSRange range, BOOL *stop) {
+                        (void)stop;
+                        if (![value isKindOfClass:NSTextAttachment.class]) return;
+                        NSTextAttachment *source = value;
+                        NSTextAttachment *white = [NSTextAttachment new];
+                        white.bounds = source.bounds;
+                        white.image = [source.image imageWithTintColor:UIColor.whiteColor renderingMode:UIImageRenderingModeAlwaysOriginal];
+                        [maskText addAttribute:NSAttachmentAttributeName value:white range:range];
+                    }];
+                glyph.attributedText = maskText;
+            }
             glyph.textAlignment = self.textAlignment;
             glyph.numberOfLines = self.numberOfLines;
             glyph.lineBreakMode = self.lineBreakMode;
@@ -175,6 +190,11 @@ static BOOL SBCPUBackdropUnavailable = NO;
     [super setText:text];
     [self setNeedsLayout];
     if (text.length == 0 && _backdrop) [self clearBackdrop];
+}
+- (void)setAttributedText:(NSAttributedString *)text {
+    if ([self.attributedText isEqualToAttributedString:text]) return;
+    [super setAttributedText:text];
+    [self invalidateBackdropTypography];
 }
 - (void)setFont:(UIFont *)font {
     if ([self.font isEqual:font]) return;
