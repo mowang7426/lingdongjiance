@@ -400,10 +400,12 @@ static void resetTextNetwork(void) {
 // Called only by the existing low-frequency data refresh, never by layout or FPS.
 static unsigned textSlotMask(BOOL second);
 static void sampleTextNetwork(void) {
-    BOOL visible = cpuWindow && !cpuWindow.hidden && cpuWindow.alpha > 0.01 &&
-        floatingView && floatingView.window && !floatingView.hidden && floatingView.alpha > 0.01;
+    BOOL visible = cpuWindow && !cpuWindow.hidden && cpuWindow.alpha > 0.01;
+    BOOL firstVisible = floatingView && floatingView.window && !floatingView.hidden && floatingView.alpha > 0.01;
+    BOOL secondVisible = textOnly2Label && textOnly2Label.window && !textOnly2Label.hidden && textOnly2Label.alpha > 0.01;
     BOOL needed = SBCPUTextNetworkNeeded(isEnabled, visible,
-        floatingTextOnlyMode ? textSlotMask(NO) : 0, floatingTextOnlyMode2 ? textSlotMask(YES) : 0);
+        floatingTextOnlyMode && firstVisible ? textSlotMask(NO) : 0,
+        floatingTextOnlyMode2 && secondVisible ? textSlotMask(YES) : 0);
     if (!needed) { resetTextNetwork(); return; }
     static int blankToken = -1;
     if (blankToken == -1) {
@@ -2763,7 +2765,7 @@ static BOOL textOnly2Dragging=NO;
 }
 @end
 static void updateTextOnlySecond(void) {
-    if (!floatingTextOnlyMode2 || !isEnabled || !cpuWindow || !cpuWindow.rootViewController) {
+    if (!SBCPUTextHUDShouldExist(isEnabled,floatingTextOnlyMode2,cpuWindow!=nil,cpuWindow.rootViewController!=nil)) {
         clearTextSlots(textOnly2Label); [textOnly2Label removeFromSuperview]; textOnly2Label=nil; textOnly2Dragging=NO; return;
     }
     UIView *host=cpuWindow.rootViewController.view;
@@ -2774,6 +2776,7 @@ static void updateTextOnlySecond(void) {
         UIPanGestureRecognizer *pan=[[UIPanGestureRecognizer alloc] initWithTarget:cpuWindow.rootViewController action:@selector(sbcpu_secondTextPan:)];
         [textOnly2Label addGestureRecognizer:pan]; [host addSubview:textOnly2Label];
     }
+    if (textOnly2Locked) textOnly2Dragging=NO;
     textOnly2Label.userInteractionEnabled=!textOnly2Locked;
     SBCPUTextGeometry g=textOnlyGeometry();
     CGSize size=layoutTextSlots(textOnly2Label,YES,g);

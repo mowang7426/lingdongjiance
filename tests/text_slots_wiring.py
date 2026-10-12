@@ -11,11 +11,11 @@ for forbidden in ['sizeThatFits','boundingRect','minimumScaleFactor','NSTimer','
 assert 'layoutTextSlots(textOnlyLabel,NO,textGeometry)' in s
 assert 'layoutTextSlots(textOnly2Label,YES,g)' in s
 assert s.count('    sampleTextNetwork();')==1
-assert 'floatingTextOnlyMode2 ? textSlotMask(YES) : 0' in s
+assert 'floatingTextOnlyMode2 && secondVisible ? textSlotMask(YES) : 0' in s
 clear=s[s.index('static void clearTextSlots'):s.index('static UIColor *textSlotColor')]
 assert clear.index('slot.realtimeInvertEnabled = NO') < clear.index('[slot removeFromSuperview]')
 second=s[s.index('static void updateTextOnlySecond(void) {'):s.index('static void applyTextOnlyMode(void) {')]
-assert '!floatingTextOnlyMode2 || !isEnabled || !cpuWindow' in second
+assert '!SBCPUTextHUDShouldExist(isEnabled,floatingTextOnlyMode2,cpuWindow!=nil,cpuWindow.rootViewController!=nil)' in second
 assert 'clearTextSlots(textOnly2Label); [textOnly2Label removeFromSuperview]; textOnly2Label=nil' in second
 assert 'textOnly2Label.userInteractionEnabled=!textOnly2Locked' in second
 assert 'textOnly2Label.hidden=textOnly2Label.hidden || floatingView.hidden' in second

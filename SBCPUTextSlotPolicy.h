@@ -22,4 +22,8 @@ static inline double SBCPUTextSlotsLayout(unsigned mask, double font, double ava
 static inline int SBCPUTextNetworkNeeded(int enabled, int visible, unsigned first, unsigned second) {
     return enabled && visible && ((first|second)&(3u<<8));
 }
+/* Existing view must be torn down whenever its owner/mode is unavailable. */
+static inline int SBCPUTextHUDShouldExist(int enabled, int mode, int window, int host) {
+    return enabled && mode && window && host;
+}
 #endif

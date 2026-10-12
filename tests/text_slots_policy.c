@@ -28,5 +28,14 @@ int main(void) {
     for (int enabled=0;enabled<2;enabled++) for (int visible=0;visible<2;visible++)
     for (unsigned a=0;a<1024;a++) for (unsigned b=0;b<1024;b++)
         assert(!!SBCPUTextNetworkNeeded(enabled,visible,a,b)==!!(enabled && visible && ((a|b)&768)));
+    for (int bits=0;bits<16;bits++) {
+        int exists=SBCPUTextHUDShouldExist(bits&1,bits&2,bits&4,bits&8);
+        assert(!!exists==(bits==15));
+        /* Close, disable, lose window, lose host must ALL clear a live HUD. */
+        for (int bit=0;bit<4;bit++) {
+            int closed=bits&~(1<<bit);
+            assert(!SBCPUTextHUDShouldExist(closed&1,closed&2,closed&4,closed&8));
+        }
+    }
     return 0;
 }

@@ -19,7 +19,7 @@ controller = (r/'sbcpuprefs/SBCPUTextOnlyController.m').read_text()
 for api in ('CFPreferencesSetValue', 'CFPreferencesSynchronize', 'CFPreferencesCopyValue', 'notify_post'):
     assert api in controller
 sampler = s[s.index('static void sampleTextNetwork(void) {'):s.index('static NSNumber *textOnlyBatteryCurrent')]
-for required in ('SBCPUTextNetworkNeeded', 'floatingTextOnlyMode2 ? textSlotMask(YES) : 0', '!cpuWindow.hidden', '!floatingView.hidden', 'AF_LINK', 'IFF_UP', 'IFF_RUNNING', 'IFF_LOOPBACK', 'freeifaddrs', 'systemUptime', 'hasBlankedScreen'):
+for required in ('SBCPUTextNetworkNeeded', 'floatingTextOnlyMode2 && secondVisible ? textSlotMask(YES) : 0', '!cpuWindow.hidden', '!floatingView.hidden', 'AF_LINK', 'IFF_UP', 'IFF_RUNNING', 'IFF_LOOPBACK', 'freeifaddrs', 'systemUptime', 'hasBlankedScreen'):
     assert required in sampler, required
 assert 'NSTimer' not in sampler and 'CADisplayLink' not in sampler
 assert s.count('    sampleTextNetwork();') == 1
