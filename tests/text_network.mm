@@ -32,7 +32,9 @@ int main(void) {
         assert([SBCPUNetworkRate(nextafter(1048576, 0)) isEqual:@"1023.9K/s"]);
         assert([SBCPUNetworkRate(1048576 + 1) isEqual:@"1.0M/s"]);
         assert([SBCPUNetworkRate(INFINITY) isEqual:@"--"]);
-        assert([SBCPUNetworkText(YES, 2*1048576, 1.25*1024) isEqual:@"↑1.2K/s ↓2.0M/s"]);
+        assert([SBCPUNetworkTextDirections(YES, 2*1048576, 1.25*1024, YES, NO) isEqual:@"↑1.2K/s"]);
+        assert([SBCPUNetworkTextDirections(YES, 2*1048576, 1.25*1024, NO, YES) isEqual:@"↓2.0M/s"]);
+        assert([SBCPUNetworkTextDirections(YES, 2*1048576, 1.25*1024, NO, NO) isEqual:@""]);
         assert([SBCPUNetworkText(YES, 0, 0) isEqual:@"↑0B/s ↓0B/s"]);
         assert([SBCPUNetworkRate(1024) isEqual:@"1.0K/s"]);
         assert([SBCPUNetworkRate(1048576) isEqual:@"1.0M/s"]);

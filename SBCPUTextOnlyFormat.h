@@ -41,13 +41,13 @@ static inline NSString *SBCPUTextOnlyRow(SBCPUTextOnlyFields fields,
     NSString *temperature, NSString *current, NSArray<NSDictionary *> *signals) {
     NSMutableArray<NSString *> *parts = [NSMutableArray array];
     if (fields.cpu) [parts addObject:[@"◉" stringByAppendingString:SBCPUTextOnlyCompactValue(cpu, @"%", NO)]];
-    if (fields.frequency) [parts addObject:SBCPUTextOnlyCompactValue(frequency, @"MHz", NO)];
-    if (fields.fps) [parts addObject:SBCPUTextOnlyCompactValue([fps isKindOfClass:[NSString class]] ? [fps stringByAppendingString:@"fps"] : nil, @"fps", NO)];
+    if (fields.frequency) [parts addObject:[@"ƒ" stringByAppendingString:SBCPUTextOnlyCompactValue(frequency, @"MHz", NO)]];
+    if (fields.fps) [parts addObject:[@"≋" stringByAppendingString:SBCPUTextOnlyCompactValue([fps isKindOfClass:[NSString class]] ? [fps stringByAppendingString:@"fps"] : nil, @"fps", NO)]];
     if (fields.battery) [parts addObject:[@"▰" stringByAppendingString:SBCPUTextOnlyCompactValue(battery, @"%", NO)]];
-    if (fields.temperature) [parts addObject:SBCPUTextOnlyCompactValue(temperature, @"°C", YES)];
-    if (fields.current) [parts addObject:SBCPUTextOnlyCompactValue(current, @"mA", YES)];
-    if (fields.sim1) [parts addObject:SBCPUTextOnlySignal(signals, 1)];
-    if (fields.sim2) [parts addObject:SBCPUTextOnlySignal(signals, 2)];
+    if (fields.temperature) [parts addObject:[@"△" stringByAppendingString:SBCPUTextOnlyCompactValue(temperature, @"°C", YES)]];
+    if (fields.current) [parts addObject:[@"↯" stringByAppendingString:SBCPUTextOnlyCompactValue(current, @"mA", YES)]];
+    if (fields.sim1) [parts addObject:[@"⌁" stringByAppendingString:SBCPUTextOnlySignal(signals, 1)]];
+    if (fields.sim2) [parts addObject:[@"⌁" stringByAppendingString:SBCPUTextOnlySignal(signals, 2)]];
     return [parts componentsJoinedByString:@" "];
 }
 #endif

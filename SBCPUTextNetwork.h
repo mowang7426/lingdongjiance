@@ -41,8 +41,15 @@ static inline NSString *SBCPUNetworkRate(double bytesPerSecond) {
     if (value < 1e15) value = floor(value * 10) / 10;
     return [NSString stringWithFormat:@"%.1f%@/s", value, divisor == 1024 ? @"K" : @"M"];
 }
+static inline NSString *SBCPUNetworkTextDirections(BOOL valid, double download, double upload,
+    BOOL showUpload, BOOL showDownload) {
+    NSMutableArray<NSString *> *parts = [NSMutableArray array];
+    if (showUpload) [parts addObject:[NSString stringWithFormat:@"↑%@", SBCPUNetworkRate(valid ? upload : NAN)]];
+    if (showDownload) [parts addObject:[NSString stringWithFormat:@"↓%@", SBCPUNetworkRate(valid ? download : NAN)]];
+    return [parts componentsJoinedByString:@" "];
+}
+
 static inline NSString *SBCPUNetworkText(BOOL valid, double download, double upload) {
-    return [NSString stringWithFormat:@"↑%@ ↓%@", SBCPUNetworkRate(valid ? upload : NAN),
-        SBCPUNetworkRate(valid ? download : NAN)];
+    return SBCPUNetworkTextDirections(valid, download, upload, YES, YES);
 }
 #endif

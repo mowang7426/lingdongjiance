@@ -367,7 +367,8 @@ static SBCPUTextRGBA textOnlyCustomRGBA = {0, 122.0/255.0, 1, 1};
 static BOOL textOnlyShowCPU = YES, textOnlyShowFrequency = YES, textOnlyShowFPS = YES;
 static BOOL textOnlyShowBattery = YES, textOnlyShowTemperature = YES, textOnlyShowCurrent = YES;
 static BOOL textOnlyShowSIM1 = YES, textOnlyShowSIM2 = YES;
-static BOOL textOnlyShowNetwork = NO;
+static BOOL textOnlyShowUploadNetwork = NO;
+static BOOL textOnlyShowDownloadNetwork = NO;
 static NSDictionary *textNetworkPrevious = nil;
 static double textNetworkUptime = 0;
 static NSString *textNetworkRow = nil;
@@ -381,7 +382,8 @@ static void resetTextNetwork(void) {
 
 // Called only by the existing low-frequency data refresh, never by layout or FPS.
 static void sampleTextNetwork(void) {
-    BOOL needed = isEnabled && floatingTextOnlyMode && textOnlyShowNetwork &&
+    BOOL needed = isEnabled && floatingTextOnlyMode &&
+        (textOnlyShowUploadNetwork || textOnlyShowDownloadNetwork) &&
         cpuWindow && !cpuWindow.hidden && cpuWindow.alpha > 0.01 &&
         floatingView && floatingView.window && !floatingView.hidden && floatingView.alpha > 0.01;
     if (!needed) { resetTextNetwork(); return; }
@@ -411,7 +413,8 @@ static void sampleTextNetwork(void) {
     freeifaddrs(interfaces);
     double now = NSProcessInfo.processInfo.systemUptime, download = 0, upload = 0;
     BOOL valid = SBCPUNetworkDelta(textNetworkPrevious, snapshot, now - textNetworkUptime, &download, &upload);
-    textNetworkRow = SBCPUNetworkText(valid, download, upload);
+    textNetworkRow = SBCPUNetworkTextDirections(valid, download, upload,
+        textOnlyShowUploadNetwork, textOnlyShowDownloadNetwork);
     textNetworkPrevious = snapshot.count ? snapshot : nil;
     textNetworkUptime = now;
 }
@@ -1110,9 +1113,25 @@ static void LoadPreferences(void) {
     textOnlyShowCurrent = getBoolPref(CFSTR("floatingTextOnlyShowCurrent"), YES);
     textOnlyShowSIM1 = getBoolPref(CFSTR("floatingTextOnlyShowSIM1"), YES);
     textOnlyShowSIM2 = getBoolPref(CFSTR("floatingTextOnlyShowSIM2"), YES);
-    BOOL wasNetwork = textOnlyShowNetwork;
-    textOnlyShowNetwork = getBoolPref(CFSTR("floatingTextOnlyShowNetwork"), NO);
-    if (wasNetwork != textOnlyShowNetwork || wasTextOnly != floatingTextOnlyMode || !isEnabled)
+    BOOL wasUploadNetwork = textOnlyShowUploadNetwork;
+    BOOL wasDownloadNetwork = textOnlyShowDownloadNetwork;
+    CFTypeRef uploadPref = CFPreferencesCopyValue(CFSTR("floatingTextOnlyShowUploadNetwork"), kPrefAppID, kCFPreferencesCurrentUser, kCFPreferencesAnyHost);
+    CFTypeRef downloadPref = CFPreferencesCopyValue(CFSTR("floatingTextOnlyShowDownloadNetwork"), kPrefAppID, kCFPreferencesCurrentUser, kCFPreferencesAnyHost);
+    if (!uploadPref && !downloadPref) {
+        // One-time compatibility migration: the former combined switch enabled both directions.
+        BOOL legacy = getBoolPref(CFSTR("floatingTextOnlyShowNetwork"), NO);
+        textOnlyShowUploadNetwork = legacy;
+        textOnlyShowDownloadNetwork = legacy;
+        setBoolPref(CFSTR("floatingTextOnlyShowUploadNetwork"), legacy);
+        setBoolPref(CFSTR("floatingTextOnlyShowDownloadNetwork"), legacy);
+        CFPreferencesSynchronize(kPrefAppID, kCFPreferencesCurrentUser, kCFPreferencesAnyHost);
+    } else {
+        textOnlyShowUploadNetwork = getBoolPref(CFSTR("floatingTextOnlyShowUploadNetwork"), NO);
+        textOnlyShowDownloadNetwork = getBoolPref(CFSTR("floatingTextOnlyShowDownloadNetwork"), NO);
+    }
+    if (uploadPref) CFRelease(uploadPref);
+    if (downloadPref) CFRelease(downloadPref);
+    if (wasUploadNetwork != textOnlyShowUploadNetwork || wasDownloadNetwork != textOnlyShowDownloadNetwork || wasTextOnly != floatingTextOnlyMode || !isEnabled)
         resetTextNetwork();
     statusDockReturnDelay = MAX(1, MIN(30, getIntPref(CFSTR("statusDockReturnDelay"), 5)));
     floatingValueRefreshInterval = MAX(1.0, MIN(2.0, getFloatPref(CFSTR("floatingValueRefreshInterval"), 1.0f)));
@@ -2659,9 +2678,10 @@ static void applyTextOnlyMode(void) {
     textOnlyLabel.text = SBCPUTextOnlyRow(fields, floatingView.cpuValueLabel.text,
         floatingView.cpuFreqLabel.text, floatingView.fpsValueLabel.text, floatingView.batteryValueLabel.text,
         floatingView.tempValueLabel.text, netCurrent, textOnlySignals);
-    if (textOnlyShowNetwork) {
-        NSString *network = textNetworkRow ?: SBCPUNetworkText(NO, 0, 0);
-        textOnlyLabel.text = textOnlyLabel.text.length ? [textOnlyLabel.text stringByAppendingFormat:@" %@", network] : network;
+    if (textOnlyShowUploadNetwork || textOnlyShowDownloadNetwork) {
+        NSString *network = textNetworkRow ?: SBCPUNetworkTextDirections(NO, 0, 0,
+            textOnlyShowUploadNetwork, textOnlyShowDownloadNetwork);
+        if (network.length) textOnlyLabel.text = textOnlyLabel.text.length ? [textOnlyLabel.text stringByAppendingFormat:@" %@", network] : network;
     }
     textOnlyLabel.hidden = (textOnlyLabel.text.length == 0);
     textOnlyLabel.font = [UIFont monospacedSystemFontOfSize:floatingTextOnlyFontSize weight:UIFontWeightMedium];
