@@ -34,6 +34,16 @@
 #import <objc/runtime.h>
 #import <dlfcn.h>
 #import <substrate.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+// TrollSpeed's no-hook compositor counter: counts globally committed display frames.
+// Weak import keeps the tweak safe on OS builds that do not export the symbol.
+CFIndex CARenderServerGetDirtyFrameCount(void *) __attribute__((weak_import));
+#ifdef __cplusplus
+}
+#endif
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
@@ -3121,11 +3131,10 @@ static void updateCPU(void) {
 #pragma mark - 7. 所有的 Objective-C 类实现区块
 
 @implementation SBCPUFPSHelper {
-    CADisplayLink *_displayLink;
-    CFTimeInterval _lastTimestamp;
-    NSInteger _frameCount;
-    CFTimeInterval _sampleElapsed;
-    double _smoothedFPS;
+    NSTimer *_sampleTimer;
+    CFIndex _previousDirtyFrameCount;
+    CFTimeInterval _previousFPSTime;
+    BOOL _hasFPSBaseline;
 }
 
 + (instancetype)sharedInstance {
@@ -3137,56 +3146,58 @@ static void updateCPU(void) {
     return instance;
 }
 
-
-
 - (void)startMonitoring {
-    if (_displayLink) return;
-    _displayLink = [CADisplayLink displayLinkWithTarget:self selector:@selector(tick:)];
-    [_displayLink addToRunLoop:[NSRunLoop mainRunLoop] forMode:NSRunLoopCommonModes];
+    if (_sampleTimer) return;
+
+    // Follow TrollSpeed: sample the compositor's global dirty-frame counter,
+    // rather than counting callbacks delivered by SpringBoard's run loop.
+    // This is observational (no frame-rate hook, range request, or 120-Hz API).
+    _hasFPSBaseline = NO;
+    _previousDirtyFrameCount = 0;
+    _currentFPS = 0.0;
+    if (!CARenderServerGetDirtyFrameCount) return;
+    _sampleTimer = [NSTimer timerWithTimeInterval:1.0
+                                             target:self
+                                           selector:@selector(sampleFPS:)
+                                           userInfo:nil
+                                            repeats:YES];
+    [[NSRunLoop mainRunLoop] addTimer:_sampleTimer forMode:NSRunLoopCommonModes];
 }
 
 - (void)stopMonitoring {
-    if (_displayLink) {
-        [_displayLink invalidate];
-        _displayLink = nil;
-    }
-    _lastTimestamp = 0;
-    _frameCount = 0;
-    _sampleElapsed = 0;
-    _smoothedFPS = 0;
+    [_sampleTimer invalidate];
+    _sampleTimer = nil;
+    _previousDirtyFrameCount = 0;
+    _hasFPSBaseline = NO;
     _currentFPS = 0.0;
 }
 
+- (void)sampleFPS:(NSTimer *)timer {
+    if (!CARenderServerGetDirtyFrameCount) return;
+    CFIndex dirtyFrameCount = CARenderServerGetDirtyFrameCount(NULL);
+    CFTimeInterval now = CACurrentMediaTime();
+    CFTimeInterval elapsed = now - _previousFPSTime;
+    if (!_hasFPSBaseline || elapsed <= 0.0 || elapsed > 5.0) {
+        _previousDirtyFrameCount = dirtyFrameCount;
+        _previousFPSTime = now;
+        _hasFPSBaseline = YES;
+        _currentFPS = 0.0;
+        return;
+    }
 
-- (void)tick:(CADisplayLink *)link {
-    CFTimeInterval timestamp = link.timestamp;
-    if (_lastTimestamp == 0 || timestamp <= _lastTimestamp) {
-        _lastTimestamp = timestamp;
-        _frameCount = 0;
-        _sampleElapsed = 0;
-        return;
-    }
-    CFTimeInterval interval = timestamp - _lastTimestamp;
-    _lastTimestamp = timestamp;
-    // 后台切换/主线程卡顿会产生很大的时间洞，不能把它算进屏幕刷新率。
-    if (interval <= 0.0 || interval > 0.25) {
-        _frameCount = 0;
-        _sampleElapsed = 0;
-        return;
-    }
-    _frameCount++;
-    _sampleElapsed += interval;
-    // 约四分之一秒采样一次：降低显示延迟，同时保留足够的帧数抗抖动。
-    if (_sampleElapsed >= 0.25) {
-        double measured = (double)_frameCount / _sampleElapsed;
-        if (measured >= 1.0 && measured <= 240.0) {
-            // 轻度平滑，避免采样抖动导致显示跳变；不再使用 1 秒滞后窗口。
-            _smoothedFPS = (_smoothedFPS > 0.0) ? (_smoothedFPS * 0.35 + measured * 0.65) : measured;
-            self.currentFPS = _smoothedFPS;
-        }
-        _frameCount = 0;
-        _sampleElapsed = 0;
-    }
+    CFIndex frameDiff = dirtyFrameCount - _previousDirtyFrameCount;
+    _previousDirtyFrameCount = dirtyFrameCount;
+    _previousFPSTime = now;
+    if (frameDiff < 0) frameDiff = 0; // counter reset/restart
+
+    // Do not cap to the host screen's advertised maximum: in SpringBoard
+    // that value can describe SpringBoard's own 60-Hz surface, not the
+    // foreground app/compositor refresh rate.
+    // Use real monotonic elapsed time, not the timer's nominal interval:
+    // a delayed main thread must not turn 60 FPS into a spurious 120.
+    double measured = (double)frameDiff / elapsed;
+    if (measured > 240.0) measured = 240.0;
+    _currentFPS = measured;
 }
 @end
 

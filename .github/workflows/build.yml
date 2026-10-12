@@ -19,6 +19,7 @@ jobs:
           set -e
           python3 tests/text_network_wiring.py
           python3 tests/no_120_experiments.py
+          python3 tests/fps_counter_policy.py
           TMP_NET=$(mktemp -d)
           clang++ -std=c++11 -fobjc-arc -framework Foundation -Wall -Wextra -Werror \
             tests/text_network.mm -o "$TMP_NET/network"
