@@ -190,10 +190,9 @@ static double PCompute(NSArray *rows, NSString **reason) {
                 }
             }
             if (filtered.count) {
-                io_name_t node = {0}; uint64_t rid = 0;
+                io_name_t node = {0};
                 IORegistryEntryGetName(service, node);
-                IORegistryEntryGetRegistryEntryID(service, &rid);
-                [result addObject:@{@"node":@((const char *)node), @"registryID":@(rid), @"rawProperties":filtered}];
+                [result addObject:@{@"node":@((const char *)node), @"rawProperties":filtered}];
             }
         }
         if (props) CFRelease(props);
