@@ -14,6 +14,16 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Second window whole-surface touch regression
+        run: |
+          set -e
+          python3 tests/second_touch_wiring.py
+          TMP_TOUCH=$(mktemp -d)
+          clang -std=c11 -Wall -Wextra -Werror -pedantic tests/second_touch_policy.c -o "$TMP_TOUCH/touch"
+          "$TMP_TOUCH/touch"
+          clang++ -x c++ -std=c++11 -Wall -Wextra -Werror -pedantic tests/second_touch_policy.c -o "$TMP_TOUCH/touch-cxx"
+          "$TMP_TOUCH/touch-cxx"
+
       - name: Dual text rows and right-edge regression
         run: |
           set -e

@@ -27,7 +27,7 @@ assert 'SBCPUTextAnchorOffsetsMatch' in second
 assert '[saved[@"offsetX"] doubleValue]==floatingTextOnly2X' not in second
 assert 'setFloatPref(CFSTR("floatingTextOnly2X"),floatingTextOnly2X)' in second
 assert 'SBCPUTextCaptureAnchor' in second and 'SBCPUTextResolveAnchor' in second
-assert 'textOnlyGeometryForView(cpuWindow.rootViewController.view, YES)' in s
+assert 'textOnlyGeometryForView(textOnly2Window.rootViewController.view, YES)' in s
 assert 'textOnlyGeometryForView(floatingView.superview, NO)' in s
 assert 'MAX(second?0:4, g.width-MAX(a.x,b.x))' in s
 assert 'if (floatingView) applyTextOnlyMode();' in s

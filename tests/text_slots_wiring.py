@@ -21,8 +21,8 @@ assert 'textOnly2Label.userInteractionEnabled=!textOnly2Locked' in second
 assert 'textOnly2Label.hidden=textOnly2Label.hidden || floatingView.hidden' in second
 assert 'SBCPUTextResolveAnchor(anchor,g.width,g.height' in second
 assert 'textOnlyContainerCenter(p,g)' in second
-hit=s[s.index('@implementation SBCPUWindow'):s.index('@implementation SBCPUValuePickerController')]
-assert '!textOnly2Locked' in hit and 'return textOnly2Label' in hit and 'return nil;' in hit
+hit=s[s.index('@implementation SBCPUSecondTextWindow'):s.index('@implementation SBCPUValuePickerController')]
+assert 'SBCPUSecondTouchIgnored(textOnly2Locked' in hit and 'return textOnly2Label' in hit and 'return nil;' in hit
 for suffix in ['CPU','Frequency','FPS','Battery','Temperature','Current','SIM1','SIM2','UploadNetwork','DownloadNetwork']:
     rows=plistlib.loads((r/'sbcpuprefs/Resources/TextOnly.plist').read_bytes())['items']
     row,=[x for x in rows if x.get('key')=='floatingTextOnly2Show'+suffix]
