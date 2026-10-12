@@ -27,11 +27,11 @@ static inline UIImage *SBCPUTextOnlyFallbackIcon(BOOL thermometer, UIColor *colo
 }
 
 // SF Symbols are preferred, but the vector fallback is deterministic on real devices.
-static inline NSAttributedString *SBCPUTextOnlyAttributedRow(NSString *plain, UIFont *font, UIColor *color, CGFloat kern) {
+static inline NSAttributedString *SBCPUTextOnlyAttributedRow(NSString *plain, UIFont *font, UIColor *color) {
     if (!plain.length) return [[NSAttributedString alloc] initWithString:@""];
     UIColor *ink=color ?: UIColor.labelColor;
     NSMutableAttributedString *result=[[NSMutableAttributedString alloc] initWithString:plain attributes:@{
-        NSFontAttributeName:font, NSForegroundColorAttributeName:ink, NSKernAttributeName:@(kern)}];
+        NSFontAttributeName:font, NSForegroundColorAttributeName:ink}];
     NSArray *pairs=@[@[@"TEMP ",@"thermometer"], @[@"I ",@"bolt.fill"]];
     for (NSArray *pair in pairs) {
         NSRange range=[result.string rangeOfString:pair[0]]; if (range.location==NSNotFound) continue;
@@ -44,8 +44,5 @@ static inline NSAttributedString *SBCPUTextOnlyAttributedRow(NSString *plain, UI
         [result replaceCharactersInRange:range withAttributedString:[NSAttributedString attributedStringWithAttachment:attachment]];
     }
     return result;
-}
-static inline NSAttributedString *SBCPUTextOnlyAttributedRowLegacy(NSString *plain, UIFont *font, UIColor *color) {
-    return SBCPUTextOnlyAttributedRow(plain,font,color,0);
 }
 #endif

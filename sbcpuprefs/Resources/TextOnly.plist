@@ -231,17 +231,6 @@
 		<dict>
 			<key>defaults</key>
 			<string>com.yourname.sbcpufloating</string>
-			<key>get</key><string>getPreferenceValue:</string>
-			<key>set</key><string>setPreferenceValue:specifier:</string>
-			<key>cell</key><string>PSSliderCell</string>
-			<key>label</key><string>文字间距（窗口 1，0–12 pt）</string>
-			<key>key</key><string>floatingTextOnlyLetterSpacing</string>
-			<key>min</key><integer>0</integer><key>max</key><integer>12</integer>
-			<key>default</key><integer>0</integer><key>showValue</key><true/>
-		</dict>
-		<dict>
-			<key>defaults</key>
-			<string>com.yourname.sbcpufloating</string>
 			<key>get</key>
 			<string>getPreferenceValue:</string>
 			<key>set</key>
@@ -620,16 +609,6 @@
 			<string>setPreferenceValue:specifier:</string>
 			<key>defaults</key>
 			<string>com.yourname.sbcpufloating</string>
-		</dict>
-		<dict>
-			<key>defaults</key><string>com.yourname.sbcpufloating</string>
-			<key>get</key><string>getPreferenceValue:</string>
-			<key>set</key><string>setPreferenceValue:specifier:</string>
-			<key>cell</key><string>PSSliderCell</string>
-			<key>label</key><string>文字间距（窗口 2，0–12 pt）</string>
-			<key>key</key><string>floatingTextOnly2LetterSpacing</string>
-			<key>min</key><integer>0</integer><key>max</key><integer>12</integer>
-			<key>default</key><integer>0</integer><key>showValue</key><true/>
 		</dict>
 		<dict>
 			<key>cell</key>

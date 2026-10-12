@@ -32,7 +32,6 @@
 - (void)setPreferenceValue:(id)value specifier:(PSSpecifier *)specifier {
     NSString *key = [specifier propertyForKey:@"key"];
     if ([key isEqualToString:@"floatingTextOnlyFontSize"] || [key isEqualToString:@"floatingTextOnly2FontSize"]) value = @(SBCPUTextOnlyBound([value doubleValue], 8, 24, 13));
-    if ([key isEqualToString:@"floatingTextOnlyLetterSpacing"] || [key isEqualToString:@"floatingTextOnly2LetterSpacing"]) value = @(SBCPUTextOnlyBound([value doubleValue], 0, 12, 0));
     [self writeValues:@{key:value}];
 }
 - (void)preset:(NSInteger)preset {
