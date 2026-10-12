@@ -367,6 +367,8 @@ static SBCPUTextRGBA textOnlyCustomRGBA = {0, 122.0/255.0, 1, 1};
 static BOOL textOnlyShowCPU = YES, textOnlyShowFrequency = YES, textOnlyShowFPS = YES;
 static BOOL textOnlyShowBattery = YES, textOnlyShowTemperature = YES, textOnlyShowCurrent = YES;
 static BOOL textOnlyShowSIM1 = YES, textOnlyShowSIM2 = YES;
+static BOOL textOnlyBold = NO;
+static NSString *textOnlyPlainText = @"";
 static BOOL textOnlyShowUploadNetwork = NO;
 static BOOL textOnlyShowDownloadNetwork = NO;
 static NSDictionary *textNetworkPrevious = nil;
@@ -1104,6 +1106,7 @@ static void LoadPreferences(void) {
     floatingTextOnlyFontSize = SBCPUTextOnlyBound(getFloatPref(CFSTR("floatingTextOnlyFontSize"), 13), 8, 24, 13);
     floatingTextOnlyColor = SBCPUTextColorMode(getIntPref(CFSTR("floatingTextOnlyColor"), 0));
     textOnlyCustomRGBA = SBCPUTextDecodeRGBA(getArrayPref(CFSTR("floatingTextOnlyRGBA"), nil));
+    textOnlyBold = getBoolPref(CFSTR("floatingTextOnlyBold"), NO);
     // Independent defaults: ordinary show flags never govern this row.
     textOnlyShowCPU = getBoolPref(CFSTR("floatingTextOnlyShowCPU"), YES);
     textOnlyShowFrequency = getBoolPref(CFSTR("floatingTextOnlyShowFrequency"), YES);
@@ -2645,6 +2648,7 @@ static void applyTextOnlyTextFilter(void) {
     } else {
         textOnlyLabel.textColor = SBCPUTextUsesWhite((int)floatingTextOnlyColor, style) ? UIColor.whiteColor : UIColor.blackColor;
     }
+    if (textOnlyPlainText.length) textOnlyLabel.attributedText = SBCPUTextOnlyAttributedRow(textOnlyPlainText, textOnlyLabel.font, textOnlyLabel.textColor);
     textOnlyLabel.realtimeInvertEnabled = (floatingTextOnlyColor == 4 && textOnlyLabel.text.length > 0);
 }
 
@@ -2684,13 +2688,19 @@ static void applyTextOnlyMode(void) {
         if (network.length) textOnlyLabel.text = textOnlyLabel.text.length ? [textOnlyLabel.text stringByAppendingFormat:@" %@", network] : network;
     }
     textOnlyLabel.hidden = (textOnlyLabel.text.length == 0);
-    textOnlyLabel.font = [UIFont monospacedSystemFontOfSize:floatingTextOnlyFontSize weight:UIFontWeightMedium];
+    textOnlyPlainText = [textOnlyLabel.text copy];
+    textOnlyLabel.hidden = (textOnlyPlainText.length == 0);
+    textOnlyLabel.font = textOnlyBold ? [UIFont boldSystemFontOfSize:floatingTextOnlyFontSize] : [UIFont systemFontOfSize:floatingTextOnlyFontSize];
+    textOnlyLabel.attributedText = SBCPUTextOnlyAttributedRow(textOnlyLabel.text, textOnlyLabel.font, textOnlyLabel.textColor);
     SBCPUTextGeometry textGeometry = textOnlyGeometry();
     CGFloat available = MAX(1, textGeometry.width-textGeometry.left-textGeometry.right);
-    CGFloat naturalWidth = ceil([textOnlyLabel.text sizeWithAttributes:@{NSFontAttributeName:textOnlyLabel.font}].width);
+    CGFloat naturalWidth = ceil([textOnlyLabel.attributedText boundingRectWithSize:CGSizeMake(CGFLOAT_MAX, CGFLOAT_MAX)
+        options:NSStringDrawingUsesLineFragmentOrigin | NSStringDrawingUsesFontLeading context:nil].size.width);
     CGFloat fittedFont = SBCPUTextOnlyFitFont(naturalWidth, available, floatingTextOnlyFontSize);
-    textOnlyLabel.font = [UIFont monospacedSystemFontOfSize:fittedFont weight:UIFontWeightMedium];
-    CGFloat fittedWidth = ceil([textOnlyLabel.text sizeWithAttributes:@{NSFontAttributeName:textOnlyLabel.font}].width);
+    textOnlyLabel.font = textOnlyBold ? [UIFont boldSystemFontOfSize:fittedFont] : [UIFont systemFontOfSize:fittedFont];
+    textOnlyLabel.attributedText = SBCPUTextOnlyAttributedRow(textOnlyLabel.text, textOnlyLabel.font, textOnlyLabel.textColor);
+    CGFloat fittedWidth = ceil([textOnlyLabel.attributedText boundingRectWithSize:CGSizeMake(CGFLOAT_MAX, CGFLOAT_MAX)
+        options:NSStringDrawingUsesLineFragmentOrigin | NSStringDrawingUsesFontLeading context:nil].size.width);
     BOOL wrap = fittedWidth + 2 > available;
     textOnlyLabel.numberOfLines = wrap ? 0 : 1;
     // At 8pt use additional rows instead of infinitely small text or ellipsis.

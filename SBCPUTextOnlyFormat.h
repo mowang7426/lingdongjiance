@@ -1,6 +1,6 @@
 #ifndef SBCPU_TEXT_ONLY_FORMAT_H
 #define SBCPU_TEXT_ONLY_FORMAT_H
-#import <Foundation/Foundation.h>
+#import <UIKit/UIKit.h>
 #include <math.h>
 
 // Presentation inputs only: no thermal/charging status or controller settings.
@@ -42,7 +42,7 @@ static inline NSString *SBCPUTextOnlyRow(SBCPUTextOnlyFields fields,
     NSMutableArray<NSString *> *parts = [NSMutableArray array];
     if (fields.cpu) [parts addObject:[@"CPU " stringByAppendingString:SBCPUTextOnlyCompactValue(cpu, @"%", NO)]];
     if (fields.frequency) [parts addObject:SBCPUTextOnlyCompactValue(frequency, @"MHz", NO)];
-    if (fields.fps) [parts addObject:[@"FPS " stringByAppendingString:SBCPUTextOnlyCompactValue([fps isKindOfClass:[NSString class]] ? [fps stringByAppendingString:@"fps"] : nil, @"fps", NO)]];
+    if (fields.fps) [parts addObject:[@"FPS " stringByAppendingString:SBCPUTextOnlyCompactValue(fps, @"", NO)]];
     if (fields.battery) [parts addObject:[@"BAT " stringByAppendingString:SBCPUTextOnlyCompactValue(battery, @"%", NO)]];
     if (fields.temperature) [parts addObject:[@"TEMP " stringByAppendingString:SBCPUTextOnlyCompactValue(temperature, @"°C", YES)]];
     if (fields.current) [parts addObject:[@"I " stringByAppendingString:SBCPUTextOnlyCompactValue(current, @"mA", YES)]];
@@ -51,3 +51,26 @@ static inline NSString *SBCPUTextOnlyRow(SBCPUTextOnlyFields fields,
     return [parts componentsJoinedByString:@" "];
 }
 #endif
+
+// Builds the rendered row without emoji: SF Symbols are monochrome template images;
+// the textual label remains the fallback when a symbol is unavailable.
+static inline NSAttributedString *SBCPUTextOnlyAttributedRow(NSString *plain, UIFont *font, UIColor *color) {
+    if (!plain.length) return [[NSAttributedString alloc] initWithString:@""];
+    NSMutableAttributedString *result = [[NSMutableAttributedString alloc] initWithString:plain attributes:@{
+        NSFontAttributeName: font, NSForegroundColorAttributeName: color ?: UIColor.labelColor}];
+    NSArray *pairs = @[@[@"TEMP ", @"thermometer"], @[@"I ", @"bolt.fill"]];
+    for (NSArray *pair in pairs) {
+        NSRange range = [result.string rangeOfString:pair[0]];
+        if (range.location == NSNotFound) continue;
+        UIImage *symbol = [UIImage systemImageNamed:pair[1]];
+        if (!symbol) continue; // keep the text label as a safe system fallback
+        symbol = [symbol imageWithTintColor:color ?: UIColor.labelColor renderingMode:UIImageRenderingModeAlwaysOriginal];
+        NSTextAttachment *attachment = [NSTextAttachment new];
+        attachment.image = symbol;
+        CGFloat side = MAX(1, font.pointSize * 0.82);
+        attachment.bounds = CGRectMake(0, (font.capHeight - side) * 0.5, side, side);
+        [result replaceCharactersInRange:range
+                     withAttributedString:[NSAttributedString attributedStringWithAttachment:attachment]];
+    }
+    return result;
+}
