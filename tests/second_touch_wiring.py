@@ -27,7 +27,10 @@ end='    if (pan.state==UIGestureRecognizerStateEnded'
 oldpan=base[base.index('- (void)sbcpu_secondTextPan:'):base.index('\n@end',base.index('- (void)sbcpu_secondTextPan:'))]
 assert pan[pan.index(end):]==oldpan[oldpan.index(end):]
 a=s.index('@implementation SBCPUFloatingView'); b=base.index('@implementation SBCPUFloatingView')
-assert s[a:s.index('\n@end',a)+5]==base[b:base.index('\n@end',b)+5]
+# Only authorized frequency formatting differs in 5.04; all touch/layout code still byte-identical.
+expected_view=base[b:base.index('\n@end',b)+5].replace('_cpuFreqLabel.text = (cpuFreq > 100.0)', '_cpuFreqLabel.text = (cpuFreq > 0.0)')
+expected_view=expected_view.replace('if (statusDockShowFrequency) [dockItems addObject:[NSString stringWithFormat:@"频 %.1fG", cpuFreq / 1000.0]];', 'if (statusDockShowFrequency) [dockItems addObject:(cpuFreq > 0.0 ? [NSString stringWithFormat:@"频 %.1fG", cpuFreq / 1000.0] : @"频 --")];')
+assert s[a:s.index('\n@end',a)+5]==expected_view
 assert s.count('scheduledTimer')==base.count('scheduledTimer')
 rows=plistlib.loads((r/'sbcpuprefs/Resources/TextOnly.plist').read_bytes())['items']
 assert len([v for v in rows if v.get('key')=='floatingTextOnly2Locked'])==1

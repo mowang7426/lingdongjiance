@@ -53,6 +53,7 @@ CFIndex CARenderServerGetDirtyFrameCount(void *) __attribute__((weak_import));
 #import "SBCPUChargeDayNight.h"
 #import "SBCPUBatteryMetrics.h"
 #import "SBCPUMemoryMetrics.h"
+#import "SBCPUPCoreFrequency.h"
 #import "SBCPUFloatingDisplayPolicy.h"
 #import "SBCPUFloatingLockPolicy.h"
 #import "SBCPUSecondTouchPolicy.h"
@@ -2225,228 +2226,10 @@ static double getTotalCPUUsage(void) {
     return cpuUsage;
 }
 
-// 当前频率 = IOReport P-State residency × AppleARMIODevice DVFS 表。
-typedef struct IOReportSubscriptionRef *SBIOReportSubscription;
-typedef CFMutableDictionaryRef (*SBIOReportCopyChannelsFn)(NSString *, NSString *, uint64_t, uint64_t, uint64_t);
-typedef SBIOReportSubscription (*SBIOReportCreateSubscriptionFn)(void *, CFMutableDictionaryRef, CFMutableDictionaryRef *, uint64_t, CFTypeRef);
-typedef CFDictionaryRef (*SBIOReportCreateSamplesFn)(SBIOReportSubscription, CFMutableDictionaryRef, CFTypeRef);
-typedef CFDictionaryRef (*SBIOReportCreateSamplesDeltaFn)(CFDictionaryRef, CFDictionaryRef, CFTypeRef);
-typedef int (*SBIOReportIterateFn)(CFDictionaryRef, int (^)(CFDictionaryRef));
-typedef NSString *(*SBIOReportChannelNameFn)(CFDictionaryRef);
-typedef NSString *(*SBIOReportGroupFn)(CFDictionaryRef);
-typedef NSString *(*SBIOReportSubGroupFn)(CFDictionaryRef);
-typedef int (*SBIOReportStateCountFn)(CFDictionaryRef);
-typedef uint64_t (*SBIOReportStateResidencyFn)(CFDictionaryRef, int);
-typedef NSString *(*SBIOReportStateNameFn)(CFDictionaryRef, int);
-
-static struct {
-    void *handle;
-    SBIOReportCopyChannelsFn copyChannels;
-    SBIOReportCreateSubscriptionFn createSubscription;
-    SBIOReportCreateSamplesFn createSamples;
-    SBIOReportCreateSamplesDeltaFn createDelta;
-    SBIOReportIterateFn iterate;
-    SBIOReportChannelNameFn channelName;
-    SBIOReportGroupFn group;
-    SBIOReportSubGroupFn subgroup;
-    SBIOReportStateCountFn stateCount;
-    SBIOReportStateNameFn stateName;
-    SBIOReportStateResidencyFn stateResidency;
-    CFMutableDictionaryRef subscribedChannels;
-    NSArray *ecpuDVFS;
-    NSArray *pcpuDVFS;
-    SBIOReportSubscription subscription;
-    CFTypeRef previousSample;
-    BOOL ready;
-} gIOReport = {0};
-
-static NSArray *readDVFSTable(CFStringRef propertyKey) {
-    io_iterator_t iterator = IO_OBJECT_NULL;
-    CFMutableDictionaryRef matching = IOServiceMatching("AppleARMIODevice");
-    if (!matching || IOServiceGetMatchingServices(kIOMainPortDefault, matching, &iterator) != KERN_SUCCESS) return @[];
-    NSArray *result = @[];
-    io_service_t service = IOIteratorNext(iterator);
-    while (service) {
-        CFTypeRef value = IORegistryEntryCreateCFProperty(service, propertyKey, kCFAllocatorDefault, 0);
-        if (value && CFGetTypeID(value) == CFDataGetTypeID()) {
-            CFDataRef data = (CFDataRef)value;
-            CFIndex length = CFDataGetLength(data);
-            const UInt8 *bytes = CFDataGetBytePtr(data);
-            NSMutableArray *table = [NSMutableArray arrayWithObject:@0.0];
-            for (CFIndex offset = 0; offset + 8 <= length; offset += 8) {
-                uint32_t hz = 0;
-                memcpy(&hz, bytes + offset, sizeof(hz));
-                double mhz = (double)hz / 1000000.0;
-                [table addObject:(mhz > 0.0 && mhz < 6000.0) ? @(mhz) : @0.0];
-            }
-            if (table.count > 1) result = [table copy];
-        }
-        if (value) CFRelease(value);
-        IOObjectRelease(service);
-        if (result.count > 1) break;
-        service = IOIteratorNext(iterator);
-    }
-    IOObjectRelease(iterator);
-    return result;
-}
-
-static void initIOReportFrequency(void) {
-    static dispatch_once_t once;
-    dispatch_once(&once, ^{
-        gIOReport.handle = dlopen("/usr/lib/libIOReport.dylib", RTLD_LAZY);
-        if (!gIOReport.handle) return;
-        gIOReport.copyChannels = (SBIOReportCopyChannelsFn)dlsym(gIOReport.handle, "IOReportCopyChannelsInGroup");
-        gIOReport.createSubscription = (SBIOReportCreateSubscriptionFn)dlsym(gIOReport.handle, "IOReportCreateSubscription");
-        gIOReport.createSamples = (SBIOReportCreateSamplesFn)dlsym(gIOReport.handle, "IOReportCreateSamples");
-        gIOReport.createDelta = (SBIOReportCreateSamplesDeltaFn)dlsym(gIOReport.handle, "IOReportCreateSamplesDelta");
-        gIOReport.iterate = (SBIOReportIterateFn)dlsym(gIOReport.handle, "IOReportIterate");
-        gIOReport.channelName = (SBIOReportChannelNameFn)dlsym(gIOReport.handle, "IOReportChannelGetChannelName");
-        gIOReport.group = (SBIOReportGroupFn)dlsym(gIOReport.handle, "IOReportChannelGetGroup");
-        gIOReport.subgroup = (SBIOReportSubGroupFn)dlsym(gIOReport.handle, "IOReportChannelGetSubGroup");
-        gIOReport.stateCount = (SBIOReportStateCountFn)dlsym(gIOReport.handle, "IOReportStateGetCount");
-        gIOReport.stateName = (SBIOReportStateNameFn)dlsym(gIOReport.handle, "IOReportStateGetNameForIndex");
-        gIOReport.stateResidency = (SBIOReportStateResidencyFn)dlsym(gIOReport.handle, "IOReportStateGetResidency");
-        gIOReport.ready = gIOReport.copyChannels && gIOReport.createSubscription && gIOReport.createSamples &&
-                          gIOReport.createDelta && gIOReport.iterate && gIOReport.channelName && gIOReport.group &&
-                          gIOReport.subgroup && gIOReport.stateCount && gIOReport.stateName && gIOReport.stateResidency;
-        gIOReport.ecpuDVFS = readDVFSTable(CFSTR("voltage-states1-sram"));
-        gIOReport.pcpuDVFS = readDVFSTable(CFSTR("voltage-states5-sram"));
-    });
-}
-
-static double readFrequencyFromIOReport(void) {
-    initIOReportFrequency();
-    if (!gIOReport.ready || (!gIOReport.ecpuDVFS.count && !gIOReport.pcpuDVFS.count)) return 0.0;
-    if (!gIOReport.subscription) {
-        CFMutableDictionaryRef channels = gIOReport.copyChannels(@"CPU Stats", nil, 0, 0, 0);
-        if (!channels) return 0.0;
-        gIOReport.subscription = gIOReport.createSubscription(NULL, channels, &gIOReport.subscribedChannels, 0, NULL);
-        CFRelease(channels);
-        if (!gIOReport.subscription) return 0.0;
-    }
-    CFDictionaryRef first = gIOReport.createSamples(gIOReport.subscription, gIOReport.subscribedChannels, NULL);
-    if (!first) return 0.0;
-    [NSThread sleepForTimeInterval:0.12];
-    CFDictionaryRef last = gIOReport.createSamples(gIOReport.subscription, gIOReport.subscribedChannels, NULL);
-    if (!last) { CFRelease(first); return 0.0; }
-    CFDictionaryRef delta = gIOReport.createDelta(first, last, NULL);
-    CFRelease(first); CFRelease(last);
-    if (!delta) return 0.0;
-
-    __block double pcpuSum = 0.0, pcpuWeight = 0.0, ecpuSum = 0.0, ecpuWeight = 0.0;
-    gIOReport.iterate(delta, ^int(CFDictionaryRef channel) {
-        NSString *group = gIOReport.group(channel);
-        NSString *subgroup = gIOReport.subgroup(channel);
-        if (![group isEqualToString:@"CPU Stats"]) return 0;
-        if (![subgroup isEqualToString:@"CPU Complex Performance States"] &&
-            ![subgroup isEqualToString:@"CPU Core Performance States"]) return 0;
-        NSString *name = gIOReport.channelName(channel);
-        NSArray *table = [name containsString:@"E"] ? gIOReport.ecpuDVFS : gIOReport.pcpuDVFS;
-        if (!table.count) return 0;
-        int count = MIN(gIOReport.stateCount(channel), (int)table.count);
-        uint64_t active = 0;
-        for (int i = 1; i < count; i++) {
-            NSString *state = gIOReport.stateName(channel, i);
-            if (![state containsString:@"P"] && ![state containsString:@"V"]) continue;
-            uint64_t residency = gIOReport.stateResidency(channel, i);
-            double mhz = [table[i] doubleValue];
-            if (mhz <= 0.0) continue;
-            active += residency;
-            if ([name containsString:@"E"]) ecpuSum += mhz * residency;
-            else pcpuSum += mhz * residency;
-        }
-        if ([name containsString:@"E"]) ecpuWeight += active;
-        else pcpuWeight += active;
-        return 0;
-    });
-    CFRelease(delta);
-    if (pcpuWeight > 0.0) return pcpuSum / pcpuWeight;
-    if (ecpuWeight > 0.0) return ecpuSum / ecpuWeight;
-    return 0.0;
-}
-
-static double frequencyMHzFromCFValue(CFTypeRef value) {
-    if (!value) return 0.0;
-    double raw = 0.0;
-    if (CFGetTypeID(value) == CFNumberGetTypeID()) {
-        if (!CFNumberGetValue((CFNumberRef)value, kCFNumberDoubleType, &raw)) return 0.0;
-    } else if (CFGetTypeID(value) == CFDataGetTypeID()) {
-        CFIndex length = CFDataGetLength((CFDataRef)value);
-        if (length == 4) {
-            uint32_t v = 0; CFDataGetBytes((CFDataRef)value, CFRangeMake(0, 4), (UInt8 *)&v); raw = v;
-        } else if (length == 8) {
-            uint64_t v = 0; CFDataGetBytes((CFDataRef)value, CFRangeMake(0, 8), (UInt8 *)&v); raw = (double)v;
-        }
-    }
-    if (raw >= 100000000.0 && raw <= 10000000000.0) return raw / 1000000.0;
-    if (raw >= 100000.0 && raw <= 10000000.0) return raw / 1000.0;
-    if (raw >= 100.0 && raw <= 6000.0) return raw;
-    return 0.0;
-}
-
-static __attribute__((unused)) double readFrequencyFromIORegistry(void) {
-    // 全量枚举 IOService，并沿父链搜索当前频率属性；不读取 *_max 或设备标称值。
-    const char *services[] = {"AppleARMPlatform", "ApplePMGR", "AppleARMIODevice", "AppleCLPC", "IOCPU", NULL};
-    const CFStringRef keys[] = {
-        CFSTR("current-frequency"), CFSTR("CurrentFrequency"),
-        CFSTR("actual-frequency"), CFSTR("ActualFrequency"),
-        CFSTR("cpu-frequency"), CFSTR("CPUFrequency"),
-        CFSTR("frequency"), CFSTR("Frequency"),
-        CFSTR("clock-frequency"), CFSTR("ClockFrequency"), NULL
-    };
-    for (int si = 0; services[si]; si++) {
-        io_iterator_t iterator = IO_OBJECT_NULL;
-        CFMutableDictionaryRef matching = IOServiceMatching(services[si]);
-        if (!matching || IOServiceGetMatchingServices(kIOMainPortDefault, matching, &iterator) != KERN_SUCCESS) continue;
-        io_service_t service = IOIteratorNext(iterator);
-        while (service) {
-            io_registry_entry_t node = service;
-            for (int depth = 0; node && depth < 10; depth++) {
-                for (int ki = 0; keys[ki]; ki++) {
-                    CFTypeRef value = IORegistryEntryCreateCFProperty(node, keys[ki], kCFAllocatorDefault, 0);
-                    double mhz = frequencyMHzFromCFValue(value);
-                    if (value) CFRelease(value);
-                    if (mhz > 100.0) {
-                        if (node != service) IOObjectRelease(node);
-                        IOObjectRelease(service); IOObjectRelease(iterator);
-                        return mhz;
-                    }
-                }
-                io_registry_entry_t parent = IO_OBJECT_NULL;
-                if (IORegistryEntryGetParentEntry(node, kIOServicePlane, &parent) != KERN_SUCCESS) parent = IO_OBJECT_NULL;
-                if (node != service) IOObjectRelease(node);
-                node = parent;
-            }
-            if (node && node != service) IOObjectRelease(node);
-            IOObjectRelease(service);
-            service = IOIteratorNext(iterator);
-        }
-        IOObjectRelease(iterator);
-    }
-    return 0.0;
-}
-
+// 5.04 diagnostic: single read-only P-core source shared by HUD and detail panel.
 static double getRealCPUFrequency(double currentCpuUsage) {
     (void)currentCpuUsage;
-    static double lastFrequencyMHz = 0.0;
-    static BOOL started = NO;
-    static dispatch_queue_t queue;
-    static NSObject *lock;
-    if (!started) {
-        started = YES;
-        queue = dispatch_queue_create("com.sbcpu.dvfs-frequency", DISPATCH_QUEUE_SERIAL);
-        lock = [NSObject new];
-        dispatch_async(queue, ^{
-            for (;;) {
-                double frequency = readFrequencyFromIOReport();
-                if (frequency > 100.0) {
-                    @synchronized (lock) { lastFrequencyMHz = frequency; }
-                }
-                [NSThread sleepForTimeInterval:0.25];
-            }
-        });
-    }
-    @synchronized (lock) { return lastFrequencyMHz; }
+    return SBCPUReadPcoreFrequency();
 }
 
 static UIWindowScene *getWindowScene(void) {
@@ -3119,7 +2902,9 @@ static void updateCPU(void) {
         return;
     }
     double cpu = getSpringBoardCPUUsage();
-    double cpuFreq = getRealCPUFrequency(cpu);
+    BOOL frequencyNeeded = showCpuFrequency || statusDockShowFrequency ||
+        (floatingTextOnlyMode && textOnlyShowFrequency) || (floatingTextOnlyMode2 && textOnly2ShowFrequency);
+    double cpuFreq = frequencyNeeded ? getRealCPUFrequency(cpu) : 0.0;
     double fps = [SBCPUFPSHelper sharedInstance].currentFPS;
 
     checkHighCPU(cpu);
@@ -5377,7 +5162,7 @@ return self;
     _cpuValueLabel.text = [NSString stringWithFormat:@"%.1f%%", cpu];
     _cpuValueLabel.textColor = (cpu >= 80.0) ? [UIColor systemRedColor] : [UIColor colorWithRed:0.18f green:0.75f blue:0.35f alpha:1.0f];
 
-    _cpuFreqLabel.text = (cpuFreq > 100.0)
+    _cpuFreqLabel.text = (cpuFreq > 0.0)
         ? [NSString stringWithFormat:@"%.0f MHz", cpuFreq]
         : @"-- MHz";
     _fpsValueLabel.text = [NSString stringWithFormat:@"%.0f", fps];
@@ -5518,7 +5303,7 @@ return self;
             NSMutableArray *dockItems = [NSMutableArray array];
             if (statusDockShowCPU) [dockItems addObject:[NSString stringWithFormat:@"CPU %.0f%%", cpu]];
             if (statusDockShowFPS) [dockItems addObject:[NSString stringWithFormat:@"FPS %.0f", fps]];
-            if (statusDockShowFrequency) [dockItems addObject:[NSString stringWithFormat:@"频 %.1fG", cpuFreq / 1000.0]];
+            if (statusDockShowFrequency) [dockItems addObject:(cpuFreq > 0.0 ? [NSString stringWithFormat:@"频 %.1fG", cpuFreq / 1000.0] : @"频 --")];
             if (statusDockShowCurrent) [dockItems addObject:[NSString stringWithFormat:@"%.0fmA", displayCurrent]];
             if (statusDockShowTemperature) [dockItems addObject:(temp > 0 ? [NSString stringWithFormat:@"%.1f°", temp] : @"温 --")];
             if (statusDockShowBattery) [dockItems addObject:[NSString stringWithFormat:@"电 %ld%%", (long)MAX(0, MIN(100, battery))]];
@@ -6421,7 +6206,8 @@ static NSString *bandItemDisplayName(NSInteger g, NSInteger v) {
 
     double freq = getRealCPUFrequency(totalSystemCpu);
     double fps = [SBCPUFPSHelper sharedInstance].currentFPS;
-    _labelsDict[@"CPU主频 / FPS"].text = [NSString stringWithFormat:@"%.0fMHz | %.0fFPS", freq, fps];
+    NSString *frequencyText = freq > 0.0 ? [NSString stringWithFormat:@"%.0fMHz", freq] : @"--MHz";
+    _labelsDict[@"CPU主频 / FPS"].text = [NSString stringWithFormat:@"%@ | %.0fFPS", frequencyText, fps];
 
     _labelsDict[@"内存可用"].text = @"读取失败";
     uint64_t kernelTotalBytes = 0;

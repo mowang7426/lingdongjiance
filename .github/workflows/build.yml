@@ -14,6 +14,15 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Read-only P-core diagnostic production algorithm regression
+        run: |
+          set -e
+          python3 tests/pcore_frequency_wiring.py
+          TMP_PCORE=$(mktemp -d)
+          clang -fobjc-arc -fblocks -framework Foundation -framework IOKit -Wall -Wextra -Werror \
+            tests/pcore_frequency.m -o "$TMP_PCORE/pcore"
+          "$TMP_PCORE/pcore"
+
       - name: Second HUD production event-tree lock and drag regression
         run: |
           set -e
