@@ -364,6 +364,7 @@ static BOOL dynamicIslandProtectionEnable = YES;
 static NSInteger floatingTextOnlyPreset = 1;
 static CGFloat floatingTextOnlyX = 0, floatingTextOnlyY = 0;
 static CGFloat floatingTextOnlyFontSize = 13;
+static CGFloat floatingTextOnlyDataGap = 4, floatingTextOnly2DataGap = 4;
 static NSInteger floatingTextOnlyColor = 0; // 0 system appearance, 1 white, 2 black, 3 custom, 4 realtime invert
 static SBCPUTextRGBA textOnlyCustomRGBA = {0, 122.0/255.0, 1, 1};
 static BOOL textOnlyShowCPU = YES, textOnlyShowFrequency = YES, textOnlyShowFPS = YES;
@@ -1125,6 +1126,8 @@ static void LoadPreferences(void) {
     floatingTextOnly2Preset = MAX(0, MIN(2, getIntPref(CFSTR("floatingTextOnly2Preset"), 1)));
     floatingTextOnly2X = SBCPUTextOnlyBound(getFloatPref(CFSTR("floatingTextOnly2X"), 0), -1000, 1000, 0);
     floatingTextOnly2Y = SBCPUTextOnlyBound(getFloatPref(CFSTR("floatingTextOnly2Y"), 70), -1000, 1000, 70);
+    floatingTextOnlyDataGap = SBCPUTextDataGap(getFloatPref(CFSTR("floatingTextOnlyDataGap"), 4));
+    floatingTextOnly2DataGap = SBCPUTextDataGap(getFloatPref(CFSTR("floatingTextOnly2DataGap"), 4));
     floatingTextOnly2FontSize = SBCPUTextOnlyBound(getFloatPref(CFSTR("floatingTextOnly2FontSize"), 13), 8, 24, 13);
     textOnly2Bold = getBoolPref(CFSTR("floatingTextOnly2Bold"), NO);
     textOnly2Locked = getBoolPref(CFSTR("floatingTextOnly2Locked"), NO);
@@ -2707,7 +2710,7 @@ static CGSize layoutTextSlots(SBCPUTextBackdropLabel *host, BOOL second, SBCPUTe
     UIFont *font=[UIFont monospacedDigitSystemFontOfSize:fs weight:(second?textOnly2Bold:textOnlyBold)?UIFontWeightBold:UIFontWeightRegular];
     CGFloat available=MAX(1,g.width-g.left-g.right);
     SBCPUTextSlot frames[10];
-    CGFloat height=SBCPUTextSlotsLayout(mask,fs,available,frames);
+    CGFloat height=SBCPUTextSlotsLayout(mask,fs,available,second?floatingTextOnly2DataGap:floatingTextOnlyDataGap,frames);
     NSMutableArray *parts=[NSMutableArray array];
     for (int i=0;i<10;i++) {
         SBCPUTextBackdropLabel *slot=(id)[host viewWithTag:4950+i];

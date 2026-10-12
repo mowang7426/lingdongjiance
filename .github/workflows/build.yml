@@ -55,6 +55,8 @@ jobs:
           set -e
           python3 tests/text_fit_wiring.py
           python3 tests/text_slots_wiring.py
+          python3 tests/text_spacing_icons.py
+          python3 tests/text_data_gap_wiring.py
           TMP_SLOTS=$(mktemp -d)
           clang -std=c11 -Wall -Wextra -Werror -pedantic tests/text_slots_policy.c -o "$TMP_SLOTS/slots"
           "$TMP_SLOTS/slots"

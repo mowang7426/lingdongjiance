@@ -10,6 +10,67 @@
 			<key>cell</key>
 			<string>PSGroupCell</string>
 			<key>label</key>
+			<string>数据间距（两个文字浮窗）</string>
+			<key>footerText</key>
+			<string>调整相邻指标固定槽位之间的间隔，不是字距、标识符与数值距离，也不是两个浮窗的位置距离。默认 4pt（4.97 槽位尾部留白），范围 0–12pt；数值位数变化不会移动槽位。两个窗口独立保存并即时生效，间距增大可能换行。</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSSliderCell</string>
+			<key>label</key>
+			<string>窗口1 数据间距（pt）</string>
+			<key>key</key>
+			<string>floatingTextOnlyDataGap</string>
+			<key>defaults</key>
+			<string>com.yourname.sbcpufloating</string>
+			<key>get</key>
+			<string>getPreferenceValue:</string>
+			<key>set</key>
+			<string>setPreferenceValue:specifier:</string>
+			<key>default</key>
+			<integer>4</integer>
+			<key>min</key>
+			<integer>0</integer>
+			<key>max</key>
+			<integer>12</integer>
+			<key>showValue</key>
+			<true/>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSSliderCell</string>
+			<key>label</key>
+			<string>窗口2 数据间距（pt）</string>
+			<key>key</key>
+			<string>floatingTextOnly2DataGap</string>
+			<key>defaults</key>
+			<string>com.yourname.sbcpufloating</string>
+			<key>get</key>
+			<string>getPreferenceValue:</string>
+			<key>set</key>
+			<string>setPreferenceValue:specifier:</string>
+			<key>default</key>
+			<integer>4</integer>
+			<key>min</key>
+			<integer>0</integer>
+			<key>max</key>
+			<integer>12</integer>
+			<key>showValue</key>
+			<true/>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSButtonCell</string>
+			<key>label</key>
+			<string>将窗口1数据间距同时应用到窗口2</string>
+			<key>action</key>
+			<string>applyDataGapToSecond</string>
+		</dict>
+
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
 			<string>纯文字浮窗</string>
 			<key>footerText</key>
 			<string>默认关闭。仅隐藏浮窗背景与装饰，保留实时监测文字。开启时不避让灵动岛，顶部文字可能被硬件遮挡；状态栏吸附、自动折叠及键盘避让临时不生效，普通配置不变。关闭后恢复普通外观与位置。</string>
