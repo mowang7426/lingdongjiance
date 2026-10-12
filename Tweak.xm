@@ -365,7 +365,7 @@ static NSInteger floatingTextOnlyPreset = 1;
 static CGFloat floatingTextOnlyX = 0, floatingTextOnlyY = 0;
 static CGFloat floatingTextOnlyFontSize = 13;
 static CGFloat floatingTextOnlyDataGap = 4, floatingTextOnly2DataGap = 4;
-static BOOL textOnlyDualLine = NO, textOnly2DualLine = NO;
+static BOOL textOnly2NetworkDualLine = NO;
 static NSInteger floatingTextOnlyColor = 0; // 0 system appearance, 1 white, 2 black, 3 custom, 4 realtime invert
 static SBCPUTextRGBA textOnlyCustomRGBA = {0, 122.0/255.0, 1, 1};
 static BOOL textOnlyShowCPU = YES, textOnlyShowFrequency = YES, textOnlyShowFPS = YES;
@@ -1124,8 +1124,7 @@ static void LoadPreferences(void) {
     statusBarDockEnable = getBoolPref(CFSTR("statusBarDockEnable"), NO);
     floatingTextOnlyMode = getBoolPref(CFSTR("floatingTextOnlyMode"), NO);
     floatingTextOnlyMode2 = getBoolPref(CFSTR("floatingTextOnlyMode2"), NO);
-    textOnlyDualLine = getBoolPref(CFSTR("floatingTextOnlyDualLine"), NO);
-    textOnly2DualLine = getBoolPref(CFSTR("floatingTextOnly2DualLine"), NO);
+    textOnly2NetworkDualLine = getBoolPref(CFSTR("floatingTextOnly2NetworkDualLine"), NO);
     floatingTextOnly2Preset = MAX(0, MIN(2, getIntPref(CFSTR("floatingTextOnly2Preset"), 1)));
     floatingTextOnly2X = SBCPUTextOnlyBound(getFloatPref(CFSTR("floatingTextOnly2X"), 0), -1000, 1000, 0);
     floatingTextOnly2Y = SBCPUTextOnlyBound(getFloatPref(CFSTR("floatingTextOnly2Y"), 70), -1000, 1000, 70);
@@ -2718,7 +2717,7 @@ static CGSize layoutTextSlots(SBCPUTextBackdropLabel *host, BOOL second, SBCPUTe
     UIFont *font=[UIFont monospacedDigitSystemFontOfSize:fs weight:(second?textOnly2Bold:textOnlyBold)?UIFontWeightBold:UIFontWeightRegular];
     CGFloat available=MAX(1,g.width-g.left-g.right);
     SBCPUTextSlot frames[10];
-    CGFloat height=SBCPUTextSlotsLayoutRows(mask,fs,available,second?floatingTextOnly2DataGap:floatingTextOnlyDataGap,second?textOnly2DualLine:textOnlyDualLine,frames);
+    CGFloat height=SBCPUTextSlotsLayoutNetwork(mask,fs,available,second?floatingTextOnly2DataGap:floatingTextOnlyDataGap,second && textOnly2NetworkDualLine,frames);
     NSMutableArray *parts=[NSMutableArray array];
     for (int i=0;i<10;i++) {
         SBCPUTextBackdropLabel *slot=(id)[host viewWithTag:4950+i];
@@ -2731,8 +2730,6 @@ static CGSize layoutTextSlots(SBCPUTextBackdropLabel *host, BOOL second, SBCPUTe
             SBCPUTextOnlyCurrentText(textOnlyBatteryCurrent,textOnlyCurrentUptime,NSProcessInfo.processInfo.systemUptime),textOnlySignals):
             SBCPUNetworkTextDirections(textNetworkSampleValid,textNetworkDownloadRate,textNetworkUploadRate,i==8,i==9);
         UIFont *slotFont=font;
-        if (second?textOnly2DualLine:textOnlyDualLine)
-            slotFont=[UIFont monospacedDigitSystemFontOfSize:frames[i].height/1.4 weight:(second?textOnly2Bold:textOnlyBold)?UIFontWeightBold:UIFontWeightRegular];
         slot.font=slotFont; slot.text=value; slot.numberOfLines=1; slot.adjustsFontSizeToFitWidth=NO;
         slot.lineBreakMode=NSLineBreakByClipping; slot.textAlignment=NSTextAlignmentLeft;
         slot.clipsToBounds=YES;

@@ -5,11 +5,11 @@
 int main(void) {
     SBCPUTextSlot a[10],b[10];
     for (int gap=-15;gap<=12;gap++) {
-        SBCPUTextSlotsLayoutRows(768,13,390,gap,0,a);
+        SBCPUTextSlotsLayoutNetwork(768,13,390,gap,0,a);
         assert(a[8].width==10*13*.65);
         assert(a[9].x==a[8].width+gap && a[9].y==a[8].y);
         for (int direction=8;direction<=9;direction++) {
-            SBCPUTextSlotsLayoutRows(1u<<direction,13,390,gap,0,a);
+            SBCPUTextSlotsLayoutNetwork(1u<<direction,13,390,gap,0,a);
             assert(a[direction].x==0 && a[direction].y==0);
             assert(a[17-direction].width==0);
         }
@@ -17,17 +17,21 @@ int main(void) {
     for (unsigned mask=0;mask<1024;mask++) for (int dual=0;dual<2;dual++)
     for (int fs=8;fs<=24;fs+=4) for (int w=160;w<=844;w+=171)
     for (int gap=-15;gap<=12;gap+=3) {
-        double h=SBCPUTextSlotsLayoutRows(mask,fs,w,gap,dual,a);
-        assert(SBCPUTextSlotsLayoutRows(mask,fs,w,gap,dual,b)==h);
+        double h=SBCPUTextSlotsLayoutNetwork(mask,fs,w,gap,dual,a);
+        assert(SBCPUTextSlotsLayoutNetwork(mask,fs,w,gap,dual,b)==h);
         assert(memcmp(a,b,sizeof(a))==0);
         for (int i=0;i<10;i++) {
             if (!(mask&(1u<<i))) { assert(a[i].width==0); continue; }
             assert(a[i].x>=0 && a[i].x+a[i].width<=w+.00001);
             assert(a[i].y+a[i].height<=h+.00001);
-            if (dual) assert(a[i].y==0 || a[i].y==a[i].height);
         }
-        if (dual && (mask&768)==768) assert(a[8].y==a[9].y);
-        if (!dual) {
+        if (dual && (mask&768)==768) {
+            assert(a[8].x==a[9].x && a[8].width==a[9].width);
+            assert(fabs(a[9].y-a[8].y-a[8].height)<.00001);
+            SBCPUTextSlotsLayout(mask&255,fs,w,gap,b);
+            for (int i=0;i<8;i++) assert(memcmp(&a[i],&b[i],sizeof(a[i]))==0);
+        }
+        if (!dual || (mask&768)!=768) {
             assert(SBCPUTextSlotsLayout(mask,fs,w,gap,b)==h);
             assert(memcmp(a,b,sizeof(a))==0);
         }

@@ -91,20 +91,6 @@
 			<key>default</key>
 			<false/>
 		</dict>
-        <dict>
-            <key>cell</key><string>PSGroupCell</string>
-            <key>label</key><string>窗口1 双行布局</string>
-            <key>footerText</key><string>默认关闭。开启后按 CPU、频率、FPS、电量、温度、电流、SIM1、SIM2、上传、下载的顺序，将已开启项目分为前半/后半两行；上下行网速始终同组。只有显示项目开关改变会重新分组，数值刷新与旋转不改变分组。每行固定槽位和数据间距；宽度不足时统一缩小文字以保持两行，异常长值在槽位内裁切。</string>
-        </dict>
-        <dict>
-            <key>cell</key><string>PSSwitchCell</string>
-            <key>label</key><string>窗口1 双行显示</string>
-            <key>key</key><string>floatingTextOnlyDualLine</string>
-            <key>defaults</key><string>com.yourname.sbcpufloating</string>
-            <key>get</key><string>getPreferenceValue:</string>
-            <key>set</key><string>setPreferenceValue:specifier:</string>
-            <key>default</key><false/>
-        </dict>
 		<dict>
 			<key>cell</key>
 			<string>PSGroupCell</string>
@@ -491,13 +477,13 @@
 		</dict>
         <dict>
             <key>cell</key><string>PSGroupCell</string>
-            <key>label</key><string>窗口2 双行布局</string>
-            <key>footerText</key><string>默认关闭。开启后按 CPU、频率、FPS、电量、温度、电流、SIM1、SIM2、上传、下载的顺序，将已开启项目分为前半/后半两行；上下行网速始终同组。只有显示项目开关改变会重新分组，数值刷新与旋转不改变分组。每行固定槽位和数据间距；宽度不足时统一缩小文字以保持两行，异常长值在槽位内裁切。</string>
+            <key>label</key><string>窗口2 网速布局</string>
+            <key>footerText</key><string>仅影响窗口2网速，默认关闭。上传和下载同时开启时，打开此开关在固定宽度网络块内上行显示 ↑速率、下行显示 ↓速率；关闭则横向显示 ↑ ↓（空间不足沿用自然换行）。只启用一个方向只显示一行，不留空行；均关闭不显示网络块。其他指标不分组、不缩小，仍按宽度自然换行，窗口1完全不受此开关影响。数据间距 -15 至 12 仅用于横向项目间距，网速纵向间距固定。数值变化不改变槽位。</string>
         </dict>
         <dict>
             <key>cell</key><string>PSSwitchCell</string>
-            <key>label</key><string>窗口2 双行显示</string>
-            <key>key</key><string>floatingTextOnly2DualLine</string>
+            <key>label</key><string>窗口2 网速双行显示</string>
+            <key>key</key><string>floatingTextOnly2NetworkDualLine</string>
             <key>defaults</key><string>com.yourname.sbcpufloating</string>
             <key>get</key><string>getPreferenceValue:</string>
             <key>set</key><string>setPreferenceValue:specifier:</string>

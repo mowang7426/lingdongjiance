@@ -36,38 +36,23 @@ static inline double SBCPUTextSlotsLayout(unsigned mask, double font, double ava
     }
     return mask ? y+h : 1;
 }
-/* Split enabled identities once, not live values. Keep the network pair together.
-   Fit the two groups to available width with one stable font scale. */
-static inline double SBCPUTextSlotsLayoutRows(unsigned mask, double font, double available, double gap,
-                                             int dual, SBCPUTextSlot slots[10]) {
-    if (!dual) return SBCPUTextSlotsLayout(mask,font,available,gap,slots);
-    int ids[10], count=0;
-    for (int i=0;i<10;i++) if (mask&(1u<<i)) ids[count++]=i;
-    int split=(count+1)/2;
-    if (split<count && ids[split-1]==8 && ids[split]==9) --split;
-    if (!split && count) split=count;
-    gap=SBCPUTextDataGap(gap);
-    double widths[2]={0,0}, cells[2]={0,0};
-    int lengths[2]={split,count-split};
-    for (int n=0;n<count;n++) cells[n<split?0:1]+=SBCPUTextSlotWidth(ids[n],font,1e9);
-    double scale=1;
-    for (int r=0;r<2;r++) {
-        widths[r]=cells[r]+(lengths[r]>0?lengths[r]-1:0)*gap;
-        if (widths[r]>available) {
-            double fit=(available-(lengths[r]-1)*gap)/cells[r];
-            if (fit<scale) scale=fit;
-        }
+/* Only the final network pair is a stacked block. All earlier metrics retain
+   their natural fixed-slot wrapping, font size and horizontal data gaps. */
+static inline double SBCPUTextSlotsLayoutNetwork(unsigned mask, double font, double available, double gap,
+                                                int networkDual, SBCPUTextSlot slots[10]) {
+    if (!networkDual || (mask & (3u<<8)) != (3u<<8))
+        return SBCPUTextSlotsLayout(mask,font,available,gap,slots);
+    SBCPUTextSlotsLayout(mask & ~(3u<<8),font,available,gap,slots);
+    double x=0,y=0,h=font*1.4;
+    for (int i=0;i<8;i++) if (mask & (1u<<i)) {
+        x=slots[i].x+slots[i].width; y=slots[i].y;
     }
-    if (scale<.01) scale=.01;
-    double h=font*scale*1.4, x=0;
-    for (int i=0;i<10;i++) { SBCPUTextSlot empty={0,0,0,0}; slots[i]=empty; }
-    for (int n=0;n<count;n++) {
-        if (n==split) x=0;
-        double width=SBCPUTextSlotWidth(ids[n],font*scale,available);
-        SBCPUTextSlot frame={x,n<split?0:h,width,h}; slots[ids[n]]=frame;
-        x=fmax(0,x+width+gap);
-    }
-    return count ? h*(count>split?2:1) : 1;
+    double width=SBCPUTextSlotWidth(8,font,available);
+    double candidate=x>0 ? fmax(0,x+SBCPUTextDataGap(gap)) : 0;
+    if (x>0 && candidate+width>available) { candidate=0; y+=h; }
+    SBCPUTextSlot up={candidate,y,width,h}; slots[8]=up;
+    SBCPUTextSlot down={candidate,y+h,width,h}; slots[9]=down;
+    return y+2*h;
 }
 static inline int SBCPUTextNetworkNeeded(int enabled, int visible, unsigned first, unsigned second) {
     return enabled && visible && ((first|second)&(3u<<8));
