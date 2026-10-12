@@ -42,7 +42,10 @@ static inline NSString *SBCPUTextOnlyRow(SBCPUTextOnlyFields fields,
     NSMutableArray<NSString *> *parts = [NSMutableArray array];
     if (fields.cpu) [parts addObject:[@"CPU " stringByAppendingString:SBCPUTextOnlyCompactValue(cpu, @"%", NO)]];
     if (fields.frequency) [parts addObject:SBCPUTextOnlyCompactValue(frequency, @"MHz", NO)];
-    if (fields.fps) [parts addObject:[@"FPS " stringByAppendingString:SBCPUTextOnlyCompactValue(fps, @"", NO)]];
+    if (fields.fps) {
+        NSString *validatedFPS = SBCPUTextOnlyCompactValue([fps isKindOfClass:[NSString class]] ? [fps stringByAppendingString:@"fps"] : nil, @"fps", NO);
+        [parts addObject:[@"FPS " stringByAppendingString:validatedFPS.length >= 3 ? [validatedFPS substringToIndex:validatedFPS.length - 3] : @"--"]];
+    }
     if (fields.battery) [parts addObject:[@"BAT " stringByAppendingString:SBCPUTextOnlyCompactValue(battery, @"%", NO)]];
     if (fields.temperature) [parts addObject:[@"TEMP " stringByAppendingString:SBCPUTextOnlyCompactValue(temperature, @"°C", YES)]];
     if (fields.current) [parts addObject:[@"I " stringByAppendingString:SBCPUTextOnlyCompactValue(current, @"mA", YES)]];
