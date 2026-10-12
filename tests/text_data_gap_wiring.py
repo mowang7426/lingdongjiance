@@ -6,7 +6,7 @@ rows=plistlib.loads((r/'sbcpuprefs/Resources/TextOnly.plist').read_bytes())['ite
 keys=['floatingTextOnlyDataGap','floatingTextOnly2DataGap']
 for key in keys:
  row,=[x for x in rows if x.get('key')==key]
- assert (row['min'],row['max'],row['default'])==(0,12,4)
+ assert (row['min'],row['max'],row['default'])==(-15,12,4)
  assert row['cell']=='PSSliderCell' and row['showValue']
  assert row['get']=='getPreferenceValue:' and row['set']=='setPreferenceValue:specifier:'
  assert row['defaults']=='com.yourname.sbcpufloating'
@@ -28,5 +28,5 @@ assert 'monospacedDigitSystemFontOfSize' in s
 # Retain layout-only API: no values/digits/strings affect frames.
 policy=(r/'SBCPUTextSlotPolicy.h').read_text()
 assert 'double gap, SBCPUTextSlot slots[10]' in policy
-assert 'x+=gap' in policy and 'cells[metric] * font * .65;' in policy
-print('PASS 4.98 independent defaults/range, one-shot copy, persistent notification + live layout, no character spacing')
+assert 'x+gap' in policy and 'cells[metric] * font * .65;' in policy
+print('PASS 4.99 independent defaults/range, one-shot copy, persistent notification + live layout, no character spacing')

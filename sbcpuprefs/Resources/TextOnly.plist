@@ -12,7 +12,7 @@
 			<key>label</key>
 			<string>数据间距（两个文字浮窗）</string>
 			<key>footerText</key>
-			<string>调整相邻指标固定槽位之间的间隔，不是字距、标识符与数值距离，也不是两个浮窗的位置距离。默认 4pt（4.97 槽位尾部留白），范围 0–12pt；数值位数变化不会移动槽位。两个窗口独立保存并即时生效，间距增大可能换行。</string>
+			<string>调整相邻指标固定槽位之间的间隔，不是字距、标识符与数值距离，也不是两个浮窗的位置距离。默认 4pt（4.97 槽位尾部留白），范围 -15–12pt；负值会让相邻固定槽位紧凑重叠，数值位数变化不会移动槽位。两个窗口独立保存并即时生效，间距增大可能换行。</string>
 		</dict>
 		<dict>
 			<key>cell</key>
@@ -30,7 +30,7 @@
 			<key>default</key>
 			<integer>4</integer>
 			<key>min</key>
-			<integer>0</integer>
+			<integer>-15</integer>
 			<key>max</key>
 			<integer>12</integer>
 			<key>showValue</key>
@@ -52,7 +52,7 @@
 			<key>default</key>
 			<integer>4</integer>
 			<key>min</key>
-			<integer>0</integer>
+			<integer>-15</integer>
 			<key>max</key>
 			<integer>12</integer>
 			<key>showValue</key>

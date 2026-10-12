@@ -3,14 +3,15 @@
 #include "../SBCPUTextSlotPolicy.h"
 int main(void) {
     assert(SBCPUTextDataGap(NAN)==4 && SBCPUTextDataGap(INFINITY)==4);
-    assert(SBCPUTextDataGap(-1)==0 && SBCPUTextDataGap(13)==12);
+    assert(SBCPUTextDataGap(-16)==-15 && SBCPUTextDataGap(-15)==-15);
+    assert(SBCPUTextDataGap(-1)==-1 && SBCPUTextDataGap(13)==12);
     assert(SBCPUTextDataGap(2.5)==2.5 && SBCPUTextDataGap(4)==4);
     SBCPUTextSlot first[10],second[10];
     SBCPUTextSlotsLayout(7,13,1000,4,first);
     /* Default starts match 4.97 widths (content + 4pt trailing padding). */
     assert(first[1].x==12*13*.65+4);
     assert(first[2].x==12*13*.65+4+10*13*.65+4);
-    for (int gap=0;gap<=12;gap++) {
+    for (int gap=-15;gap<=12;gap++) {
         SBCPUTextSlotsLayout(7,13,1000,gap,second);
         assert(second[0].x==0 && second[0].width==first[0].width);
         assert(second[1].x==second[0].width+gap);
@@ -27,7 +28,7 @@ int main(void) {
        the production placement API: rendering is separately wired to child labels. */
     const char *values[]={"9.9%","10.0%","60","120","999B/s","1.0K/s","99.9M/s","--"};
     for (unsigned mask=0;mask<1024;mask++) for (int fs=8;fs<=24;fs++)
-    for (unsigned w=0;w<sizeof(widths)/sizeof(widths[0]);w++) for (int gap=0;gap<=12;gap+=3) {
+    for (unsigned w=0;w<sizeof(widths)/sizeof(widths[0]);w++) for (int gap=-15;gap<=12;gap+=3) {
         SBCPUTextSlot baseline[10],next[10];
         double height=SBCPUTextSlotsLayout(mask,fs,widths[w],gap,baseline);
         for (unsigned v=0;v<sizeof(values)/sizeof(values[0]);v++) {
@@ -40,7 +41,7 @@ int main(void) {
                 assert(next[i].width==SBCPUTextSlotWidth(i,fs,widths[w]));
                 assert(next[i].x>=0 && next[i].x+next[i].width<=widths[w]+.0001);
                 assert(next[i].y+next[i].height<=height);
-                for (int j=0;j<i;j++) if (mask&(1u<<j))
+                for (int j=0;j<i;j++) if ((mask&(1u<<j)) && gap>=0)
                     assert(next[i].y!=next[j].y || next[i].x>=next[j].x+next[j].width);
             }
         }

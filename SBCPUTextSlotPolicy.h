@@ -4,14 +4,15 @@
 #include <math.h>
 /* 4.97 stored 4pt padding in each slot width. Make it an actual inter-slot gap. */
 static inline double SBCPUTextDataGap(double gap) {
-    return !isfinite(gap) ? 4 : (gap < 0 ? 0 : (gap > 12 ? 12 : gap));
+    return !isfinite(gap) ? 4 : (gap < -15 ? -15 : (gap > 12 ? 12 : gap));
 }
 typedef struct { double x,y,width,height; } SBCPUTextSlot;
 /* Widths depend only on metric identity/font/configuration, NEVER current values. */
 static inline double SBCPUTextSlotWidth(int metric, double font, double available) {
     static const int cells[10] = {12,10,9,10,11,13,13,13,14,14};
     double width = cells[metric] * font * .65;
-    return width < available ? width : available;
+    double usable = available > 0 ? available : 0;
+    return width < usable ? width : usable;
 }
 static inline double SBCPUTextSlotsLayout(unsigned mask, double font, double available, double gap, SBCPUTextSlot slots[10]) {
     double x=0,y=0,h=font*1.4;
@@ -20,8 +21,11 @@ static inline double SBCPUTextSlotsLayout(unsigned mask, double font, double ava
         SBCPUTextSlot empty={0,0,0,0}; slots[i]=empty;
         if (!(mask & (1u<<i))) continue;
         double width=SBCPUTextSlotWidth(i,font,available);
-        if (x>0 && x+gap+width>available) { x=0; y+=h; }
-        if (x>0) x+=gap;
+        double candidate = x>0 ? x+gap : x;
+        /* Negative gaps compact adjacent fixed slots, but never escape left. */
+        if (candidate < 0) candidate=0;
+        if (x>0 && candidate+width>available) { x=0; y+=h; }
+        else x=candidate;
         SBCPUTextSlot frame={x,y,width,h}; slots[i]=frame; x+=width;
     }
     return mask ? y+h : 1;
