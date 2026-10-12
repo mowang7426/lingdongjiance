@@ -7,7 +7,7 @@ a=s[start:end]
 for required in ['textGeometry.width-textGeometry.left-textGeometry.right',
                  'SBCPUTextOnlyFitFont(naturalWidth, available, floatingTextOnlyFontSize)',
                  'textOnlyLabel.numberOfLines = wrap ? 0 : 1',
-                 'NSLineBreakByCharWrapping', 'adjustsFontSizeToFitWidth = NO',
+                 'NSLineBreakByWordWrapping', 'adjustsFontSizeToFitWidth = NO',
                  'sizeThatFits:CGSizeMake(rowWidth, CGFLOAT_MAX)',
                  'MIN(available, fittedWidth + 2)', 'MIN(maxHeight,',
                  'SBCPUTextResolveAnchor(lockedTextAnchor',

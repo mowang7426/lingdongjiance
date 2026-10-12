@@ -2655,7 +2655,7 @@ static void applyTextOnlyMode(void) {
         [textOnlyLabel removeFromSuperview];
         textOnlyLabel = [[SBCPUTextBackdropLabel alloc] initWithFrame:CGRectZero];
         textOnlyLabel.numberOfLines = 1;
-        textOnlyLabel.lineBreakMode = NSLineBreakByCharWrapping;
+        textOnlyLabel.lineBreakMode = NSLineBreakByWordWrapping;
         textOnlyLabel.adjustsFontSizeToFitWidth = NO;
         textOnlyLabel.baselineAdjustment = UIBaselineAdjustmentAlignCenters;
         textOnlyLabel.textAlignment = NSTextAlignmentCenter;

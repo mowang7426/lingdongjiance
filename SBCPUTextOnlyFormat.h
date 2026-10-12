@@ -33,21 +33,21 @@ static inline NSString *SBCPUTextOnlySignal(NSArray<NSDictionary *> *signals, NS
         }
     }
     // Deliberately omit carrier names/band/technology; these remain in ordinary UI.
-    return [NSString stringWithFormat:@"S%ld%@dBm", (long)slot, dbm];
+    return [NSString stringWithFormat:@"%@dBm", dbm];
 }
 
 static inline NSString *SBCPUTextOnlyRow(SBCPUTextOnlyFields fields,
     NSString *cpu, NSString *frequency, NSString *fps, NSString *battery,
     NSString *temperature, NSString *current, NSArray<NSDictionary *> *signals) {
     NSMutableArray<NSString *> *parts = [NSMutableArray array];
-    if (fields.cpu) [parts addObject:[@"◉" stringByAppendingString:SBCPUTextOnlyCompactValue(cpu, @"%", NO)]];
-    if (fields.frequency) [parts addObject:[@"ƒ" stringByAppendingString:SBCPUTextOnlyCompactValue(frequency, @"MHz", NO)]];
-    if (fields.fps) [parts addObject:[@"≋" stringByAppendingString:SBCPUTextOnlyCompactValue([fps isKindOfClass:[NSString class]] ? [fps stringByAppendingString:@"fps"] : nil, @"fps", NO)]];
-    if (fields.battery) [parts addObject:[@"▰" stringByAppendingString:SBCPUTextOnlyCompactValue(battery, @"%", NO)]];
-    if (fields.temperature) [parts addObject:[@"△" stringByAppendingString:SBCPUTextOnlyCompactValue(temperature, @"°C", YES)]];
-    if (fields.current) [parts addObject:[@"↯" stringByAppendingString:SBCPUTextOnlyCompactValue(current, @"mA", YES)]];
-    if (fields.sim1) [parts addObject:[@"⌁" stringByAppendingString:SBCPUTextOnlySignal(signals, 1)]];
-    if (fields.sim2) [parts addObject:[@"⌁" stringByAppendingString:SBCPUTextOnlySignal(signals, 2)]];
+    if (fields.cpu) [parts addObject:[@"CPU " stringByAppendingString:SBCPUTextOnlyCompactValue(cpu, @"%", NO)]];
+    if (fields.frequency) [parts addObject:SBCPUTextOnlyCompactValue(frequency, @"MHz", NO)];
+    if (fields.fps) [parts addObject:[@"FPS " stringByAppendingString:SBCPUTextOnlyCompactValue([fps isKindOfClass:[NSString class]] ? [fps stringByAppendingString:@"fps"] : nil, @"fps", NO)]];
+    if (fields.battery) [parts addObject:[@"BAT " stringByAppendingString:SBCPUTextOnlyCompactValue(battery, @"%", NO)]];
+    if (fields.temperature) [parts addObject:[@"TEMP " stringByAppendingString:SBCPUTextOnlyCompactValue(temperature, @"°C", YES)]];
+    if (fields.current) [parts addObject:[@"I " stringByAppendingString:SBCPUTextOnlyCompactValue(current, @"mA", YES)]];
+    if (fields.sim1) [parts addObject:[@"S1 " stringByAppendingString:SBCPUTextOnlySignal(signals, 1)]];
+    if (fields.sim2) [parts addObject:[@"S2 " stringByAppendingString:SBCPUTextOnlySignal(signals, 2)]];
     return [parts componentsJoinedByString:@" "];
 }
 #endif
