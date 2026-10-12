@@ -2712,7 +2712,7 @@ static CGSize layoutTextSlots(SBCPUTextBackdropLabel *host, BOOL second, SBCPUTe
     for (int i=0;i<10;i++) {
         SBCPUTextBackdropLabel *slot=(id)[host viewWithTag:4950+i];
         if (!(mask&(1u<<i))) { slot.realtimeInvertEnabled=NO; [slot removeFromSuperview]; continue; }
-        if (!slot) { slot=[[SBCPUTextBackdropLabel alloc] initWithFrame:CGRectZero]; slot.tag=4950+i;
+        if (!slot) { slot=[[SBCPUCapsuleBackdropLabel alloc] initWithFrame:CGRectZero]; slot.tag=4950+i;
             slot.userInteractionEnabled=NO; slot.backgroundColor=UIColor.clearColor; [host addSubview:slot]; }
         SBCPUTextOnlyFields f={i==0,i==1,i==2,i==3,i==4,i==5,i==6,i==7};
         NSString *value=i<8?SBCPUTextOnlyRow(f,floatingView.cpuValueLabel.text,floatingView.cpuFreqLabel.text,
