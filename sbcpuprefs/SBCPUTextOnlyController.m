@@ -31,7 +31,7 @@
 }
 - (void)setPreferenceValue:(id)value specifier:(PSSpecifier *)specifier {
     NSString *key = [specifier propertyForKey:@"key"];
-    if ([key isEqualToString:@"floatingTextOnlyFontSize"]) value = @(SBCPUTextOnlyBound([value doubleValue], 8, 24, 13));
+    if ([key isEqualToString:@"floatingTextOnlyFontSize"] || [key isEqualToString:@"floatingTextOnly2FontSize"]) value = @(SBCPUTextOnlyBound([value doubleValue], 8, 24, 13));
     [self writeValues:@{key:value}];
 }
 - (void)preset:(NSInteger)preset {
@@ -143,6 +143,7 @@
         cell.imageView.tintColor = [UIColor colorWithRed:c.red green:c.green blue:c.blue alpha:1];
     }
 }
+- (void)secondTopCenter { [self writeValues:@{@"floatingTextOnly2Preset":@1, @"floatingTextOnly2X":@0, @"floatingTextOnly2Y":@70}]; [self reloadSpecifiers]; }
 - (void)viewWillAppear:(BOOL)animated { [super viewWillAppear:animated]; [self reloadSpecifiers]; }
 - (void)viewDidLoad { [super viewDidLoad]; self.title = @"纯文字浮窗"; }
 @end
