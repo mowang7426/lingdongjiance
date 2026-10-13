@@ -4,7 +4,7 @@ import subprocess
 root = Path(__file__).resolve().parents[1]
 s = (root / 'SBCPUPCoreFrequency.m').read_text()
 t = (root / 'Tweak.xm').read_text()
-for bad in ('IORegistryEntrySet', 'IOConnectCall', 'sleepForTimeInterval', 'NSTimer', 'dispatch_source_create', 'for (;;)', 'maxFreqMHz', 'voltage-states1', 'voltage-states5'):
+for bad in ('IORegistryEntrySet', 'IOConnectCall', 'sleepForTimeInterval', 'NSTimer', 'dispatch_source_create', 'for (;;)', 'maxFreqMHz', 'voltage-states1'):
     assert bad not in s, bad
 for good in ('mach_continuous_time()', 'elapsed > 5', 'elapsed < 0.5', 'CFRelease(previous)', 'CFRelease(subscription)', 'CFRelease(subscribed)', 'CFRelease(delta)', 'now - requestedAt >= 0.9', 'cachedMHz = mhz', 'now - cachedEnd <= 3', 'hasBlankedScreen', 'r < 0', 'PTopology(deltaRows)', 'PCPU[0-9]+'):
     assert good in s, good
@@ -19,5 +19,8 @@ for start, end in [('static void updateTextNetwork(', 'static BOOL statusDockSho
     if start not in base or start not in t or end not in t: continue
     assert base[base.index(start):base.index(end, base.index(start))] == t[t.index(start):t.index(end, t.index(start))]
 assert base.count('scheduledTimerWithTimeInterval:') == t.count('scheduledTimerWithTimeInterval:')
-assert '5.04~pcore-diagnostic.1' in (root / 'control').read_text()
+assert 'Version: 5.04\n' in (root / 'control').read_text()
+for good in ('PA16Table', 'PComputeMapped(deltaRows', 'iPhone15,3', 'Version 17.0 (Build 21A329)', '65536000000000ULL / hz', 'states.count != 18', 'names.count != 2', 'now - diagnosticTime < 300'):
+    assert good in s, good
+assert '@"channels":rows' not in s and '@"rawTables":tables' not in s
 print('P-core read-only wiring/lifecycle/scope: PASS')
