@@ -1,5 +1,5 @@
 #import <Foundation/Foundation.h>
 
-// 5.04: window active-residency-weighted P-core MHz, or 0 (unavailable).
+// 5.05: window active-residency-weighted P-core MHz, or 0 (unavailable).
 // Nonblocking; called by existing low-frequency refresh only. No private API on caller.
 FOUNDATION_EXPORT double SBCPUReadPcoreFrequency(void);

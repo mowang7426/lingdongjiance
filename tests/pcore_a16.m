@@ -24,10 +24,15 @@ int main(void) {
             NSDictionary *d = [NSDictionary dictionaryWithContentsOfFile:files[i]]; assert(d);
             NSString *reason = nil; double mhz = Compute(d, &reason);
             assert(fabs(mhz - expected[i]) < 1e-9);
-            assert([reason isEqualToString:@"a16-table5-sram-active-weighted"]);
+            assert([reason isEqualToString:@"structural-table5-sram-active-weighted"]);
             printf("A16 real fixture %lu: %.12f MHz PASS\n", (unsigned long)i, mhz);
-            Reject(d, ^(NSMutableDictionary *x) { x[@"machine"] = @"iPhone15,2"; });
-            Reject(d, ^(NSMutableDictionary *x) { x[@"os"] = @"Version 17.0 (Build 21A330)"; });
+            // Identity/OS changed snapshots are synthetic acceptance tests, NOT new device evidence.
+            NSMutableDictionary *alternate = Clone(d); alternate[@"machine"] = @"iPhone15,2";
+            assert(fabs(Compute(alternate, &reason) - expected[i]) < 1e-9);
+            alternate[@"os"] = @"Version 17.0 (Build 21A330)";
+            assert(fabs(Compute(alternate, &reason) - expected[i]) < 1e-9);
+            Reject(d, ^(NSMutableDictionary *x) { x[@"machine"] = @"iPhone12,1"; });
+            Reject(d, ^(NSMutableDictionary *x) { x[@"machine"] = @"iPhone99,1"; });
             Reject(d, ^(NSMutableDictionary *x) { x[@"rawTables"][0][@"node"] = @"not-pmgr"; });
             Reject(d, ^(NSMutableDictionary *x) { [x[@"rawTables"] addObject:x[@"rawTables"][0]]; });
             Reject(d, ^(NSMutableDictionary *x) { [x[@"rawTables"][0][@"rawProperties"] removeObjectForKey:@"voltage-states5"]; });

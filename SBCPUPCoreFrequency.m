@@ -103,11 +103,20 @@ static double PCompute(NSArray *rows, NSString **reason) {
     return sum / active;
 }
 
-// Evidence-gated A16 mapping. Static Hello CPU input-chain evidence, not live telemetry.
+// Structural mapping: model identity is NOT a hardcoded frequency table.
+static NSString *PChip(NSString *machine) {
+    NSDictionary *chips = @{
+        @"iPhone12,1":@"A13", @"iPhone12,3":@"A13", @"iPhone12,5":@"A13",
+        @"iPhone13,1":@"A14", @"iPhone13,2":@"A14", @"iPhone13,3":@"A14", @"iPhone13,4":@"A14",
+        @"iPhone14,4":@"A15", @"iPhone14,5":@"A15", @"iPhone14,2":@"A15", @"iPhone14,3":@"A15",
+        @"iPhone14,7":@"A15", @"iPhone14,8":@"A15", @"iPhone15,2":@"A16", @"iPhone15,3":@"A16",
+        @"iPhone15,4":@"A16", @"iPhone15,5":@"A16", @"iPhone16,1":@"A17Pro", @"iPhone16,2":@"A17Pro"};
+    return chips[machine];
+}
 static uint32_t PLE32(const uint8_t *p) {
     return (uint32_t)p[0] | ((uint32_t)p[1] << 8) | ((uint32_t)p[2] << 16) | ((uint32_t)p[3] << 24);
 }
-static NSArray *PA16Table(NSArray *tables) {
+static NSArray *PStructuralTable(NSArray *tables) {
     NSDictionary *pmgr = nil;
     for (NSDictionary *node in tables) {
         NSDictionary *props = node[@"rawProperties"];
@@ -119,15 +128,23 @@ static NSArray *PA16Table(NSArray *tables) {
     }
     NSData *sram = pmgr[@"voltage-states5-sram"], *reciprocal = pmgr[@"voltage-states5"];
     if (![sram isKindOfClass:NSData.class] || ![reciprocal isKindOfClass:NSData.class] ||
-        sram.length % 8 || reciprocal.length % 8 || sram.length != 17 * 8 || reciprocal.length != 17 * 8) return nil;
+        sram.length % 8 || reciprocal.length % 8 || sram.length < 16 || sram.length > 255 * 8 || reciprocal.length != sram.length) return nil;
+    // acc-clusters is a veto only; unknown platform tiers never choose another table.
+    NSData *clusters = pmgr[@"acc-clusters"];
+    if (clusters) {
+        if (![clusters isKindOfClass:NSData.class] || clusters.length != 16) return nil;
+        const uint8_t *c = clusters.bytes;
+        BOOL forward = c[0] == 1 && c[1] == 0 && c[8] == 5 && c[9] == 1;
+        BOOL reverse = c[8] == 1 && c[9] == 0 && c[0] == 5 && c[1] == 1;
+        if (!forward && !reverse) return nil;
+    }
     const uint8_t *a = sram.bytes, *b = reciprocal.bytes;
     NSMutableArray *frequencies = [NSMutableArray array];
     uint32_t last = 0;
-    for (NSUInteger k = 0; k < 17; k++) {
+    for (NSUInteger k = 0; k < sram.length / 8; k++) {
         uint32_t hz = PLE32(a + k * 8);
-        // A16 evidence envelope; second field is deliberately NOT a frequency.
-        if (hz < 636000000U || hz > 3468000000U || hz <= last ||
-            (k == 0 && hz != 636000000U) || (k == 16 && hz != 3468000000U) ||
+        // Broad Hz dimensional sanity, not chip endpoints. Second field is not frequency.
+        if (hz < 100000000U || hz <= last ||
             PLE32(b + k * 8) != (uint32_t)(65536000000000ULL / hz)) return nil;
         last = hz;
         [frequencies addObject:@((double)hz / 1000000.0)];
@@ -142,9 +159,14 @@ static double PComputeMapped(NSArray *rows, NSString *machine, NSString *os, NSA
             if (!PIdle(state[@"name"]) && !PExplicitMHz(state[@"name"])) binary = YES;
     }
     if (!binary) return PCompute(rows, reason); // Existing explicit-unit path, no binary guessing.
-    *reason = @"unsupported-binary-mapping-platform";
-    if (![machine isEqualToString:@"iPhone15,3"] || ![os isEqualToString:@"Version 17.0 (Build 21A329)"]) return 0;
-    NSArray *frequencies = PA16Table(tables);
+    NSString *chip = PChip(machine);
+    *reason = @"unsupported-model";
+    if (!chip) return 0;
+    // A13 device branch/table ownership is not established by our inputs.
+    *reason = @"unverified-chip-mapping";
+    if ([chip isEqualToString:@"A13"]) return 0;
+    (void)os; // Runtime acceptance is not a promise of all-iOS compatibility.
+    NSArray *frequencies = PStructuralTable(tables);
     *reason = @"invalid-or-ambiguous-pmgr-table5";
     if (!frequencies) return 0;
     NSMutableArray *mapped = [NSMutableArray array];
@@ -154,7 +176,7 @@ static double PComputeMapped(NSArray *rows, NSString *machine, NSString *os, NSA
         if (![row[@"subgroup"] isEqualToString:@"CPU Core Performance States"] || !PIsCore(row[@"channel"])) {
             [mapped addObject:row]; continue;
         }
-        *reason = @"invalid-a16-pcore-topology";
+        *reason = @"unverified-pcore-topology";
         NSString *name = row[@"channel"];
         if (![@[@"PCPU0", @"PCPU1"] containsObject:name] || [names containsObject:name] ||
             ![row[@"group"] isEqualToString:@"CPU Stats"] || ![row[@"unit"] isEqualToString:@"24Mticks"] ||
@@ -162,11 +184,12 @@ static double PComputeMapped(NSArray *rows, NSString *machine, NSString *os, NSA
             (driver && ![driver isEqual:row[@"driver"]])) return 0;
         driver = row[@"driver"]; [names addObject:name];
         NSArray *states = row[@"states"];
-        if (states.count != 18 || ![states[0][@"name"] isEqualToString:@"IDLE"]) return 0;
+        *reason = @"incomplete-or-unverified-state-map";
+        if (states.count != frequencies.count + 1 || ![states[0][@"name"] isEqualToString:@"IDLE"]) return 0;
         NSMutableArray *resolved = [NSMutableArray arrayWithObject:states[0]];
-        for (NSUInteger k = 0; k < 17; k++) {
+        for (NSUInteger k = 0; k < frequencies.count; k++) {
             NSDictionary *state = states[k + 1];
-            NSString *expected = [NSString stringWithFormat:@"V%luP%lu", (unsigned long)k, (unsigned long)(16 - k)];
+            NSString *expected = [NSString stringWithFormat:@"V%luP%lu", (unsigned long)k, (unsigned long)(frequencies.count - 1 - k)];
             if (![state[@"name"] isEqualToString:expected]) return 0;
             [resolved addObject:@{@"name":[NSString stringWithFormat:@"%.6f MHz", [frequencies[k] doubleValue]],
                                   @"residency":state[@"residency"]}];
@@ -174,9 +197,9 @@ static double PComputeMapped(NSArray *rows, NSString *machine, NSString *os, NSA
         NSMutableDictionary *copy = [row mutableCopy]; copy[@"states"] = resolved;
         [mapped addObject:copy];
     }
-    if (names.count != 2) { *reason = @"missing-a16-pcore"; return 0; }
+    if (names.count != 2) { *reason = @"missing-pcore"; return 0; }
     double mhz = PCompute(mapped, reason);
-    if (mhz > 0) *reason = @"a16-table5-sram-active-weighted";
+    if (mhz > 0) *reason = @"structural-table5-sram-active-weighted";
     return mhz;
 }
 
@@ -245,7 +268,7 @@ static double PComputeMapped(NSArray *rows, NSString *machine, NSString *os, NSA
     dlclose(h); api = (PAPI){0}; return NO;
 }
 - (NSArray *)rawTables {
-    // Read-only pmgr evidence. Binary decoding is restricted to PA16Table and the platform gate.
+    // Read-only pmgr evidence. Binary decoding is restricted to PStructuralTable and the chip/topology gates.
     NSMutableArray *result = [NSMutableArray array];
     io_iterator_t it = IO_OBJECT_NULL;
     if (IOServiceGetMatchingServices(0, IOServiceMatching("AppleARMIODevice"), &it) != KERN_SUCCESS)
@@ -254,7 +277,7 @@ static double PComputeMapped(NSArray *rows, NSString *machine, NSString *os, NSA
     unsigned services = 0;
     while ((service = IOIteratorNext(it))) {
         NSMutableDictionary *filtered = [NSMutableDictionary dictionary];
-        for (NSString *key in @[@"voltage-states5-sram", @"voltage-states5"]) {
+        for (NSString *key in @[@"voltage-states5-sram", @"voltage-states5", @"acc-clusters"]) {
             CFTypeRef property = IORegistryEntryCreateCFProperty(service, (__bridge CFStringRef)key, kCFAllocatorDefault, 0);
             if (property) {
                 // Preserve malformed candidates too, so they cannot evade the uniqueness check.
@@ -310,20 +333,38 @@ static double PComputeMapped(NSArray *rows, NSString *machine, NSString *os, NSA
     if (diagnosticTime && now - diagnosticTime < 300) return;
     diagnosticTime = now;
     lastDiagnosticStatus = [reason copy];
-    (void)rows;
+    NSMutableArray *summary = [NSMutableArray array];
+    for (NSDictionary *row in rows) {
+        if (summary.count >= 8) break;
+        NSArray *states = row[@"states"];
+        [summary addObject:@{@"channel":row[@"channel"], @"unit":row[@"unit"],
+            @"stateCount":@(states.count), @"firstState":states.count ? states[0][@"name"] : @"",
+            @"lastState":states.count ? states.lastObject[@"name"] : @""}];
+    }
+    NSMutableArray *tableSummary = [NSMutableArray array];
+    for (NSDictionary *node in tables) {
+        if (tableSummary.count >= 4) break;
+        NSMutableDictionary *lengths = [NSMutableDictionary dictionary];
+        for (NSString *key in node[@"rawProperties"]) {
+            id value = node[@"rawProperties"][key];
+            lengths[key] = [value isKindOfClass:NSData.class] ? @([value length]) : @(-1);
+        }
+        [tableSummary addObject:@{@"node":node[@"node"], @"propertyBytes":lengths}];
+    }
     char model[128] = {0}; size_t size = sizeof(model);
     sysctlbyname("hw.machine", model, &size, NULL, 0);
     NSString *directory = @"/var/mobile/Library/Logs";
     NSError *error = nil;
     [[NSFileManager defaultManager] createDirectoryAtPath:directory withIntermediateDirectories:YES attributes:nil error:&error];
-    NSDictionary *report = @{@"version":@"5.04", @"status":reason,
+    NSDictionary *report = @{@"version":@"5.05", @"status":reason,
         @"time":[NSDate date], @"machine":@((const char *)model),
         @"os":NSProcessInfo.processInfo.operatingSystemVersionString,
+        @"chip":PChip(@((const char *)model)) ?: @"unknown", @"channelSummary":summary, @"tableSummary":tableSummary,
         @"windowSeconds":@(elapsed), @"activeWeightedPcoreMHz":@(mhz),
         @"semantics":@"sum(frequencyMHz * deltaResidency) / sum(active deltaResidency); IDLE/OFF/DOWN excluded; no active residence is unavailable",
-        @"mapping":@"iPhone15,3 / 17.0 / 21A329 only: pmgr table5-sram LE uint32 Hz; VkP(16-k) -> raw[k]; explicit-unit names otherwise"};
+        @"mapping":@"conditional A14/A15/A16/A17Pro: unique pmgr dual table5, LE Hz, complete IDLE+VkP(N-1-k), PCPU0/1; A13 binary unverified; explicit-unit names unchanged"};
     NSData *data = [NSPropertyListSerialization dataWithPropertyList:report format:NSPropertyListBinaryFormat_v1_0 options:0 error:&error];
-    if (data) [data writeToFile:[directory stringByAppendingPathComponent:@"LingdongPcore-5.04-status.plist"] options:NSDataWritingAtomic error:&error];
+    if (data) [data writeToFile:[directory stringByAppendingPathComponent:@"LingdongPcore-5.05-status.plist"] options:NSDataWritingAtomic error:&error];
 }
 - (double)take {
     double now = PNow();

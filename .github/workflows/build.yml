@@ -26,6 +26,9 @@ jobs:
           clang -fobjc-arc -fblocks -framework Foundation -framework IOKit -Wall -Wextra -Werror \
             tests/pcore_a16.m -o "$TMP_PCORE/a16"
           "$TMP_PCORE/a16"
+          clang -fobjc-arc -fblocks -framework Foundation -framework IOKit -Wall -Wextra -Werror \
+            tests/pcore_structural.m -o "$TMP_PCORE/structural"
+          "$TMP_PCORE/structural"
 
       - name: Second HUD production event-tree lock and drag regression
         run: |
