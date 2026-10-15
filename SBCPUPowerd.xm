@@ -43,36 +43,8 @@ static BOOL readBoolPref(CFStringRef key, BOOL fallback) {
     return result;
 }
 
-// Do not swallow powerd's current/power-limit writes. Returning KERN_SUCCESS
-// without forwarding the write falsely reports success and can leave a stale
-// limit in place. This helper now passes all writes through to Apple's original
-// IOKit setters; it does not override Apple's thermal/current safety controls.
-static BOOL isFastChargeProperty(CFStringRef propertyName) {
-    if (!propertyName) return NO;
-    NSString *s = (__bridge NSString *)propertyName;
-    static NSArray<NSString *> *names;
-    static dispatch_once_t onceToken;
-    dispatch_once(&onceToken, ^{
-        names = @[
-            @"ChargeCurrentLimit",
-            @"MaxChargeCurrent",
-            @"AdapterPowerLimit",
-            @"AdapterCurrentLimit",
-            @"ChargingPowerLimit",
-            @"ChargingCurrentLimit",
-            @"USBPDCurrentLimit",
-            @"USBPDPowerLimit"
-        ];
-    });
-    for (NSString *name in names) {
-        if ([s caseInsensitiveCompare:name] == NSOrderedSame ||
-            [s rangeOfString:name options:NSCaseInsensitiveSearch].location != NSNotFound) {
-            return YES;
-        }
-    }
-    return NO;
-}
-
+// This helper passes every write through to Apple's original IOKit setters;
+// it does not override Apple's thermal/current safety controls.
 static kern_return_t hook_IORegistryEntrySetCFProperty(io_registry_entry_t entry,
                                                          CFStringRef propertyName,
                                                          CFTypeRef property) {
