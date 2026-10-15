@@ -2520,6 +2520,16 @@ static CGSize layoutTextSlots(SBCPUTextBackdropLabel *host, BOOL second, SBCPUTe
         slot.frame=CGRectMake(frames[i].x,frames[i].y,frames[i].width,frames[i].height);
         [parts addObject:value];
     }
+    for (int i=0;i<10;i++) {
+        SBCPUTextSlot frame=SBCPUTextSeparatorFrame(mask,i,second && textOnly2NetworkDualLine,frames);
+        SBCPUTextBackdropLabel *dot=(id)[host viewWithTag:4970+i];
+        if (frame.width<=0) { dot.realtimeInvertEnabled=NO; [dot removeFromSuperview]; continue; }
+        if (!dot) { dot=[[SBCPUCapsuleBackdropLabel alloc] initWithFrame:CGRectZero]; dot.tag=4970+i;
+            dot.userInteractionEnabled=NO; dot.backgroundColor=UIColor.clearColor; [host addSubview:dot]; }
+        dot.font=font; dot.text=@"·"; dot.numberOfLines=1; dot.adjustsFontSizeToFitWidth=NO;
+        dot.lineBreakMode=NSLineBreakByClipping; dot.textAlignment=NSTextAlignmentCenter; dot.clipsToBounds=YES;
+        dot.frame=CGRectMake(frame.x,frame.y,frame.width,frame.height);
+    }
     host.text=@""; host.hidden=mask==0;
     if (!second) textOnlyPlainText=[parts componentsJoinedByString:@" "];
     colorTextSlots(host, second);

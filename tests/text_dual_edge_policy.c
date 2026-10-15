@@ -7,7 +7,7 @@ int main(void) {
     for (int gap=-15;gap<=12;gap++) {
         SBCPUTextSlotsLayoutNetwork(768,13,390,gap,0,a);
         assert(a[8].width==10*13*.65);
-        assert(a[9].x==a[8].width+gap && a[9].y==a[8].y);
+        assert(a[9].x==a[8].width+SBCPUTextSeparatorWidth(13,gap) && a[9].y==a[8].y);
         for (int direction=8;direction<=9;direction++) {
             SBCPUTextSlotsLayoutNetwork(1u<<direction,13,390,gap,0,a);
             assert(a[direction].x==0 && a[direction].y==0);

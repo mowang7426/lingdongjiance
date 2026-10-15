@@ -9,19 +9,19 @@ int main(void) {
     SBCPUTextSlot first[10],second[10];
     SBCPUTextSlotsLayout(7,13,1000,4,first);
     /* Default starts match 4.97 widths (content + 4pt trailing padding). */
-    assert(first[1].x==12*13*.65+4);
-    assert(first[2].x==12*13*.65+4+10*13*.65+4);
+    assert(first[1].x==10*13*.65+SBCPUTextSeparatorWidth(13,4));
+    assert(first[2].x==10*13*.65+SBCPUTextSeparatorWidth(13,4)+9*13*.65+SBCPUTextSeparatorWidth(13,4));
     for (int gap=-15;gap<=12;gap++) {
         SBCPUTextSlotsLayout(7,13,1000,gap,second);
         assert(second[0].x==0 && second[0].width==first[0].width);
-        assert(second[1].x==second[0].width+gap);
-        assert(second[2].x==second[0].width+second[1].width+gap*2);
-        assert(first[1].x==12*13*.65+4); /* window 1 remains independent */
+        assert(second[1].x==second[0].width+SBCPUTextSeparatorWidth(13,gap));
+        assert(fabs(second[2].x-(second[0].width+second[1].width+SBCPUTextSeparatorWidth(13,gap)*2))<1e-9);
+        assert(first[1].x==10*13*.65+SBCPUTextSeparatorWidth(13,4)); /* window 1 remains independent */
     }
     SBCPUTextSlotsLayout(7,13,1000,4,second); /* apply first gap to second */
     assert(memcmp(first,second,sizeof(first))==0);
-    SBCPUTextSlotsLayout(3,13,187,0,first);
-    SBCPUTextSlotsLayout(3,13,187,12,second);
+    SBCPUTextSlotsLayout(3,13,175,0,first);
+    SBCPUTextSlotsLayout(3,13,175,12,second);
     assert(first[1].y==0 && second[1].y>0); /* gap alone may wrap */
     const double widths[]={64,160,320,390,844};
     /* Values deliberately span decimal/digit/unit thresholds. They cannot enter

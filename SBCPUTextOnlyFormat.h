@@ -44,11 +44,11 @@ static inline NSString *SBCPUTextOnlyRow(SBCPUTextOnlyFields fields,
     if (fields.frequency) [parts addObject:SBCPUTextOnlyCompactValue(frequency, @"MHz", NO)];
     if (fields.fps) {
         NSString *validatedFPS = SBCPUTextOnlyCompactValue([fps isKindOfClass:[NSString class]] ? [fps stringByAppendingString:@"fps"] : nil, @"fps", NO);
-        [parts addObject:[@"FPS " stringByAppendingString:validatedFPS.length >= 3 ? [validatedFPS substringToIndex:validatedFPS.length - 3] : @"--"]];
+        [parts addObject:[[validatedFPS substringToIndex:validatedFPS.length - 3] stringByAppendingString:@"FPS"]];
     }
     if (fields.battery) [parts addObject:[@"BAT " stringByAppendingString:SBCPUTextOnlyCompactValue(battery, @"%", NO)]];
-    if (fields.temperature) [parts addObject:[@"TEMP " stringByAppendingString:SBCPUTextOnlyCompactValue(temperature, @"°C", YES)]];
-    if (fields.current) [parts addObject:[@"I " stringByAppendingString:SBCPUTextOnlyCompactValue(current, @"mA", YES)]];
+    if (fields.temperature) [parts addObject:SBCPUTextOnlyCompactValue(temperature, @"°C", YES)];
+    if (fields.current) [parts addObject:SBCPUTextOnlyCompactValue(current, @"mA", YES)];
     if (fields.sim1) [parts addObject:[@"S1 " stringByAppendingString:SBCPUTextOnlySignal(signals, 1)]];
     if (fields.sim2) [parts addObject:[@"S2 " stringByAppendingString:SBCPUTextOnlySignal(signals, 2)]];
     return [parts componentsJoinedByString:@" "];

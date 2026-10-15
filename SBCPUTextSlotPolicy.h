@@ -6,17 +6,21 @@
 static inline double SBCPUTextDataGap(double gap) {
     return !isfinite(gap) ? 4 : (gap < -15 ? -15 : (gap > 12 ? 12 : gap));
 }
+/* A separator owns real space; negative legacy gaps compact padding only. */
+static inline double SBCPUTextSeparatorWidth(double font, double gap) {
+    return fmax(font*.55, font*.55 + SBCPUTextDataGap(gap));
+}
 typedef struct { double x,y,width,height; } SBCPUTextSlot;
 /* Widths depend only on metric identity/font/configuration, NEVER current values. */
 static inline double SBCPUTextSlotWidth(int metric, double font, double available) {
-    static const int cells[10] = {12,10,9,10,11,13,13,13,10,10};
+    static const int cells[10] = {10,9,6,8,7,9,10,10,10,10};
     double width = cells[metric] * font * .65;
     double usable = available > 0 ? available : 0;
     return width < usable ? width : usable;
 }
 static inline double SBCPUTextSlotsLayout(unsigned mask, double font, double available, double gap, SBCPUTextSlot slots[10]) {
     double x=0,y=0,h=font*1.4;
-    gap=SBCPUTextDataGap(gap);
+    gap=SBCPUTextSeparatorWidth(font,gap);
     for (int i=0;i<10;i++) {
         SBCPUTextSlot empty={0,0,0,0}; slots[i]=empty;
         if (!(mask & (1u<<i))) continue;
@@ -48,11 +52,25 @@ static inline double SBCPUTextSlotsLayoutNetwork(unsigned mask, double font, dou
         x=slots[i].x+slots[i].width; y=slots[i].y;
     }
     double width=SBCPUTextSlotWidth(8,font,available);
-    double candidate=x>0 ? fmax(0,x+SBCPUTextDataGap(gap)) : 0;
+    double candidate=x>0 ? x+SBCPUTextSeparatorWidth(font,gap) : 0;
     if (x>0 && candidate+width>available) { candidate=0; y+=h; }
     SBCPUTextSlot up={candidate,y,width,h}; slots[8]=up;
     SBCPUTextSlot down={candidate,y+h,width,h}; slots[9]=down;
     return y+2*h;
+}
+/* One dot before each adjacent block on the same configured row. No leading,
+   trailing or stacked up/down dot. Disabled metrics have no placeholder. */
+static inline SBCPUTextSlot SBCPUTextSeparatorFrame(unsigned mask, int metric, int dual,
+                                                    const SBCPUTextSlot slots[10]) {
+    SBCPUTextSlot empty={0,0,0,0};
+    if (!(mask&(1u<<metric)) || (dual && metric==9 && (mask&(1u<<8)))) return empty;
+    for (int j=metric-1;j>=0;j--) if (mask&(1u<<j)) {
+        if (slots[j].y!=slots[metric].y) return empty;
+        double end=slots[j].x+slots[j].width;
+        SBCPUTextSlot dot={end,slots[metric].y,slots[metric].x-end,slots[metric].height};
+        return dot.width>0 ? dot : empty;
+    }
+    return empty;
 }
 static inline int SBCPUTextNetworkNeeded(int enabled, int visible, unsigned first, unsigned second) {
     return enabled && visible && ((first|second)&(3u<<8));

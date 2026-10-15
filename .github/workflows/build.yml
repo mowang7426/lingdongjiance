@@ -90,6 +90,14 @@ jobs:
             "$TMP_NEW/$src-cxx"
           done
 
+      - name: Clean fixed separators regression
+        run: |
+          set -e
+          clang -std=c11 -Wall -Wextra -Werror -pedantic tests/text_clean_slots_policy.c -o /tmp/clean-slots
+          /tmp/clean-slots
+          clang++ -x c++ -std=c++11 -Wall -Wextra -Werror -pedantic tests/text_clean_slots_policy.c -o /tmp/clean-slots-cxx
+          /tmp/clean-slots-cxx
+
       - name: Text-only presentation policy regression
         run: |
           set -e

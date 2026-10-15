@@ -10,6 +10,13 @@ for forbidden in ['sizeThatFits','boundingRect','minimumScaleFactor','NSTimer','
     assert forbidden not in layout
 assert 'layoutTextSlots(textOnlyLabel,NO,textGeometry)' in s
 assert 'layoutTextSlots(textOnly2Label,YES,g)' in s
+for token in ['SBCPUTextSeparatorFrame(mask,i,second && textOnly2NetworkDualLine,frames)',
+              'viewWithTag:4970+i', 'dot.text=@"·"', 'dot.adjustsFontSizeToFitWidth=NO',
+              'dot.userInteractionEnabled=NO', 'dot.frame=CGRectMake(frame.x',
+              'dot.realtimeInvertEnabled=NO; [dot removeFromSuperview]']:
+    assert token in layout, token
+assert layout.index('dot.frame=CGRectMake') < layout.index('colorTextSlots(host, second)')
+assert 'monospacedDigitSystemFontOfSize:fs' in layout
 assert s.count('    sampleTextNetwork();')==1
 assert 'floatingTextOnlyMode2 && secondVisible ? textSlotMask(YES) : 0' in s
 clear=s[s.index('static void clearTextSlots'):s.index('static UIColor *textSlotColor')]
