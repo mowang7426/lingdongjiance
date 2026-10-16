@@ -5,7 +5,7 @@ TMP_FPS=$(mktemp -d)
 trap 'rm -rf "$TMP_FPS"' EXIT
 SDK=$(xcrun --sdk iphonesimulator --show-sdk-path)
 ARCH=$(uname -m)
-xcrun --sdk iphonesimulator clang -arch "$ARCH" -isysroot "$SDK" \
+xcrun --sdk iphonesimulator clang++ -arch "$ARCH" -isysroot "$SDK" \
   -mios-simulator-version-min=14.0 -x objective-c++ -std=c++11 -fobjc-arc -fblocks -I. \
   -Wall -Wextra -Werror -framework UIKit -framework Foundation \
   -framework CoreText -framework QuartzCore -framework CoreGraphics \
