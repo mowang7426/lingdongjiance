@@ -8,7 +8,7 @@ ARCH=$(uname -m)
 xcrun --sdk iphonesimulator clang -arch "$ARCH" -isysroot "$SDK" \
   -mios-simulator-version-min=14.0 -fobjc-arc -fblocks -I. \
   -Wall -Wextra -Werror -framework UIKit -framework Foundation \
-  -framework CoreText -framework QuartzCore \
+  -framework CoreText -framework QuartzCore -framework CoreGraphics \
   tests/text_fps_uikit.m SBCPUTextBackdropLabel.m -o "$TMP_FPS/fps-uikit"
 xcrun simctl list devices available -j > "$TMP_FPS/devices.json"
 DEVICE=$(python3 - "$TMP_FPS/devices.json" <<'PY'
