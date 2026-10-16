@@ -14,6 +14,11 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: UIKit FPS glyph budget and clipping regression (iOS Simulator)
+        run: |
+          python3 tests/text_fps_budget_wiring.py
+          bash tests/text_fps_uikit.sh
+
       - name: Read-only P-core production algorithm and A16 evidence regression
         run: |
           set -e

@@ -12,7 +12,7 @@ for key in keys:
  assert row['defaults']=='com.yourname.sbcpufloating'
  assert f'{key} = SBCPUTextDataGap(getFloatPref(CFSTR("{key}"), 4))' in s
  assert f'[key isEqualToString:@"{key}"]' in c
-assert 'second?floatingTextOnly2DataGap:floatingTextOnlyDataGap,second && textOnly2NetworkDualLine,frames' in s
+assert 'second?floatingTextOnly2DataGap:floatingTextOnlyDataGap,second && textOnly2NetworkDualLine,fpsWidth,frames' in s
 assert 'CFPreferencesSetValue' in c and 'CFPreferencesSynchronize' in c
 assert 'notify_post("com.yourname.sbcpufloating.prefschanged")' in c
 assert 'if (floatingView) applyTextOnlyMode();' in s

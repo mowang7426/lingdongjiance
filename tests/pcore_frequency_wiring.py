@@ -19,7 +19,7 @@ for start, end in [('static void updateTextNetwork(', 'static BOOL statusDockSho
     if start not in base or start not in t or end not in t: continue
     assert base[base.index(start):base.index(end, base.index(start))] == t[t.index(start):t.index(end, t.index(start))]
 assert base.count('scheduledTimerWithTimeInterval:') == t.count('scheduledTimerWithTimeInterval:')
-assert 'Version: 5.07\n' in (root / 'control').read_text()
+assert 'Version: 5.08\n' in (root / 'control').read_text()
 for good in ('PStructuralTable', 'PComputeMapped(deltaRows', 'iPhone15,3', 'unverified-chip-mapping', '65536000000000ULL / hz', 'states.count != frequencies.count + 1', 'names.count != 2', 'now - diagnosticTime < 300'):
     assert good in s, good
 assert '@"channels":rows' not in s and '@"rawTables":tables' not in s

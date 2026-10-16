@@ -7,6 +7,17 @@ int main(void) {
     assert(SBCPUTextDataGap(-1)==-1 && SBCPUTextDataGap(13)==12);
     assert(SBCPUTextDataGap(2.5)==2.5 && SBCPUTextDataGap(4)==4);
     SBCPUTextSlot first[10],second[10];
+    for (int fs=8;fs<=24;fs++) {
+        assert(SBCPUTextSlotWidth(2,fs,1000)==fs*4.5+2);
+        assert(SBCPUTextSlotWidth(2,fs,20)==20); /* narrow configurations stay bounded */
+        double configured=fs*4.5+5;
+        SBCPUTextSlotsLayoutNetworkFPS(1023,fs,1000,4,0,configured,first);
+        SBCPUTextSlotsLayoutNetworkFPS(1023,fs,1000,4,0,configured,second);
+        assert(memcmp(first,second,sizeof(first))==0);
+        assert(first[2].width==configured);
+        for (int i=0;i<10;i++) if (i!=2)
+            assert(first[i].width==SBCPUTextSlotWidth(i,fs,1000));
+    }
     SBCPUTextSlotsLayout(7,13,1000,4,first);
     /* Default starts match 4.97 widths (content + 4pt trailing padding). */
     assert(first[1].x==10*13*.65+SBCPUTextSeparatorWidth(13,4));

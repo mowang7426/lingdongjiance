@@ -6,6 +6,7 @@
 #import "SBCPUTextOnlyFormat.h"
 #import "SBCPUTextOnlyTypography.h"
 #import "SBCPUTextSlotPolicy.h"
+#import "SBCPUTextFPSBudget.h"
 #import "SBCPUTextOnlyCurrent.h"
 #import "SBCPUTextNetwork.h"
 #import <net/if_dl.h>
@@ -2501,7 +2502,8 @@ static CGSize layoutTextSlots(SBCPUTextBackdropLabel *host, BOOL second, SBCPUTe
     UIFont *font=[UIFont monospacedDigitSystemFontOfSize:fs weight:(second?textOnly2Bold:textOnlyBold)?UIFontWeightBold:UIFontWeightRegular];
     CGFloat available=MAX(1,g.width-g.left-g.right);
     SBCPUTextSlot frames[10];
-    CGFloat height=SBCPUTextSlotsLayoutNetwork(mask,fs,available,second?floatingTextOnly2DataGap:floatingTextOnlyDataGap,second && textOnly2NetworkDualLine,frames);
+    CGFloat fpsWidth=SBCPUTextFPSConfiguredWidth(font);
+    CGFloat height=SBCPUTextSlotsLayoutNetworkFPS(mask,fs,available,second?floatingTextOnly2DataGap:floatingTextOnlyDataGap,second && textOnly2NetworkDualLine,fpsWidth,frames);
     NSMutableArray *parts=[NSMutableArray array];
     for (int i=0;i<10;i++) {
         SBCPUTextBackdropLabel *slot=(id)[host viewWithTag:4950+i];
