@@ -2,7 +2,7 @@
 #include <string.h>
 #include "../SBCPUTextSlotPolicy.h"
 int main(void) {
-    const char *values[]={"0","--","-3mA","-99999mA","999FPS","999999999999999999mA","999B/s","1.0K/s","99.9M/s","1.0G/s"};
+    const char *values[]={"0","--","-3mA","-99999mA","FPS0","FPS60","FPS120","FPS--","FPS999","999999999999999999mA","999B/s","1.0K/s","99.9M/s","1.0G/s"};
     const double widths[]={64,320,390,844};
     for (unsigned mask=0;mask<1024;mask++) for (int dual=0;dual<2;dual++)
     for (int fs=8;fs<=24;fs+=4) for (unsigned w=0;w<4;w++) {
