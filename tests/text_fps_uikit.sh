@@ -6,7 +6,7 @@ trap 'rm -rf "$TMP_FPS"' EXIT
 SDK=$(xcrun --sdk iphonesimulator --show-sdk-path)
 ARCH=$(uname -m)
 xcrun --sdk iphonesimulator clang -arch "$ARCH" -isysroot "$SDK" \
-  -mios-simulator-version-min=14.0 -fobjc-arc -fblocks -I. \
+  -mios-simulator-version-min=14.0 -x objective-c++ -std=c++11 -fobjc-arc -fblocks -I. \
   -Wall -Wextra -Werror -framework UIKit -framework Foundation \
   -framework CoreText -framework QuartzCore -framework CoreGraphics \
   tests/text_fps_uikit.m SBCPUTextBackdropLabel.m -o "$TMP_FPS/fps-uikit"

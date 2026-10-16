@@ -25,14 +25,14 @@ static inline CGFloat SBCPUTextFPSConfiguredWidth(UIFont *font) {
     NSNumber *cached=[cache objectForKey:font];
     if (cached) return cached.doubleValue;
     CGFloat extent=SBCPUTextFPSGlyphExtent(@"FPS--",font);
-    /* Exhaust all three-digit templates; shorter forms are included explicitly.
+    /* Exhaust all FPS0..FPS999 templates, including shorter forms.
        This also handles replacement fonts with non-uniform digit advances. */
     for (int n=0;n<1000;n++) {
-        NSString *template=[NSString stringWithFormat:@"FPS%d",n];
-        extent=MAX(extent,SBCPUTextFPSGlyphExtent(template,font));
+        NSString *sampleTemplate=[NSString stringWithFormat:@"FPS%d",n];
+        extent=MAX(extent,SBCPUTextFPSGlyphExtent(sampleTemplate,font));
     }
-    for (NSString *template in @[@"FPS0",@"FPS60",@"FPS99"])
-        extent=MAX(extent,SBCPUTextFPSGlyphExtent(template,font));
+    for (NSString *sampleTemplate in @[@"FPS0",@"FPS60",@"FPS99"])
+        extent=MAX(extent,SBCPUTextFPSGlyphExtent(sampleTemplate,font));
     CGFloat width=MAX(SBCPUTextSlotWidth(2,font.pointSize,CGFLOAT_MAX),ceil(extent)+2);
     [cache setObject:@(width) forKey:font];
     return width;
