@@ -129,7 +129,10 @@ int main(int argc,char **argv){@autoreleasepool{
  if(![mode isEqual:@"vsync-missing-setter"])
   class_addMethod(object_getClass(captureClass),sel_registerName("setFigVirtualDisplayOption:forKey:"),(IMP)VSyncSetter,setterTypes);
  missingVSyncKey=[mode isEqual:@"vsync-missing-key"];
- if([mode isEqual:@"vsync-key-type"])fixtureVSyncKey=(CFStringRef)@120;
+ if([mode isEqual:@"vsync-key-type"]){
+  int invalidKeyNumber=120;
+  fixtureVSyncKey=reinterpret_cast<CFStringRef>(CFNumberCreate(NULL,kCFNumberIntType,&invalidKeyNumber));
+ }
  throwingVSync=[mode isEqual:@"vsync-exception"];
  bool rejectedVSync=[mode hasPrefix:@"vsync-"] && !throwingVSync;
  class_addMethod(writerClass,initWriter,(IMP)Writer,"@@:@@");

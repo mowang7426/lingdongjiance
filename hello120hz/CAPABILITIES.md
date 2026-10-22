@@ -22,7 +22,7 @@
 - 直接审计上传 Core/H120Recording.mm，每个私有方法均 NSMethodSignature 分参数检查（不按含offset整串比较）。BOOL c/B 使用各自原型；核对 CGSize double-double、CMTime qiIq、block @?、返回类型，错误/缺失拒绝并日志。不恢复或整包复制旧分支。
 - 仅 `RPScreenCaptureManagerIOS` 的 systemRecording 真值同步调用域内把真实采样请求间隔改为 `CMTime(1,120)`。只有 `RPMovieWriter.systemRecording` 通过签名检查且真值的同步 setup 内修改视频 writer 参数；音频/第三方/嵌套非系统/域外原样。
 - VTCompressionSessionCreate/VTSessionSetProperty/Invalidate 使用公共头精确ABI；仅在上述系统 writer 同步域内成功创建的编码器被标记，再调用真实 VTSessionSetProperty 请求120，保存真实 create/set OSStatus。标记随 session 身份延续到异步 property 调用，而非全进程TLS；最多持有8个会话防止裸指针复用，失效/关闭清理。非录屏编码器不改。
-- **限制**：异步“创建”capture/encoder 的来源上下文没有可证实的目标 iOS 私有符号/对象链，不能用全局“正在录屏”冒充系统会话。此时失败关闭，日志 systemContext=false。上传 VSync setter 是类级全局且返回void，没有已证实可恢复/会话级API，故不写它，日志 `class-wide-setter-not-session-safe` / statusAvailable=false，不能伪称VSync成功。当前无法保证源端120，不能保证真120帧；只写编码元数据也不算达成。
+- **限制**：异步“创建”capture/encoder 的来源上下文没有可证实的目标 iOS 私有符号/对象链，不能用全局“正在录屏”冒充系统会话。此时失败关闭，日志 systemContext=false。VSync setter 是类级全局且返回void；full2 因不可恢复而未调用，full3 已恢复下述受控请求，但没有已证实的恢复/会话级API。日志 statusAvailable=false，不能伪称系统接受了VSync120。当前无法保证源端120，不能保证真120帧；只写编码元数据也不算达成。
 
 - **full3 已按原包可验证证据恢复采集端请求**：系统录屏同步 capture factory 且目标 setter 精确匹配 `void(id,id,id)`、VSync key 存在且为 CFString 时，实际发送 `setFigVirtualDisplayOption:@120 forKey:key`；记录调用完成但不伪造接受状态。缺 key、类型、方法签名、异常均 fail-closed 并记录原因；关闭/非录屏/异步路径不调用。
 - 该 setter 是类级且没有已证实 getter/恢复 key；full3 不猜 nil/60，不自动 kill/注销/重启。成功请求后关闭开关或结束录屏仍可能影响同 replayd 后续捕获，必须用户主动用越狱管理器重载 replayd；注销 SpringBoard 不等于重载 replayd。
@@ -34,7 +34,7 @@
 
 需提供开启与关闭各5–10秒 **未经聊天平台转码的原始录屏文件**及事件日志、机型/iOS build/越狱环境。分别检查编码请求、输出PTS间隔/帧数和独立画面帧（重复画面不算真实120），截图58.78FPS/5s只能证明旧输出约60，不能定位采集源/编码器。CI仅验证替身链路、ABI编译/签名与包结构，不能替代目标机实测。
 
-上传 backboardd preferred_frame_duration/hardware_minimum_frame_duration 的 uint32_t 返回 ABI 仅凭 mangled 符号无法证实。已有本地公开 QuartzCore 头/符号和 CADisplayLink/DynamicFrameRateSource 反编译证据支持客户端 CAFrameRateRange 输入，但没有后台两个函数的返回约定证据。因此未安装后台 Hook、不注入 backboardd；这是显式未实现的后台 cadence，不宣称完整版120或所有硬件生效。需目标 iOS build 的这两个方法反汇编/调用点与量纲、真机符号解析和帧率轨迹后方可补齐，不冒猜 ABI 风险。
+原包审计已确认 backboardd preferred_frame_duration 替换函数通过 w0 返回32位整数，并存在 hardware_minimum_frame_duration 调用链；这比仅凭 mangled 符号更进一步，但尚未取得目标 iOS 两个系统函数的返回约定、量纲与调用点证据。已有本地公开 QuartzCore 头/符号和 CADisplayLink/DynamicFrameRateSource 反编译证据支持客户端 CAFrameRateRange 输入。因此未安装后台 Hook、不注入 backboardd；这是显式未实现的后台 cadence，不宣称完整版120或所有硬件生效。需目标 iOS build 的这两个方法反汇编/调用点与量纲、真机符号解析和帧率轨迹后方可补齐，不冒猜目标系统 ABI 风险。
 
 ## 集成隔离与安装
 
