@@ -5,14 +5,30 @@
 #include <fcntl.h>
 #include <mach-o/loader.h>
 #include <mach-o/fat.h>
+#include <sys/stat.h>
 
 static NSString *H120FileCheck(NSString *path) {
     if (!path) return @"path resolver returned nil";
     int fd = open(path.fileSystemRepresentation, O_RDONLY | O_NOFOLLOW | O_CLOEXEC);
     int error = fd < 0 ? errno : 0;
     if (fd >= 0) close(fd);
-    return [NSString stringWithFormat:@"%@ : %@ (errno=%d %s)", path,
-        error ? @"unreadable/missing" : @"readable", error, strerror(error)];
+    NSMutableString *result = [NSMutableString stringWithFormat:@"%@ : %@ (O_NOFOLLOW errno=%d %s)", path,
+        error == ELOOP ? @"nofollow-open refused (follow check below)" : error ? @"unreadable/missing" : @"readable", error, strerror(error)];
+    struct stat st;
+    if (lstat(path.fileSystemRepresentation, &st) == 0 && S_ISLNK(st.st_mode)) {
+        char link[4096]; ssize_t size = readlink(path.fileSystemRepresentation, link, sizeof(link) - 1);
+        if (size >= 0) { link[size] = 0; [result appendFormat:@"; final-component symlink -> %s", link]; }
+        else [result appendFormat:@"; readlink errno=%d", errno];
+    }
+    if (error == ELOOP) {
+        // O_NOFOLLOW itself returns ELOOP for a valid final-component symlink.
+        // A separate read-only follow check distinguishes that from a real loop.
+        int followed = open(path.fileSystemRepresentation, O_RDONLY | O_NONBLOCK | O_CLOEXEC);
+        int followError = followed < 0 ? errno : 0;
+        if (followed >= 0) close(followed);
+        [result appendFormat:@"; follow-open errno=%d %s (Settings only; O_NOFOLLOW ELOOP alone is NOT proof of a symlink cycle or replayd load failure)", followError, strerror(followError)];
+    }
+    return result;
 }
 static void H120AppendMachO(NSMutableString *text, NSString *path) {
     NSData *data = path ? [NSData dataWithContentsOfFile:path] : nil;
@@ -57,7 +73,7 @@ static void H120AppendMachO(NSMutableString *text, NSString *path) {
     }
 }
 static NSString *H120RecordingSelfCheck(void) {
-    NSMutableString *text = [NSMutableString stringWithString:@"Hello120Hz Settings self-check 5.09+full4 (NOT daemon proof)\n"];
+    NSMutableString *text = [NSMutableString stringWithString:@"Hello120Hz Settings self-check 5.09+full5 (NOT daemon proof)\n"];
     NSDictionary *prefs = H120ReadPreferences();
     [text appendFormat:@"Settings uid=%u pid=%d\npreferences=%@\nmaster=%d recording=%d\n", geteuid(), getpid(),
         H120FileCheck(H120PreferencesPath()), [prefs[@"wantsEnable"] boolValue], [prefs[@"recordingEnabled"] boolValue]];
@@ -95,72 +111,4 @@ static NSString *H120RecordingSelfCheck(void) {
     [text appendString:@"No preference changes, recording, process kill, respring or sandbox modifications performed.\n"];
     return text;
 }
-@interface H120RecordingDiagnosticController : UIViewController
-@property(nonatomic, strong) UITextView *output;
-@property(nonatomic, copy) NSString *report;
-@end
-@implementation H120RecordingDiagnosticController
-- (void)viewDidLoad {
-    [super viewDidLoad]; self.title = H120Text(@"Recording Diagnostics", @"录屏诊断");
-    self.view.backgroundColor = UIColor.systemBackgroundColor;
-    self.output = [[UITextView alloc] initWithFrame:self.view.bounds];
-    self.output.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
-    self.output.editable = NO; self.output.font = [UIFont monospacedSystemFontOfSize:12 weight:UIFontWeightRegular];
-    [self.view addSubview:self.output];
-    self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc] initWithTitle:H120Text(@"Export", @"导出诊断")
-        style:UIBarButtonItemStylePlain target:self action:@selector(exportDiagnostic)];
-    self.report = @"设置端正在自检；等待 replayd 与 SpringBoard 真实应答（各1.5秒），尚未证明模块已加载…\n";
-    self.output.text = self.report;
-    __weak H120RecordingDiagnosticController *weakSelf = self;
-    dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
-        NSString *check = H120RecordingSelfCheck();
-        dispatch_async(dispatch_get_main_queue(), ^{
-            H120RecordingDiagnosticController *owner = weakSelf; if (!owner) return;
-            owner.report = [check stringByAppendingString:@"\n等待模块握手回执…\n"]; owner.output.text = owner.report;
-            H120DiagnosticProbe(1.5, ^(uint64_t state, unsigned status) {
-                H120RecordingDiagnosticController *target = weakSelf; if (!target) return;
-                NSMutableString *result = [check mutableCopy];
-                [result appendFormat:@"\nDarwin notify transport status=%u; rawState=%016llx\n", status, (unsigned long long)state];
-                if (status != 0) [result appendString:@"通信注册/状态读写失败；不能据此判断是否加载。\n"];
-                else if (!state) [result appendString:@"未收到应答：可能未加载/通信受限。已发送 ping 不等于已收到应答。\n"];
-                else {
-                    unsigned version = (unsigned)(state >> 48), error = (state >> 12) & 4095;
-                    [result appendFormat:@"收到录屏模块真实应答：version=%u (%@), replayd pid=%llu\nhooks=0x%llx enabled=%d preferencesReadable=%d\nlog errno=%u (%s)\n", version,
-                        version == H120_DIAGNOSTIC_VERSION ? @"5.09+full4" : @"版本不匹配", (state >> 24) & 0xffffff,
-                        (state >> 6) & 15, (int)((state >> 10) & 1), (int)((state >> 11) & 1), error, strerror(error)];
-                    [result appendString:@"收到应答只证明该版本模块在进程中响应，不证明系统接受120或真实输出120。errno=0且hooks=0也可能处于初始化阶段。\n"];
-                }
-                for (NSString *path in @[@H120_RECORDING_LOG_PATH, H120JailbreakPath(@"/var/mobile/Library/Logs/Hello120Hz/recording.jsonl") ?: @""]) {
-                    if (!path.length) continue;
-                    int fd = open(path.fileSystemRepresentation, O_RDONLY | O_NOFOLLOW | O_CLOEXEC);
-                    if (fd < 0) { [result appendFormat:@"\nlog read %@: errno=%d %s\n", path, errno, strerror(errno)]; continue; }
-                    char buffer[131073]; ssize_t count = read(fd, buffer, 131072); int error = count < 0 ? errno : 0; close(fd);
-                    NSString *logs = count >= 0 ? [[NSString alloc] initWithBytes:buffer length:count encoding:NSUTF8StringEncoding] : nil;
-                    [result appendFormat:@"\n--- %@ (max128KiB, read errno=%d) ---\n%@\n", path, error, logs ?: @"unavailable/non-UTF8"];
-                }
-                target.report = result; target.output.text = result;
-                H120DiagnosticProbeNamed(H120_CLIENT_DIAGNOSTIC_PING, 1.5, ^(uint64_t client, unsigned transport) {
-                    H120RecordingDiagnosticController *page = weakSelf; if (!page) return;
-                    [result appendFormat:@"\nSpringBoard 主模块握手 transport=%u raw=%016llx\n", transport, (unsigned long long)client];
-                    if (transport || !client) [result appendString:@"主模块未收到应答：可能未加载/通信受限；Settings 中读到120不代表主模块生效。\n"];
-                    else [result appendFormat:@"主模块真实应答 version=%llu (%@), PID=%llu, installed client hooks=%llu/8, enabled=%d, preferencesReadable=%d, current requested targetFPS=%llu\n该应答仅验证SpringBoard载入与当前请求策略，不证明第三方应用已注入，也不是面板物理Hz。\n", client >> 48,
-                        (client >> 48) == H120_DIAGNOSTIC_VERSION ? @"5.09+full4" : @"版本不匹配", (client >> 24) & 0xffffff,
-                        (client >> 6) & 15, (int)((client >> 10) & 1), (int)((client >> 11) & 1), (client >> 12) & 4095];
-                    page.report = result; page.output.text = result;
-                });
-            });
-        });
-    });
-}
-- (void)exportDiagnostic {
-    NSString *name = [NSString stringWithFormat:@"Hello120Hz-diagnostic-%@.txt", NSUUID.UUID.UUIDString];
-    NSURL *file = [NSURL fileURLWithPath:[NSTemporaryDirectory() stringByAppendingPathComponent:name]];
-    NSError *error = nil;
-    if (![(self.report ?: @"") writeToURL:file atomically:YES encoding:NSUTF8StringEncoding error:&error]) {
-        H120Alert(self, [NSString stringWithFormat:@"导出失败：%@", error.localizedDescription]); return;
-    }
-    UIActivityViewController *share = [[UIActivityViewController alloc] initWithActivityItems:@[file] applicationActivities:nil];
-    share.popoverPresentationController.barButtonItem = self.navigationItem.rightBarButtonItem;
-    [self presentViewController:share animated:YES completion:nil];
-}
-@end
+#include "H120DiagnosticSessionController.inc"

@@ -5,7 +5,7 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-#define H120_DIAGNOSTIC_VERSION 50904u
+#define H120_DIAGNOSTIC_VERSION 50905u
 #define H120_RECORDING_LOG_DIRECTORY "/var/mobile/Library/Logs/Hello120Hz"
 #define H120_RECORDING_LOG_PATH H120_RECORDING_LOG_DIRECTORY "/recording.jsonl"
 /* Numeric state only; no media, bundle identifiers or user content. */

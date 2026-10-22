@@ -470,7 +470,7 @@ static NSDictionary *H120Row(NSString *identifier, NSString *title, NSString *su
         @"record.circle", 66, NO, NO) mutableCopy];
     recording[@"h120Toggle"] = @([preferences[@"recordingEnabled"] boolValue]);
     self.coordinator.sections = @[@[enabled, rate, recording], actions];
-    self.coordinator.footers = @[H120Text(@"Source 3.3.3-3 · LingDong 5.09+full4", @"来源 3.3.3-3 · 灵动 5.09+full4"), @""];
+    self.coordinator.footers = @[H120Text(@"Source 3.3.3-3 · LingDong 5.09+full5", @"来源 3.3.3-3 · 灵动 5.09+full5"), @""];
     [self.settingsTable reloadData];
 }
 - (void)selectIdentifier:(NSString *)identifier {

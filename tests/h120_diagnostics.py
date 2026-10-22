@@ -5,6 +5,11 @@ import subprocess, tempfile
 root = Path(__file__).resolve().parents[1]
 with tempfile.TemporaryDirectory() as tmp:
     test = str(Path(tmp)/'diagnostics')
+    session = str(Path(tmp)/'session')
+    for compiler, standard, language in (('clang','c11','c'), ('clang++','c++11','c++')):
+        subprocess.run([compiler,'-x',language,'-std='+standard,'-Wall','-Wextra','-Werror','-pedantic',
+            str(root/'tests/h120_diagnostic_session.c'),'-o',session], check=True)
+        subprocess.run([session], check=True)
     subprocess.run(['clang','-std=c11','-fblocks','-Wall','-Wextra','-Werror',
         str(root/'tests/h120_diagnostics_native.c'),
         str(root/'hello120hz/Shared/H120RecordingDiagnostics.c'),'-o',test], check=True)

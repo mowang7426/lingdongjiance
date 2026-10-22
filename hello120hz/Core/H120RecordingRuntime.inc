@@ -119,7 +119,7 @@ __attribute__((constructor)) static void InitializeRecording(void) {
     H120DiagnosticStart();
     dispatch_async(dispatch_get_main_queue(), ^{
         @autoreleasepool {
-            Event(@"module-load", @{@"version":@"5.09+full4", @"process":@"replayd", @"uid":@(geteuid()),
+            Event(@"module-load", @{@"version":@"5.09+full5", @"process":@"replayd", @"uid":@(geteuid()),
                 @"cadenceInstalled":@NO, @"cadenceReason":@"original-w0-ABI-proven-target-system-ABI-unverified"});
             ReloadRecording();
             ObserveRecordingPreferences();
