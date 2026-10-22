@@ -135,7 +135,13 @@ static NSString *H120RecordingSelfCheck(void) {
     });
 }
 - (void)exportDiagnostic {
-    UIActivityViewController *share = [[UIActivityViewController alloc] initWithActivityItems:@[self.report ?: @""] applicationActivities:nil];
+    NSString *name = [NSString stringWithFormat:@"Hello120Hz-diagnostic-%@.txt", NSUUID.UUID.UUIDString];
+    NSURL *file = [NSURL fileURLWithPath:[NSTemporaryDirectory() stringByAppendingPathComponent:name]];
+    NSError *error = nil;
+    if (![(self.report ?: @"") writeToURL:file atomically:YES encoding:NSUTF8StringEncoding error:&error]) {
+        H120Alert(self, [NSString stringWithFormat:@"导出失败：%@", error.localizedDescription]); return;
+    }
+    UIActivityViewController *share = [[UIActivityViewController alloc] initWithActivityItems:@[file] applicationActivities:nil];
     share.popoverPresentationController.barButtonItem = self.navigationItem.rightBarButtonItem;
     [self presentViewController:share animated:YES completion:nil];
 }
