@@ -411,6 +411,8 @@ static NSDictionary *H120Row(NSString *identifier, NSString *title, NSString *su
         if (!H120WritePreference(@"wantsEnable", @(enabled))) {
             H120Alert(owner, H120Text(@"Could not save preferences.", @"无法保存配置。"));
             [owner reloadValues];
+        } else if (!enabled && [H120ReadPreferences()[@"recordingEnabled"] boolValue]) {
+            H120Alert(owner, H120Text(@"New recording requests are disabled. If VSync was requested, end recording and manually reload replayd through your jailbreak manager; disabling does not reset class-wide state. Respring is not a replayd reload.", @"已停止新的录屏修改。若已请求过 VSync，结束录屏后需通过越狱管理器手动重载 replayd；关闭开关不能复原类级状态，注销不等于重载 replayd。"));
         }
     };
     self.coordinator.recordingToggleChanged = ^(BOOL enabled) {
@@ -418,6 +420,8 @@ static NSDictionary *H120Row(NSString *identifier, NSString *title, NSString *su
         if (!H120WritePreference(@"recordingEnabled", @(enabled))) {
             H120Alert(owner, H120Text(@"Could not save preferences.", @"无法保存配置。"));
             [owner reloadValues];
+        } else {
+            H120Alert(owner, H120Text(@"System recording test: VSync is class-wide. After recording ends or either switch is disabled, use your jailbreak manager to reload replayd to restore its original state. No automatic process restart; Respring is not sufficient. Later captures may inherit the option until reloaded.", @"系统录屏测试：VSync 为类级状态。录屏结束或关闭任一开关后，请使用越狱管理器手动重载 replayd 才能恢复原状态；本插件不自动重启进程，注销不保证生效。重载前后续捕获仍可能继承该选项。"));
         }
     };
     self.settingsTable = H120CreateTable(self, self.coordinator);
@@ -458,11 +462,11 @@ static NSDictionary *H120Row(NSString *identifier, NSString *title, NSString *su
         : H120Text(@"Enable Debug HUD", @"打开调试"), H120Text(@"Show system-level debug information", @"显示系统级的调试信息"),
         @"lasso", 50, YES, NO)];
     NSMutableDictionary *recording = [H120Row(@"recording", H120Text(@"120 FPS Recording", @"录屏 120 帧"),
-        H120Text(@"System recording · master switch required · diagnostic test", @"仅系统录屏 · 需同时启用调整 · 诊断测试版"),
+        H120Text(@"System recording test · reload replayd after use/off", @"系统录屏测试 · 结束或关闭后需手动重载 replayd"),
         @"record.circle", 66, NO, NO) mutableCopy];
     recording[@"h120Toggle"] = @([preferences[@"recordingEnabled"] boolValue]);
     self.coordinator.sections = @[@[enabled, rate, recording], actions];
-    self.coordinator.footers = @[H120Text(@"Source 3.3.3-3 · LingDong 5.09+full2", @"来源 3.3.3-3 · 灵动 5.09+full2"), @""];
+    self.coordinator.footers = @[H120Text(@"Source 3.3.3-3 · LingDong 5.09+full3", @"来源 3.3.3-3 · 灵动 5.09+full3"), @""];
     [self.settingsTable reloadData];
 }
 - (void)selectIdentifier:(NSString *)identifier {

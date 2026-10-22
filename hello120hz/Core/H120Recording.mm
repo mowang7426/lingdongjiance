@@ -111,18 +111,59 @@ void *SetRecordingContext(pthread_key_t key, bool systemRecording) {
     return previous;
 }
 
+// VSync is a class-wide private option. No getter/reset contract has been verified.
+// A completed void call means only "requested", never an OSStatus/accepted FPS.
+// Once attempted, restoration requires an explicit user-initiated replayd reload.
+std::atomic<bool> vsyncReloadRequired(false);
+bool RequestCaptureVSync(id receiver) {
+    SEL setter = sel_registerName("setFigVirtualDisplayOption:forKey:");
+    NSMethodSignature *signature = Signature((Class)receiver, setter, true);
+    Method method = class_getClassMethod((Class)receiver, setter);
+    const char *encoding = method ? method_getTypeEncoding(method) : nullptr;
+    NSString *reason = @"signature-rejected";
+    bool requested = false, attempted = false;
+    if (!method) reason = @"setter-missing";
+    else if (HasArguments(signature, 4) && ExactType(signature.methodReturnType, "v") &&
+             ObjectType([signature getArgumentTypeAtIndex:2]) &&
+             ObjectType([signature getArgumentTypeAtIndex:3])) {
+        // The exported variable contains the CFStringRef; the dlsym address is not the key.
+        auto symbol = reinterpret_cast<CFStringRef *>(dlsym(RTLD_DEFAULT, "kFigVirtualDisplaySinkOption_VSyncRate"));
+        if (!symbol || !*symbol) reason = @"key-missing";
+        else if (CFGetTypeID(*symbol) != CFStringGetTypeID()) reason = @"key-type-rejected";
+        else {
+            attempted = true;
+            vsyncReloadRequired.store(true, std::memory_order_release);
+            @try {
+                using Setter = void (*)(id, SEL, id, id);
+                reinterpret_cast<Setter>(objc_msgSend)(receiver, setter, @(kRecordingFPS), (id)*symbol);
+                requested = true;
+                reason = @"void-call-completed-not-acceptance";
+            } @catch (NSException *exception) {
+                (void)exception; // Never log exception payload: it can contain private data.
+                reason = @"setter-exception-state-unknown";
+            }
+        }
+    }
+    Event(@"vsync-request", @{@"class":@"FigScreenCaptureController", @"encoding":encoding ? @(encoding) : @"missing",
+        @"attempted":@(attempted), @"requested":@(requested), @"requestedFPS":@120,
+        @"statusAvailable":@NO, @"reason":reason, @"restorePolicy":@"manual-replayd-reload-no-verified-reset",
+        @"reloadRequired":@(vsyncReloadRequired.load(std::memory_order_acquire))});
+    return requested;
+}
+
 id CaptureFactory(id receiver, SEL selector, CGSize size, CMTime interval) {
     bool active = ActiveRecordingContext(captureContextKey);
     bool vsync = false;
-    // The uploaded setter is class-wide and returns void. Without a verified
-    // per-session/reversible option API it can leak 120 into third-party capture.
-    // Request a real 1/120 sampling interval; diagnose VSync rather than leak state.
-    if (active) interval = CMTimeMake(1, kRecordingFPS);
+    // Called only inside the signature-verified synchronous system-recording entry.
+    // Disabled/third-party capture never invokes the setter; sticky class state is
+    // deliberately NOT reset with guessed nil/60 values when leaving this scope.
+    if (active) { vsync = RequestCaptureVSync(receiver); interval = CMTimeMake(1, kRecordingFPS); }
     using Factory = id (*)(id, SEL, CGSize, CMTime);
     id result = reinterpret_cast<Factory>(originalCaptureFactory)(receiver, selector, size, interval);
     Event(@"capture-request", @{@"active":@(active), @"intervalValue":@(interval.value),
         @"intervalScale":@(interval.timescale), @"vsyncRequested":@(vsync),
-        @"vsyncStatusAvailable":@NO, @"vsyncReason":@"class-wide-setter-not-session-safe", @"resultNonNil":@(result != nil)});
+        @"vsyncStatusAvailable":@NO, @"reloadRequired":@(vsyncReloadRequired.load(std::memory_order_acquire)),
+        @"resultNonNil":@(result != nil)});
     return result;
 }
 

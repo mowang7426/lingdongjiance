@@ -277,6 +277,7 @@ jobs:
             dpkg-deb -c "$deb" | grep -E 'PreferenceBundles/SBCPUPrefs\.bundle|PreferenceLoader/Preferences/SBCPUPrefs\.plist'
             STAGED_ICONS=$(mktemp -d)
             dpkg-deb -x "$deb" "$STAGED_ICONS"
+            dpkg-deb -e "$deb" "$STAGED_ICONS/DEBIAN"
             python3 tests/thermal_removed.py --staged "$STAGED_ICONS"
             python3 tests/panel_branding.py --staged "$STAGED_ICONS"
             python3 tests/preferences_navigation.py --staged "$STAGED_ICONS"

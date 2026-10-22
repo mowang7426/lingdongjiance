@@ -1,4 +1,4 @@
-# 最终功能矩阵（5.09+full2 验证版）
+# 最终功能矩阵（5.09+full3 录屏修复测试版）
 
 |截图项目|实现/偏好|验证和边界|
 |---|---|---|
@@ -9,7 +9,7 @@
 |打开/关闭调试|原 CARenderServerGetDebugOption/SetDebugOption/SetDebugValue 手动动作|符号存在才调用；缺失提示；系统权限/真实 HUD 须真机验证，安装不会自动打开|
 |重置|原 wantsEnable=false,wantsFPS=120,selectedApps=[]，不等同切换注入模式|偏好持久化与通知一致性测试|
 |注销/点我生效|用户主动点击并二次确认后原 sbreload 路径调用；失败提示越狱管理器|没有执行实际注销；安装无新增自动注销|
-|来源版本说明|来源3.3.3-3、灵动5.09+full2 分开显示|非声称灵动3.3.3-3|
+|来源版本说明|来源3.3.3-3、灵动5.09+full3 分开显示|非声称灵动3.3.3-3|
 
 ## 明确不包含/未证实
 
@@ -24,7 +24,9 @@
 - VTCompressionSessionCreate/VTSessionSetProperty/Invalidate 使用公共头精确ABI；仅在上述系统 writer 同步域内成功创建的编码器被标记，再调用真实 VTSessionSetProperty 请求120，保存真实 create/set OSStatus。标记随 session 身份延续到异步 property 调用，而非全进程TLS；最多持有8个会话防止裸指针复用，失效/关闭清理。非录屏编码器不改。
 - **限制**：异步“创建”capture/encoder 的来源上下文没有可证实的目标 iOS 私有符号/对象链，不能用全局“正在录屏”冒充系统会话。此时失败关闭，日志 systemContext=false。上传 VSync setter 是类级全局且返回void，没有已证实可恢复/会话级API，故不写它，日志 `class-wide-setter-not-session-safe` / statusAvailable=false，不能伪称VSync成功。当前无法保证源端120，不能保证真120帧；只写编码元数据也不算达成。
 
-### 现场诊断与生效步骤
+- **full3 已按原包可验证证据恢复采集端请求**：系统录屏同步 capture factory 且目标 setter 精确匹配 `void(id,id,id)`、VSync key 存在且为 CFString 时，实际发送 `setFigVirtualDisplayOption:@120 forKey:key`；记录调用完成但不伪造接受状态。缺 key、类型、方法签名、异常均 fail-closed 并记录原因；关闭/非录屏/异步路径不调用。
+- 该 setter 是类级且没有已证实 getter/恢复 key；full3 不猜 nil/60，不自动 kill/注销/重启。成功请求后关闭开关或结束录屏仍可能影响同 replayd 后续捕获，必须用户主动用越狱管理器重载 replayd；注销 SpringBoard 不等于重载 replayd。
+- full3 恢复了 `usr/libexec/hello120hz-install` 实际最终 stage 落包，并在包解包测试中验证 postinst 调用、权限和独立过滤器隔离。
 
 安装匹配越狱环境的包，打开 设置→灵动监测→Hello 120Hz，开启上述两个开关。首次安装独立模块需要 **replayd 的一个新进程**加载；注销 SpringBoard 不保证重载 replayd。本包不会杀进程、注销或重启；请使用越狱管理器明确支持的手动守护进程重载方式，或自行选择重启并重新越狱。已载入模块后的开关变化无需再次重载；停止当前录屏，下一段录屏验收关闭/开启（不会改写正在录制会话已接受的源参数）。原桌面注入变化仍按原说明注销/重开应用。
 
@@ -36,6 +38,6 @@
 
 ## 集成隔离与安装
 
-仅原灵动根页新增一条 Hello 原 controller 入口；原浮窗/充电/温控/CPU 源码和反色未修改。新核心作为独立子工程；缺省配置只系统进程，开启全局由用户主动操作。两种包使用各自 Rootless/RootHide 路径解析。新过滤器安装脚本只操作自己的精确文件，不更改现有父目录权限/所有者，不覆盖用户已有注入配置或 wantsEnable，不自行安装到设备。包版本 5.09+full2 比旧5.10/5.11低，包管理器可能要求允许降级。
+仅原灵动根页新增一条 Hello 原 controller 入口；原浮窗/充电/温控/CPU 源码和反色未修改。新核心作为独立子工程；缺省配置只系统进程，开启全局由用户主动操作。两种包使用各自 Rootless/RootHide 路径解析。新过滤器安装脚本只操作自己的精确文件，不更改现有父目录权限/所有者，不覆盖用户已有注入配置或 wantsEnable，不自行安装到设备。包版本 5.09+full3 比旧5.10/5.11低，包管理器可能要求允许降级。
 
 CI 通过仅说明编译、生产策略/控制器测试与打包检查通过，不等于越狱设备实测。真机验收：安装AltList→缺省总开关关闭→选择帧率→启用→验证 UI 动画轨迹；全局切换后用户确认注销并重开第三方；黑名单进程恢复原策略；关闭总开关透传；手动 HUD 打开/关闭；最后用户确认注销。勿用浮窗请求FPS替代面板真实刷新率证据。

@@ -39,7 +39,17 @@ static void FixtureInvalidate(VTCompressionSessionRef) { ++invalidates; }
 static decltype(&VTCompressionSessionCreate) hookedCreate=FixtureCreate;
 static decltype(&VTSessionSetProperty) hookedSet=FixtureSet;
 static decltype(&VTCompressionSessionInvalidate) hookedInvalidate=FixtureInvalidate;
+static CFStringRef fixtureVSyncKey = CFSTR("fixture-VSyncRate");
+static bool missingVSyncKey;
+static int vsyncCalls, vsyncFPS;
+static bool throwingVSync;
+static void VSyncSetter(id,SEL,id value,id key) {
+ assert([value isKindOfClass:NSNumber.class] && key==(id)fixtureVSyncKey);
+ ++vsyncCalls;vsyncFPS=[value intValue];
+ if(throwingVSync)[NSException raise:@"fixture" format:@"setter failure"];
+}
 static void *FixtureDlsym(void *handle,const char *name) {
+ if (!strcmp(name,"kFigVirtualDisplaySinkOption_VSyncRate")) return missingVSyncKey ? nullptr : &fixtureVSyncKey;
  if (!strcmp(name,"VTCompressionSessionCreate")) return (void *)FixtureCreate;
  if (!strcmp(name,"VTSessionSetProperty")) return (void *)FixtureSet;
  if (!strcmp(name,"VTCompressionSessionInvalidate")) return (void *)FixtureInvalidate;
@@ -112,6 +122,16 @@ int main(int argc,char **argv){@autoreleasepool{
  if([mode isEqual:@"bad-time"])factoryTypes="@@:{CGSize=dd}{CMTime=qq}";
  if([mode isEqual:@"bad-return"])factoryTypes="v@:{CGSize=dd}{CMTime=qiIq}";
  class_addMethod(object_getClass(captureClass),factory,(IMP)Capture,factoryTypes);
+ const char *setterTypes = "v32@0:8@16@24";
+ if([mode isEqual:@"vsync-bad-return"])setterTypes="i@:@@";
+ if([mode isEqual:@"vsync-bad-arg"])setterTypes="v@:i@";
+ if([mode isEqual:@"vsync-bad-count"])setterTypes="v@:@";
+ if(![mode isEqual:@"vsync-missing-setter"])
+  class_addMethod(object_getClass(captureClass),sel_registerName("setFigVirtualDisplayOption:forKey:"),(IMP)VSyncSetter,setterTypes);
+ missingVSyncKey=[mode isEqual:@"vsync-missing-key"];
+ if([mode isEqual:@"vsync-key-type"])fixtureVSyncKey=(CFStringRef)@120;
+ throwingVSync=[mode isEqual:@"vsync-exception"];
+ bool rejectedVSync=[mode hasPrefix:@"vsync-"] && !throwingVSync;
  class_addMethod(writerClass,initWriter,(IMP)Writer,"@@:@@");
  const char *startTypes=charABI ? "v64@0:8i16{CGSize=dd}20c36@40@?48@?56" : "v64@0:8i16{CGSize=dd}20B36@40@?48@?56";
  if([mode isEqual:@"bad-block"])startTypes="v@:i{CGSize=dd}B@@@?";
@@ -141,11 +161,16 @@ int main(int argc,char **argv){@autoreleasepool{
   while(H120RecordingActive() && disabledLimit.timeIntervalSinceNow>0)
    [[NSRunLoop currentRunLoop] runUntilDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
   assert(!H120RecordingActive()); // production Darwin notification, no direct reload
-  RunStart(manager,true);RunSetup(movie);assert(interval.timescale==60 && FPS()==60);
+  RunStart(manager,true);RunSetup(movie);assert(interval.timescale==60 && FPS()==60 && vsyncCalls==0);
+  assert(!vsyncReloadRequired.load());
   assert(H120WritePreference(@"recordingEnabled",@YES));ReloadRecording();
   RunStart(manager,true);assert(interval.value==1 && interval.timescale==120);
-  RunStart(manager,false);assert(interval.timescale==60);
-  MakeCapture();assert(interval.timescale==60);
+  assert(vsyncCalls==(rejectedVSync ? 0 : 1));
+  assert(vsyncReloadRequired.load()==!rejectedVSync);
+  if(!rejectedVSync)assert(vsyncFPS==120);
+  int beforeVSync=vsyncCalls;
+  RunStart(manager,false);assert(interval.timescale==60 && vsyncCalls==beforeVSync);
+  MakeCapture();assert(interval.timescale==60 && vsyncCalls==beforeVSync);
   RunSetup(movie);assert(FPS()==120 && lastFPS==120);
   assert([settingsSeen[AVVideoCompressionPropertiesKey][AVVideoAverageBitRateKey] intValue]==12345);
   VTCompressionSessionRef tagged=encoder;
@@ -154,11 +179,16 @@ int main(int argc,char **argv){@autoreleasepool{
   std::thread worker([=]{@autoreleasepool{hookedSet(tagged,kVTCompressionPropertyKey_ExpectedFrameRate,(CFTypeRef)@60);}});worker.join();assert(lastFPS==120);
   systemMovie=false;RunSetup(movie);assert(FPS()==60);hookedSet(encoder,kVTCompressionPropertyKey_ExpectedFrameRate,(CFTypeRef)@60);assert(lastFPS==60);systemMovie=true;
   MakeWriter();assert(FPS()==60);
-  asyncWork=true;RunStart(manager,true);RunSetup(movie);assert(interval.timescale==60 && FPS()==60);asyncWork=false;
+  beforeVSync=vsyncCalls;
+  asyncWork=true;RunStart(manager,true);RunSetup(movie);assert(interval.timescale==60 && FPS()==60 && vsyncCalls==beforeVSync);asyncWork=false;
   throwing=true;@try{RunStart(manager,true);}@catch(NSException *e){(void)e;}@try{RunSetup(movie);}@catch(NSException *e){(void)e;}
   throwing=false;MakeCapture();MakeWriter();assert(interval.timescale==60 && FPS()==60);
   assert(H120WritePreference(@"wantsEnable",@NO));ReloadRecording();
-  RunStart(manager,true);RunSetup(movie);assert(interval.timescale==60 && FPS()==60);
+  beforeVSync=vsyncCalls;
+  RunStart(manager,true);RunSetup(movie);assert(interval.timescale==60 && FPS()==60 && vsyncCalls==beforeVSync);
+  // No guessed 60/nil reset is sent. A class-level attempted write remains sticky
+  // across end-of-synchronous-call and disable, requiring manual process reload.
+  assert(vsyncReloadRequired.load()==!rejectedVSync);
   hookedSet(tagged,kVTCompressionPropertyKey_ExpectedFrameRate,(CFTypeRef)@60);assert(lastFPS==60);
   hookedInvalidate(tagged);assert(invalidates==1);assert(![recordingEncoders containsObject:[NSValue valueWithPointer:tagged]]);
   [manager release];[movie release];
@@ -166,7 +196,15 @@ int main(int argc,char **argv){@autoreleasepool{
  NSString *logs=[NSString stringWithContentsOfFile:[H120JailbreakPath(@"/var/mobile/Library/Logs/Hello120Hz") stringByAppendingPathComponent:@"recording.jsonl"] encoding:NSUTF8StringEncoding error:NULL];
  assert([logs containsString:@"configuration-read"] && [logs containsString:@"method-gate"]);
  if([mode hasPrefix:@"bad-"])assert([logs containsString:@"signature-rejected"]);
- else assert([logs containsString:@"-12900"] && [logs containsString:@"class-wide-setter-not-session-safe"]);
+ else {
+  assert([logs containsString:@"-12900"] && [logs containsString:@"manual-replayd-reload-no-verified-reset"]);
+  if([mode isEqual:@"vsync-missing-key"])assert([logs containsString:@"key-missing"]);
+  else if([mode isEqual:@"vsync-key-type"])assert([logs containsString:@"key-type-rejected"]);
+  else if([mode isEqual:@"vsync-missing-setter"])assert([logs containsString:@"setter-missing"]);
+  else if(throwingVSync)assert([logs containsString:@"setter-exception-state-unknown"]);
+  else if(rejectedVSync)assert([logs containsString:@"signature-rejected"]);
+  else assert([logs containsString:@"void-call-completed-not-acceptance"]);
+ }
  [[NSFileManager defaultManager] removeItemAtPath:fixtureRoot error:NULL];
  printf("PASS production recording reload/signature/context/VT-return/fail-closed: %s\n",argv[1]);
 }return 0;}

@@ -85,6 +85,8 @@ void ReloadRecording(void) {
     Event(@"configuration-read", @{@"master":@(master), @"recording":@(toggle),
         @"enabled":@(master && toggle), @"filePresent":@([[NSFileManager defaultManager] fileExistsAtPath:H120PreferencesPath() ?: @""]),
         @"source":@"explicit-jailbreak-mobile-file-no-CFPreferences-user-cache",
+        @"reloadRequired":@(vsyncReloadRequired.load(std::memory_order_acquire)),
+        @"restorePolicy":@"manual-replayd-reload-no-verified-reset",
         @"blacklistApplied":@NO, @"asyncPropagationSupported":@NO});
     H120InstallRecordingHooks();
     InstallVT();
@@ -107,7 +109,8 @@ void ObserveRecordingPreferences(void) {
 __attribute__((constructor)) static void InitializeRecording(void) {
     @autoreleasepool {
         if (![NSProcessInfo.processInfo.processName isEqualToString:@"replayd"]) return;
-        Event(@"module-load", @{@"version":@"5.09+full2", @"process":@"replayd", @"uid":@(geteuid())});
+        Event(@"module-load", @{@"version":@"5.09+full3", @"process":@"replayd", @"uid":@(geteuid()),
+            @"cadenceInstalled":@NO, @"cadenceReason":@"original-w0-ABI-proven-target-system-ABI-unverified"});
         ReloadRecording();
         ObserveRecordingPreferences();
         _dyld_register_func_for_add_image(RecordingImageAdded);

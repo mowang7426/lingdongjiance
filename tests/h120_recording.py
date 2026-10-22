@@ -17,5 +17,7 @@ else:
  with tempfile.TemporaryDirectory() as tmp:
   p=Path(tmp);(p/'recording.mm').write_text(native)
   subprocess.run(['clang++','-std=c++17','-fno-objc-arc','-fblocks','-framework','Foundation','-framework','AVFoundation','-framework','VideoToolbox','-framework','CoreMedia','-framework','CoreGraphics','-Wall','-Wextra','-Werror','-Wno-deprecated-declarations',str(p/'recording.mm'),'-o',str(p/'test')],check=True)
-  for mode in ['B','c','bad-block','bad-size','bad-time','bad-return','bad-flag','late']:
+  for mode in ['B','c','bad-block','bad-size','bad-time','bad-return','bad-flag','late',
+               'vsync-bad-return','vsync-bad-arg','vsync-bad-count','vsync-missing-setter',
+               'vsync-missing-key','vsync-key-type','vsync-exception']:
    subprocess.run([str(p/'test'),mode],check=True)

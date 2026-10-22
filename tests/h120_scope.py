@@ -51,5 +51,12 @@ if '--staged' in sys.argv:
  for p in stage.rglob('0hello120hz.plist'):
   assert plistlib.loads(p.read_bytes())['Filter']['Executables']==['SpringBoard']
  assert list(stage.rglob('0hello120hzRecording.dylib'))
+ helpers=list(stage.rglob('usr/libexec/hello120hz-install'));assert len(helpers)==1
+ assert helpers[0].read_bytes()==(h/'install-filter.sh').read_bytes()
+ assert helpers[0].stat().st_mode & 0o111
+ postinst=list(stage.rglob('postinst'));assert postinst
+ assert all('"$JB/usr/libexec/hello120hz-install" "$JB"' in p.read_text() for p in postinst)
+ # Separate immutable injection files survive every client global/system/blacklist mode.
+ assert list(stage.rglob('SBCPULiquidGlassBackboardd.plist'))
  assert all(plistlib.loads(p.read_bytes())=={'Filter':{'Executables':['replayd']}} for p in stage.rglob('0hello120hzRecording.plist'))
 print('Hello original scope plus isolated recording, defaults, exclusions, isolation, filter installer and resources PASS')
