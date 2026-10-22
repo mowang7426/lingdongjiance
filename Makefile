@@ -71,13 +71,11 @@ endif
 include $(THEOS_MAKE_PATH)/bundle.mk
 include $(THEOS_MAKE_PATH)/aggregate.mk
 
+# Final-stage extensions stay within their registered subproject boundary.
+include $(foreach project,$(SUBPROJECTS),$(wildcard $(THEOS_PROJECT_DIR)/$(project)/package-stage.mk))
+
 # 确保 Control Center bundle 的资源和注册过滤器一定进入最终 DEB。
 after-stage::
-	# Aggregate final stage: subproject after-stage additions are not reliably merged.
-	$(ECHO_NOTHING)mkdir -p "$(THEOS_STAGING_DIR)/usr/libexec" "$(THEOS_STAGING_DIR)/usr/share/doc/sbcpufloating"$(ECHO_END)
-	$(ECHO_NOTHING)cp "$(THEOS_PROJECT_DIR)/hello120hz/install-filter.sh" "$(THEOS_STAGING_DIR)/usr/libexec/hello120hz-install"$(ECHO_END)
-	$(ECHO_NOTHING)chmod 0755 "$(THEOS_STAGING_DIR)/usr/libexec/hello120hz-install"$(ECHO_END)
-	$(ECHO_NOTHING)cp "$(THEOS_PROJECT_DIR)/hello120hz/SOURCE.md" "$(THEOS_PROJECT_DIR)/hello120hz/CAPABILITIES.md" "$(THEOS_STAGING_DIR)/usr/share/doc/sbcpufloating/"$(ECHO_END)
 	$(ECHO_NOTHING)mkdir -p "$(THEOS_STAGING_DIR)/usr/share/doc/sbcpufloating"$(ECHO_END)
 	$(ECHO_NOTHING)cp "$(THEOS_PROJECT_DIR)/LICENSE.TrollSpeed" "$(THEOS_PROJECT_DIR)/TEXT_ONLY_MODE.md" "$(THEOS_STAGING_DIR)/usr/share/doc/sbcpufloating/"$(ECHO_END)
 	$(ECHO_NOTHING)mkdir -p "$(THEOS_STAGING_DIR)/Library/MobileSubstrate/DynamicLibraries"$(ECHO_END)
