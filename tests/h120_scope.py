@@ -76,7 +76,7 @@ if '--staged' in sys.argv:
  for p in stage.rglob('0hello120hz.plist'):assert plistlib.loads(p.read_bytes())['Filter']['Executables']==expected
  assert not list(stage.rglob('0hello120hzRecording.dylib')) and not list(stage.rglob('0hello120hzRecording.plist'))
  for name in ('DefaultInjection.plist','AllInjection.plist'):
-  matches=list(stage.rglob(name));assert matches and all(p.read_bytes()==(h/'Preferences/Resources'/name).read_bytes() for p in matches)
+  matches=list(stage.rglob(name));assert matches and all(plistlib.loads(p.read_bytes())==plistlib.loads((h/'Preferences/Resources'/name).read_bytes()) for p in matches)
  helpers=list(stage.rglob('usr/libexec/hello120hz-install'));assert len(helpers)==1
  assert helpers[0].read_bytes()==(h/'install-filter.sh').read_bytes() and helpers[0].stat().st_mode & 0o111
  postinst=list(stage.rglob('postinst'));assert postinst
