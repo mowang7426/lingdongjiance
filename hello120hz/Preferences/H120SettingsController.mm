@@ -24,6 +24,8 @@ static void H120Alert(UIViewController *controller, NSString *message) {
     [controller presentViewController:alert animated:YES completion:nil];
 }
 
+#include "H120RecordingDiagnosticController.inc"
+
 static UINavigationItem *H120NavigationItem(UIViewController *controller, UIViewController *owner) {
     return owner ? owner.navigationItem : controller.navigationItem;
 }
@@ -461,16 +463,20 @@ static NSDictionary *H120Row(NSString *identifier, NSString *title, NSString *su
     [actions addObject:H120Row(@"hud", H120HUDEnabled() ? H120Text(@"Disable Debug HUD", @"关闭调试")
         : H120Text(@"Enable Debug HUD", @"打开调试"), H120Text(@"Show system-level debug information", @"显示系统级的调试信息"),
         @"lasso", 50, YES, NO)];
+    [actions addObject:H120Row(@"diagnostics", H120Text(@"Recording Diagnostics / Export", @"录屏诊断 / 导出诊断"),
+        H120Text(@"Check loaded module, paths and errors without restarting", @"查看模块应答、实际路径和错误；无需重启"), @"stethoscope", 50, YES, YES)];
     NSMutableDictionary *recording = [H120Row(@"recording", H120Text(@"120 FPS Recording", @"录屏 120 帧"),
         H120Text(@"System recording test · reload replayd after use/off", @"系统录屏测试 · 结束或关闭后需手动重载 replayd"),
         @"record.circle", 66, NO, NO) mutableCopy];
     recording[@"h120Toggle"] = @([preferences[@"recordingEnabled"] boolValue]);
     self.coordinator.sections = @[@[enabled, rate, recording], actions];
-    self.coordinator.footers = @[H120Text(@"Source 3.3.3-3 · LingDong 5.09+full3", @"来源 3.3.3-3 · 灵动 5.09+full3"), @""];
+    self.coordinator.footers = @[H120Text(@"Source 3.3.3-3 · LingDong 5.09+full4", @"来源 3.3.3-3 · 灵动 5.09+full4"), @""];
     [self.settingsTable reloadData];
 }
 - (void)selectIdentifier:(NSString *)identifier {
-    if ([identifier isEqual:@"rate"]) {
+    if ([identifier isEqual:@"diagnostics"]) {
+        [self.navigationController pushViewController:[H120RecordingDiagnosticController new] animated:YES];
+    } else if ([identifier isEqual:@"rate"]) {
         [self.navigationController pushViewController:[H120FrameRateController new] animated:YES];
     } else if ([identifier isEqual:@"excluded"]) {
         Class controller = NSClassFromString(@"Mode3Controller");

@@ -90,6 +90,9 @@ void ReloadRecording(void) {
         @"blacklistApplied":@NO, @"asyncPropagationSupported":@NO});
     H120InstallRecordingHooks();
     InstallVT();
+    NSString *path = H120PreferencesPath();
+    H120DiagnosticUpdate(installedHooks, master && toggle,
+        path && access(path.fileSystemRepresentation, R_OK) == 0);
 }
 std::atomic<bool> installPending(false);
 void RecordingImageAdded(const struct mach_header *, intptr_t) {
@@ -97,6 +100,9 @@ void RecordingImageAdded(const struct mach_header *, intptr_t) {
     dispatch_async(dispatch_get_main_queue(), ^{
         installPending.store(false);
         H120InstallRecordingHooks(); InstallVT();
+        NSString *path = H120PreferencesPath();
+        H120DiagnosticUpdate(installedHooks, H120RecordingActive(),
+            path && access(path.fileSystemRepresentation, R_OK) == 0);
     });
 }
 void ObserveRecordingPreferences(void) {
@@ -107,12 +113,17 @@ void ObserveRecordingPreferences(void) {
 }
 }
 __attribute__((constructor)) static void InitializeRecording(void) {
-    @autoreleasepool {
-        if (![NSProcessInfo.processInfo.processName isEqualToString:@"replayd"]) return;
-        Event(@"module-load", @{@"version":@"5.09+full3", @"process":@"replayd", @"uid":@(geteuid()),
-            @"cadenceInstalled":@NO, @"cadenceReason":@"original-w0-ABI-proven-target-system-ABI-unverified"});
-        ReloadRecording();
-        ObserveRecordingPreferences();
-        _dyld_register_func_for_add_image(RecordingImageAdded);
-    }
+    // No Foundation, path lookup or dyld re-entry before a lightweight responder.
+    // getprogname is the executable basename, not a mutable ObjC display name.
+    if (strcmp(getprogname(), "replayd") != 0) return;
+    H120DiagnosticStart();
+    dispatch_async(dispatch_get_main_queue(), ^{
+        @autoreleasepool {
+            Event(@"module-load", @{@"version":@"5.09+full4", @"process":@"replayd", @"uid":@(geteuid()),
+                @"cadenceInstalled":@NO, @"cadenceReason":@"original-w0-ABI-proven-target-system-ABI-unverified"});
+            ReloadRecording();
+            ObserveRecordingPreferences();
+            _dyld_register_func_for_add_image(RecordingImageAdded);
+        }
+    });
 }

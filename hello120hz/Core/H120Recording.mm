@@ -1,5 +1,6 @@
 #import "H120Recording.h"
 #import "../Shared/H120Preferences.h"
+#include "../Shared/H120RecordingDiagnostics.h"
 #import <VideoToolbox/VideoToolbox.h>
 #include <atomic>
 #include <notify.h>
@@ -39,20 +40,19 @@ void Event(NSString *event, NSDictionary *fields) {
         NSUInteger count = [counts[key] unsignedIntegerValue];
         if (count >= 24) return;
         counts[key] = @(count + 1); previous[key] = fields;
-        NSString *directory = H120JailbreakPath(@"/var/mobile/Library/Logs/Hello120Hz");
-        if (!directory) return;
-        [[NSFileManager defaultManager] createDirectoryAtPath:directory withIntermediateDirectories:YES attributes:nil error:NULL];
-        NSString *path = [directory stringByAppendingPathComponent:@"recording.jsonl"];
-        int fd = open(path.fileSystemRepresentation, O_CREAT|O_WRONLY|O_APPEND|O_NOFOLLOW, 0644);
-        if (fd < 0) { NSLog(@"[Hello120Hz recording] diagnostic file unavailable errno=%d", errno); return; }
-        if (geteuid() == 0) { fchown(fd, 501, 501); fchmod(fd, 0644); }
+        int error = 0;
+        int fd = H120DiagnosticOpenLogAt(H120_RECORDING_LOG_DIRECTORY, H120_RECORDING_LOG_PATH, &error);
+        H120DiagnosticLogError(error);
+        if (fd < 0) return; // errno is visible through the file-independent handshake
         struct stat st;
         if (fstat(fd, &st) == 0 && st.st_size < 131072) {
             NSMutableDictionary *row = [fields mutableCopy];
             row[@"event"] = event; row[@"time"] = @([[NSDate date] timeIntervalSince1970]);
             NSData *data = [NSJSONSerialization dataWithJSONObject:row options:0 error:NULL];
             if (data && (uint64_t)st.st_size + data.length + 1 <= 131072) {
-                write(fd, data.bytes, data.length); write(fd, "\n", 1);
+                ssize_t countWritten = write(fd, data.bytes, data.length);
+                if (countWritten != (ssize_t)data.length || write(fd, "\n", 1) != 1)
+                    H120DiagnosticLogError(errno ? errno : EIO);
             }
             [row release];
         }

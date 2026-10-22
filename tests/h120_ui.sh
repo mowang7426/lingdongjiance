@@ -13,10 +13,13 @@ test "$ARCH" = arm64
 clang++ -arch arm64 -std=c++17 -Wall -Wextra -Werror tests/h120_abi.cpp \
  tests/h120_abi_probe.S hello120hz/Core/H120RangeTrampolines.S -o "$TMP/h120-abi"
 "$TMP/h120-abi"
+clang -std=c11 -fblocks -Wall -Wextra -Werror -c hello120hz/Shared/H120RecordingDiagnostics.c -o "$TMP/diagnostics-host.o"
+xcrun --sdk iphonesimulator clang -arch "$ARCH" -isysroot "$SDK" -mios-simulator-version-min=15.0 \
+ -std=c11 -fblocks -c hello120hz/Shared/H120RecordingDiagnostics.c -o "$TMP/diagnostics.o"
 xcrun --sdk iphonesimulator clang++ -arch "$ARCH" -isysroot "$SDK" -mios-simulator-version-min=15.0 \
  -std=c++17 -fobjc-arc -fblocks -Itests/h120_stubs -I. -Wno-nullability-completeness \
  -framework UIKit -framework Foundation -framework QuartzCore -framework CoreFoundation -framework CoreGraphics \
- tests/h120_ui.mm -o "$TMP/h120-ui"
+ tests/h120_ui.mm "$TMP/diagnostics.o" -o "$TMP/h120-ui"
 xcrun simctl list devices available -j > "$TMP/devices.json"
 DEVICE=$(python3 - "$TMP/devices.json" <<'PY'
 import json,sys

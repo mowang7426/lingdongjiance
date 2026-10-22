@@ -11,6 +11,11 @@
 static NSString *fixtureRoot;
 #define ROOT_PATH_NS_VAR(x) [fixtureRoot stringByAppendingString:(x)]
 // @HEADERS@
+#include "@DIAGNOSTIC_HEADER@"
+#undef H120_RECORDING_LOG_DIRECTORY
+#undef H120_RECORDING_LOG_PATH
+#define H120_RECORDING_LOG_DIRECTORY fixtureRoot.fileSystemRepresentation
+#define H120_RECORDING_LOG_PATH [fixtureRoot stringByAppendingPathComponent:@"recording.jsonl"].fileSystemRepresentation
 static Class captureClass, writerClass, managerClass, movieClass;
 static bool lateClass;
 static Class FixtureLookup(NSString *name) {
@@ -196,7 +201,7 @@ int main(int argc,char **argv){@autoreleasepool{
   hookedInvalidate(tagged);assert(invalidates==1);assert(![recordingEncoders containsObject:[NSValue valueWithPointer:tagged]]);
   [manager release];[movie release];
  }
- NSString *logs=[NSString stringWithContentsOfFile:[H120JailbreakPath(@"/var/mobile/Library/Logs/Hello120Hz") stringByAppendingPathComponent:@"recording.jsonl"] encoding:NSUTF8StringEncoding error:NULL];
+ NSString *logs=[NSString stringWithContentsOfFile:[fixtureRoot stringByAppendingPathComponent:@"recording.jsonl"] encoding:NSUTF8StringEncoding error:NULL];
  assert([logs containsString:@"configuration-read"] && [logs containsString:@"method-gate"]);
  if([mode hasPrefix:@"bad-"])assert([logs containsString:@"signature-rejected"]);
  else {

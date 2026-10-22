@@ -13,7 +13,7 @@ ifeq ($(THEOS_PACKAGE_SCHEME),roothide)
 0hello120hz_CFLAGS += -DTHEOS_PACKAGE_SCHEME_ROOTHIDE=1 -I$(THEOS_VENDOR_INCLUDE_PATH)/roothide
 0hello120hz_LDFLAGS += -L$(THEOS_VENDOR_LIBRARY_PATH)/iphone/roothide -lroothide
 endif
-0hello120hzRecording_FILES = Core/H120Recording.mm Shared/H120Preferences.mm
+0hello120hzRecording_FILES = Core/H120Recording.mm Shared/H120Preferences.mm Shared/H120RecordingDiagnostics.c
 0hello120hzRecording_CFLAGS = -fobjc-arc -IShared
 Core/H120Recording.mm_CFLAGS = -fno-objc-arc
 0hello120hzRecording_CCFLAGS = -std=c++17
