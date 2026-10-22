@@ -12,6 +12,7 @@ enum H120RecordingHook {
     H120RecordingMovieWriterSetup = 1u << 3
 };
 uint32_t H120InstallRecordingHooks(void);
+void H120StartRecordingRuntime(void);
 #ifdef __cplusplus
 }
 #endif

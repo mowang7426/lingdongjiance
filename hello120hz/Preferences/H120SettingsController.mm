@@ -61,7 +61,7 @@ static BOOL H120SetGlobalInjection(BOOL enabled) {
     NSString *path = H120FilterPath();
     if (!path) return NO;
     NSDictionary *dictionary = @{@"Filter": @{
-        @"Mode": @"Any", @"Executables": @[@"SpringBoard"],
+        @"Mode": @"Any", @"Executables": @[@"SpringBoard", @"backboardd", @"replayd"],
         @"Bundles": enabled ? @[@"com.apple.UIKit", @"com.apple.Preferences"]
                             : @[@"com.apple.springboard", @"com.apple.Preferences"]
     }};
@@ -463,6 +463,8 @@ static NSDictionary *H120Row(NSString *identifier, NSString *title, NSString *su
     [actions addObject:H120Row(@"hud", H120HUDEnabled() ? H120Text(@"Disable Debug HUD", @"关闭调试")
         : H120Text(@"Enable Debug HUD", @"打开调试"), H120Text(@"Show system-level debug information", @"显示系统级的调试信息"),
         @"lasso", 50, YES, NO)];
+    [actions addObject:H120Row(@"applyRecording", H120Text(@"Apply Recording Settings", @"应用录屏设置"),
+        H120Text(@"View safe reload instructions; does not restart processes", @"查看安全重载说明；不会自动重启进程"), @"arrow.clockwise", 50, YES, YES)];
     [actions addObject:H120Row(@"diagnostics", H120Text(@"Recording Diagnostics / Export", @"录屏诊断 / 导出诊断"),
         H120Text(@"Check loaded module, paths and errors without restarting", @"查看模块应答、实际路径和错误；无需重启"), @"stethoscope", 50, YES, YES)];
     NSMutableDictionary *recording = [H120Row(@"recording", H120Text(@"120 FPS Recording", @"录屏 120 帧"),
@@ -470,11 +472,14 @@ static NSDictionary *H120Row(NSString *identifier, NSString *title, NSString *su
         @"record.circle", 66, NO, NO) mutableCopy];
     recording[@"h120Toggle"] = @([preferences[@"recordingEnabled"] boolValue]);
     self.coordinator.sections = @[@[enabled, rate, recording], actions];
-    self.coordinator.footers = @[H120Text(@"Source 3.3.3-3 · LingDong 5.09+full5", @"来源 3.3.3-3 · 灵动 5.09+full5"), @""];
+    self.coordinator.footers = @[H120Text(@"Source 3.3.3-3 · LingDong 5.09+full6", @"来源 3.3.3-3 · 灵动 5.09+full6"), @""];
     [self.settingsTable reloadData];
 }
 - (void)selectIdentifier:(NSString *)identifier {
-    if ([identifier isEqual:@"diagnostics"]) {
+    if ([identifier isEqual:@"applyRecording"]) {
+        H120PostPreferencesChanged();
+        H120Alert(self, H120Text(@"Settings change notifications have been sent (not a daemon acknowledgement). This build has no verified privileged replayd reload service. After ending recording, use your jailbreak manager to reload replayd or perform a userspace reload. If already done, do not repeat: open Recording Diagnostics and export the result. Respring only reloads SpringBoard and is not a replayd reload. No restart was executed; 120 FPS is not guaranteed.", @"已发送设置变更通知（不代表守护进程已应答）。当前没有已验证的 replayd 特权重载服务。结束录屏后，请在越狱管理器重载 replayd 或执行用户空间重载。如果已经做过，不必重复：打开录屏诊断并导出结果。注销仅重载 SpringBoard，不等于重载 replayd。本按钮没有执行重启，也不保证录屏达到 120 帧。"));
+    } else if ([identifier isEqual:@"diagnostics"]) {
         [self.navigationController pushViewController:[H120RecordingDiagnosticController new] animated:YES];
     } else if ([identifier isEqual:@"rate"]) {
         [self.navigationController pushViewController:[H120FrameRateController new] animated:YES];

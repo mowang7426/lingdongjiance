@@ -10,7 +10,7 @@
 
 static const char *pingName = "cn.zqbb.hello120hz.recording.diagnostic.v4.ping";
 static atomic_uint hooksState, activeState, preferencesState, logError;
-/* [63:48] protocol/build 50905, [47:24] PID, [23:12] errno,
+/* [63:48] protocol/build 50906, [47:24] PID, [23:12] errno,
    [11] preferences readable, [10] enabled, [9:6] hooks, [5:0] reserved. */
 uint64_t H120DiagnosticState(void) {
     return ((uint64_t)H120_DIAGNOSTIC_VERSION << 48) | ((uint64_t)(getpid() & 0xffffff) << 24) |

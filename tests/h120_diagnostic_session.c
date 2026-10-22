@@ -6,7 +6,7 @@ int main(void) {
     H120ProbeChannel recording = H120ProbeBegin(100, 1.5), client = H120ProbeBegin(100, 1.5);
     assert(!H120ProbeCanExport(1, &recording, &client));
     assert(!H120ProbeExpire(&recording, 101));
-    assert(H120ProbeFinish(&recording, UINT64_C(50905) << 48, 0, 101));
+    assert(H120ProbeFinish(&recording, UINT64_C(50906) << 48, 0, 101));
     assert(recording.status == H120ProbeCompleted && recording.receipt);
     assert(!H120ProbeCanExport(1, &recording, &client));
     assert(H120ProbeExpire(&client, 101.5));

@@ -2,26 +2,17 @@ ARCHS = arm64 arm64e
 TARGET = iphone:clang:16.5:15.0
 include $(THEOS)/makefiles/common.mk
 
-# Separate target: never mixed into floating HUD, charge or CPU processes.
-TWEAK_NAME = 0hello120hz 0hello120hzRecording
-0hello120hz_FILES = Core/H120Hooks.mm Core/H120RangeTrampolines.S Core/H120Policy.c Shared/H120Preferences.mm Shared/H120RecordingDiagnostics.c
+# One Hello module, process-routed at its sole constructor. Never mixed into HUD/CPU.
+TWEAK_NAME = 0hello120hz
+0hello120hz_FILES = Core/H120Hooks.mm Core/H120Recording.mm Core/H120RangeTrampolines.S Core/H120Policy.c Shared/H120Preferences.mm Shared/H120RecordingDiagnostics.c
 0hello120hz_CFLAGS = -fobjc-arc -IShared
 0hello120hz_CCFLAGS = -std=c++17
-0hello120hz_FRAMEWORKS = Foundation QuartzCore CoreFoundation
+0hello120hz_FRAMEWORKS = Foundation QuartzCore AVFoundation CoreMedia CoreGraphics CoreFoundation
+Core/H120Recording.mm_CFLAGS = -fno-objc-arc
 0hello120hz_LIBRARIES = substrate
 ifeq ($(THEOS_PACKAGE_SCHEME),roothide)
 0hello120hz_CFLAGS += -DTHEOS_PACKAGE_SCHEME_ROOTHIDE=1 -I$(THEOS_VENDOR_INCLUDE_PATH)/roothide
 0hello120hz_LDFLAGS += -L$(THEOS_VENDOR_LIBRARY_PATH)/iphone/roothide -lroothide
-endif
-0hello120hzRecording_FILES = Core/H120Recording.mm Shared/H120Preferences.mm Shared/H120RecordingDiagnostics.c
-0hello120hzRecording_CFLAGS = -fobjc-arc -IShared
-Core/H120Recording.mm_CFLAGS = -fno-objc-arc
-0hello120hzRecording_CCFLAGS = -std=c++17
-0hello120hzRecording_FRAMEWORKS = Foundation AVFoundation CoreMedia CoreGraphics VideoToolbox CoreFoundation
-0hello120hzRecording_LIBRARIES = substrate
-ifeq ($(THEOS_PACKAGE_SCHEME),roothide)
-0hello120hzRecording_CFLAGS += -DTHEOS_PACKAGE_SCHEME_ROOTHIDE=1 -I$(THEOS_VENDOR_INCLUDE_PATH)/roothide
-0hello120hzRecording_LDFLAGS += -L$(THEOS_VENDOR_LIBRARY_PATH)/iphone/roothide -lroothide
 endif
 include $(THEOS_MAKE_PATH)/tweak.mk
 SUBPROJECTS += Preferences

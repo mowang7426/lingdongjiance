@@ -1,7 +1,6 @@
 #import "H120Recording.h"
 #import "../Shared/H120Preferences.h"
 #include "../Shared/H120RecordingDiagnostics.h"
-#import <VideoToolbox/VideoToolbox.h>
 #include <atomic>
 #include <notify.h>
 #include <mach-o/dyld.h>
@@ -176,6 +175,17 @@ id WriterInputInit(id receiver, SEL selector, NSString *mediaType, NSDictionary 
         id existing = [settings objectForKey:AVVideoCompressionPropertiesKey];
         NSMutableDictionary *compression = [existing isKindOfClass:[NSDictionary class]]
             ? [existing mutableCopy] : [[NSMutableDictionary alloc] init];
+        id oldFPS = [compression objectForKey:AVVideoExpectedSourceFrameRateKey];
+        id oldRate = [compression objectForKey:AVVideoAverageBitRateKey];
+        // Match the original conditional bitrate policy; do not multiply twice
+        // for an already-120 request, invent missing bitrates, or overflow int64.
+        if ((!oldFPS || [oldFPS respondsToSelector:@selector(doubleValue)]) &&
+            [oldFPS doubleValue] < kRecordingFPS &&
+            [oldRate respondsToSelector:@selector(longLongValue)]) {
+            int64_t rate = [oldRate longLongValue];
+            if (rate > 0 && rate < (INT64_C(1) << 62))
+                [compression setObject:@(rate * 2) forKey:AVVideoAverageBitRateKey];
+        }
         [compression setObject:@(kRecordingFPS) forKey:AVVideoExpectedSourceFrameRateKey];
         [compression setObject:@(kRecordingFPS) forKey:AVVideoMaxKeyFrameIntervalKey];
         [adjusted setObject:compression forKey:AVVideoCompressionPropertiesKey];

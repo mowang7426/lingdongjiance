@@ -73,7 +73,7 @@ static void H120AppendMachO(NSMutableString *text, NSString *path) {
     }
 }
 static NSString *H120RecordingSelfCheck(void) {
-    NSMutableString *text = [NSMutableString stringWithString:@"Hello120Hz Settings self-check 5.09+full5 (NOT daemon proof)\n"];
+    NSMutableString *text = [NSMutableString stringWithString:@"Hello120Hz Settings self-check 5.09+full6 (NOT daemon proof)\n"];
     NSDictionary *prefs = H120ReadPreferences();
     [text appendFormat:@"Settings uid=%u pid=%d\npreferences=%@\nmaster=%d recording=%d\n", geteuid(), getpid(),
         H120FileCheck(H120PreferencesPath()), [prefs[@"wantsEnable"] boolValue], [prefs[@"recordingEnabled"] boolValue]];
@@ -81,13 +81,13 @@ static NSString *H120RecordingSelfCheck(void) {
     for (NSString *logical in @[@"/Library/MobileSubstrate/DynamicLibraries/0hello120hz.dylib", @"/Library/MobileSubstrate/DynamicLibraries/0hello120hz.plist", @"/usr/libexec/hello120hz-install"]) {
         NSString *path = H120JailbreakPath(logical);
         // The main filter is intentionally a symlink to the writable mobile policy.
-        [text appendFormat:@"client/helper %@ exists=%d\n", path ?: @"resolver nil", path && [NSFileManager.defaultManager fileExistsAtPath:path]];
-        if ([logical hasSuffix:@".plist"]) [text appendFormat:@"effective client filter=%@\n", path ? [NSDictionary dictionaryWithContentsOfFile:path] : nil];
+        [text appendFormat:@"single Hello module/helper %@ exists=%d\n", path ?: @"resolver nil", path && [NSFileManager.defaultManager fileExistsAtPath:path]];
+        if ([logical hasSuffix:@".plist"]) [text appendFormat:@"effective single-module filter=%@\n", path ? [NSDictionary dictionaryWithContentsOfFile:path] : nil];
     }
-    [text appendString:@"系统模式仅SpringBoard/Preferences；全局模式为UIKit客户端并保留黑名单，不是所有进程。backboard cadence未实现；读取目标120不等于实际物理锁120，dirty-frame FPS也不等于物理Hz，录屏输出FPS另行验收。\n"];
-    [text appendString:@"System mode targets SpringBoard/Preferences only. Global UI mode adds UIKit clients, not all daemons; exclusions still apply. Backboard cadence is NOT implemented. Dirty-frame/compositor FPS is NOT physical panel Hz; request120 is NOT guaranteed physical lock120 or recorded120.\n"];
-    NSString *library = H120JailbreakPath(@"/Library/MobileSubstrate/DynamicLibraries/0hello120hzRecording.dylib");
-    NSString *filter = H120JailbreakPath(@"/Library/MobileSubstrate/DynamicLibraries/0hello120hzRecording.plist");
+    [text appendString:@"单模块两种模式均包含SpringBoard/backboardd/replayd/Preferences；全局模式为UIKit客户端并保留黑名单，不是所有进程。backboardd仅安全空入口，cadence未实现；读取目标120不等于实际物理锁120，dirty-frame FPS也不等于物理Hz，录屏输出FPS另行验收。\n"];
+    [text appendString:@"Both modes retain SpringBoard/backboardd/replayd/Preferences in one module. Global UI mode adds UIKit clients, not all daemons; exclusions still apply. Backboard cadence is NOT implemented. Dirty-frame/compositor FPS is NOT physical panel Hz; request120 is NOT guaranteed physical lock120 or recorded120.\n"];
+    NSString *library = H120JailbreakPath(@"/Library/MobileSubstrate/DynamicLibraries/0hello120hz.dylib");
+    NSString *filter = H120JailbreakPath(@"/Library/MobileSubstrate/DynamicLibraries/0hello120hz.plist");
     [text appendFormat:@"module=%@\nfilter=%@\nfilter content=%@\n", H120FileCheck(library), H120FileCheck(filter),
         filter ? [NSDictionary dictionaryWithContentsOfFile:filter] : @"resolver nil"];
     H120AppendMachO(text, library);

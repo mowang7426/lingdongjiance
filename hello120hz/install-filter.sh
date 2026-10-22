@@ -19,11 +19,27 @@ for relative in var var/mobile var/mobile/Library var/mobile/Library/Preferences
 done
 preferences="$directory/cn.zqbb.fix120hz.injection.plist"
 [ ! -L "$preferences" ] || exit 1
-if [ ! -e "$preferences" ]; then
-    cp "$base/Library/PreferenceBundles/hello120hz.bundle/DefaultInjection.plist" "$preferences"
-    chown 501:501 "$preferences"
-    chmod 0644 "$preferences"
+# The filter is owned entirely by this plugin. Migrate the existing generated
+# XML without dropping the user's All Apps mode. No other preference keys live
+# in this file; wantsEnable/recordingEnabled/selectedApps are a separate plist.
+resource="$base/Library/PreferenceBundles/hello120hz.bundle"
+template="$resource/DefaultInjection.plist"
+if [ -e "$preferences" ]; then
+    case "$(cat "$preferences")" in
+        *com.apple.UIKit*) template="$resource/AllInjection.plist" ;;
+    esac
 fi
+[ -f "$template" ] || exit 1
+# Atomic replacement also repairs full5's persisted missing-replayd filter.
+temporary="$preferences.full6.$$"
+(umask 077; set -C; cat "$template" > "$temporary") || exit 1
+chown 501:501 "$temporary"
+chmod 0644 "$temporary"
+mv -f "$temporary" "$preferences"
+# Upgrade cleanup is limited to exact legacy filenames owned by this package.
+# $base was supplied by the existing validated rootless/roothide postinst.
+rm -f "$base/Library/MobileSubstrate/DynamicLibraries/0hello120hzRecording.dylib" \
+      "$base/Library/MobileSubstrate/DynamicLibraries/0hello120hzRecording.plist"
 loader="$base/Library/MobileSubstrate/DynamicLibraries/0hello120hz.plist"
 # Exact package-owned filter only. Its mobile-owned target permits atomic UI writes.
 rm -f "$loader"

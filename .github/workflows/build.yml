@@ -23,6 +23,9 @@ jobs:
           python3 tests/h120_scope.py
           bash tests/h120_ui.sh
 
+      - name: Single-module process routing and integer policy regression
+        run: sh tests/h120_process.sh
+
       - name: Production recording native ABI and session regression
         run: python3 tests/h120_recording.py
 

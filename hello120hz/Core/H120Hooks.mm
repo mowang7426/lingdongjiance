@@ -11,6 +11,8 @@
 #import "../Shared/H120Preferences.h"
 #include "H120Policy.h"
 #include "H120Runtime.h"
+#include "H120Process.h"
+#include "H120Recording.h"
 #include "../Shared/H120RecordingDiagnostics.h"
 #include <unistd.h>
 
@@ -112,9 +114,15 @@ static void H120InstallClientHooks(void) {
     H120Install("__Z39CADisplayEnableHighFrameRateRestrictionv", (void *)H120Restriction, (void **)&originalRestriction);
 }
 
-// The uploaded backboardd return ABI is not evidenced by the symbol names.
-// No backboardd / replayd injection or guessed function call is shipped.
-__attribute__((constructor)) static void H120Initialize(void) {
+// The original package proves uint32_t(void *) replacements, but not the
+// target OS implementation/units. Do not substitute AppleInternalDisplay's
+// receiver into a CLCD minimum function merely because both names resolve.
+static void H120StartBackboardRuntime(void) {
+    // Deliberately no client/recording hooks here. A verified target-system
+    // provider must be supplied before enabling physical-display cadence.
+}
+
+static void H120StartClientRuntime(void) {
     if (strcmp(getprogname(), "SpringBoard") == 0) H120DiagnosticStartNamed(H120_CLIENT_DIAGNOSTIC_PING);
     @autoreleasepool {
         NSString *process = NSProcessInfo.processInfo.processName;
@@ -122,7 +130,7 @@ __attribute__((constructor)) static void H120Initialize(void) {
         H120ReloadPreferences(); // initial disabled/default/exclusion state BEFORE installing hooks
         H120InstallClientHooks();
         H120PublishClientDiagnostic();
-        NSLog(@"[Hello120Hz] client hooks installed where symbols exist; backboard cadence unavailable (unverified ABI); recording uses separate replayd-only module");
+        NSLog(@"[Hello120Hz] client hooks installed where symbols exist; recording routed through the same Hello module");
         static int preferencesToken;
         notify_register_dispatch(H120PreferencesNotification.UTF8String, &preferencesToken,
                                  dispatch_get_main_queue(), ^(int token) {
@@ -132,4 +140,13 @@ __attribute__((constructor)) static void H120Initialize(void) {
         if (center) CFNotificationCenterAddObserver(center, NULL, H120DistributedPreferences,
             (__bridge CFStringRef)H120PreferencesNotification, NULL, CFNotificationSuspensionBehaviorDeliverImmediately);
     }
+}
+
+// Exactly one constructor for Hello display, backboard and recording paths.
+// replayd enters its lightweight responder immediately, then Foundation work
+// is scheduled safely by H120StartRecordingRuntime. No process restart here.
+__attribute__((constructor)) static void H120Initialize(void) {
+    H120ProcessEntries entries = {H120StartClientRuntime,
+        H120StartBackboardRuntime, H120StartRecordingRuntime};
+    H120EnterProcess(getprogname(), entries);
 }
