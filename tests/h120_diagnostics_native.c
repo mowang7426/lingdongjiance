@@ -28,14 +28,20 @@ int main(int argc, char **argv) {
         unlink(directory); rmdir(root);
         puts("PASS production POSIX log path selection: no parent/permission/symlink/errno"); return 0;
     }
-    if (!strcmp(argv[1], "server")) {
+    int client = strstr(argv[1], "client") != NULL;
+    if (!strcmp(argv[1], "server") || !strcmp(argv[1], "client-server")) {
         assert(argc == 4);
-        H120DiagnosticStart(); H120DiagnosticUpdate(15, atoi(argv[3]), 1); H120DiagnosticLogError(atoi(argv[2]));
+        if (client) {
+            H120DiagnosticStartNamed(H120_CLIENT_DIAGNOSTIC_PING);
+            H120DiagnosticUpdateClient(8, atoi(argv[3]), 1, (unsigned)atoi(argv[2]));
+        } else {
+            H120DiagnosticStart(); H120DiagnosticUpdate(15, atoi(argv[3]), 1); H120DiagnosticLogError(atoi(argv[2]));
+        }
         printf("READY %d\n", getpid()); fflush(stdout); dispatch_main();
     }
     assert(argc == 5);
     int pid = atoi(argv[2]), error = atoi(argv[3]), active = atoi(argv[4]);
-    H120DiagnosticProbe(0.5, ^(uint64_t state, unsigned status) {
+    void (^done)(uint64_t, unsigned) = ^(uint64_t state, unsigned status) {
         assert(status == 0);
         if (pid == 0) assert(state == 0);
         else {
@@ -44,11 +50,13 @@ int main(int argc, char **argv) {
             assert(((state >> 12) & 4095) == (unsigned)error);
             assert(((state >> 11) & 1) == 1);
             assert(((state >> 10) & 1) == (unsigned)active);
-            assert(((state >> 6) & 15) == 15);
+            assert(((state >> 6) & 15) == (client ? 8u : 15u));
             assert((state >> 48) != 50903); // old full3 must never be reported as full4
         }
         printf("PASS production Darwin notification %s state=%016llx status=%u\n", pid ? "ack/version/PID/hooks/disabled/errno" : "timeout-no-false-ack", (unsigned long long)state, status);
         exit(0);
-    });
+    };
+    if (client) H120DiagnosticProbeNamed(H120_CLIENT_DIAGNOSTIC_PING, 0.5, done);
+    else H120DiagnosticProbe(0.5, done);
     dispatch_main();
 }

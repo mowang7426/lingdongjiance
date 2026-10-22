@@ -37,10 +37,14 @@ int H120DiagnosticOpenLogAt(const char *directory, const char *path, int *error)
     if (!S_ISREG(st.st_mode)) { *error = EINVAL; close(fd); return -1; }
     return fd;
 }
-void H120DiagnosticStart(void) {
+void H120DiagnosticUpdateClient(unsigned count, int active, int readable, unsigned target) {
+    H120DiagnosticUpdate(count, active, readable); atomic_store(&logError, target);
+}
+void H120DiagnosticStart(void) { H120DiagnosticStartNamed(pingName); }
+void H120DiagnosticStartNamed(const char *ping) {
     static int token = -1;
     dispatch_queue_t queue = dispatch_queue_create("cn.zqbb.hello120hz.diagnostic", DISPATCH_QUEUE_SERIAL);
-    unsigned status = notify_register_dispatch(pingName, &token, queue, ^(int request) {
+    unsigned status = notify_register_dispatch(ping, &token, queue, ^(int request) {
         uint64_t nonce = 0;
         if (notify_get_state(request, &nonce) != NOTIFY_STATUS_OK || !nonce) return;
         char reply[128]; snprintf(reply, sizeof(reply), "cn.zqbb.hello120hz.recording.diagnostic.v4.reply.%016llx", (unsigned long long)nonce);
@@ -57,6 +61,9 @@ void H120DiagnosticStart(void) {
     dispatch_release(queue);
 }
 void H120DiagnosticProbe(double timeout, void (^completion)(uint64_t, unsigned)) {
+    H120DiagnosticProbeNamed(pingName, timeout, completion);
+}
+void H120DiagnosticProbeNamed(const char *ping, double timeout, void (^completion)(uint64_t, unsigned)) {
     uint64_t nonce = ((uint64_t)arc4random() << 32) | arc4random();
     if (!nonce) nonce = 1;
     char reply[128]; snprintf(reply, sizeof(reply), "cn.zqbb.hello120hz.recording.diagnostic.v4.reply.%016llx", (unsigned long long)nonce);
@@ -70,9 +77,9 @@ void H120DiagnosticProbe(double timeout, void (^completion)(uint64_t, unsigned))
         finished = 1; notify_cancel(response); if (request >= 0) notify_cancel(request);
         completion(state, result);
     });
-    if (status == NOTIFY_STATUS_OK) status = notify_register_check(pingName, &request);
+    if (status == NOTIFY_STATUS_OK) status = notify_register_check(ping, &request);
     if (status == NOTIFY_STATUS_OK) status = notify_set_state(request, nonce);
-    if (status == NOTIFY_STATUS_OK) status = notify_post(pingName);
+    if (status == NOTIFY_STATUS_OK) status = notify_post(ping);
     if (status != NOTIFY_STATUS_OK) {
         finished = 1; if (response >= 0) notify_cancel(response); if (request >= 0) notify_cancel(request);
         completion(0, status); return;

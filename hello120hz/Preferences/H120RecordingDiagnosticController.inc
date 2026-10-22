@@ -61,6 +61,15 @@ static NSString *H120RecordingSelfCheck(void) {
     NSDictionary *prefs = H120ReadPreferences();
     [text appendFormat:@"Settings uid=%u pid=%d\npreferences=%@\nmaster=%d recording=%d\n", geteuid(), getpid(),
         H120FileCheck(H120PreferencesPath()), [prefs[@"wantsEnable"] boolValue], [prefs[@"recordingEnabled"] boolValue]];
+    [text appendFormat:@"Settings requested target FPS=%@ (NOT measured Hz)\n", prefs[@"wantsFPS"] ?: @120];
+    for (NSString *logical in @[@"/Library/MobileSubstrate/DynamicLibraries/0hello120hz.dylib", @"/Library/MobileSubstrate/DynamicLibraries/0hello120hz.plist", @"/usr/libexec/hello120hz-install"]) {
+        NSString *path = H120JailbreakPath(logical);
+        // The main filter is intentionally a symlink to the writable mobile policy.
+        [text appendFormat:@"client/helper %@ exists=%d\n", path ?: @"resolver nil", path && [NSFileManager.defaultManager fileExistsAtPath:path]];
+        if ([logical hasSuffix:@".plist"]) [text appendFormat:@"effective client filter=%@\n", path ? [NSDictionary dictionaryWithContentsOfFile:path] : nil];
+    }
+    [text appendString:@"系统模式仅SpringBoard/Preferences；全局模式为UIKit客户端并保留黑名单，不是所有进程。backboard cadence未实现；读取目标120不等于实际物理锁120，dirty-frame FPS也不等于物理Hz，录屏输出FPS另行验收。\n"];
+    [text appendString:@"System mode targets SpringBoard/Preferences only. Global UI mode adds UIKit clients, not all daemons; exclusions still apply. Backboard cadence is NOT implemented. Dirty-frame/compositor FPS is NOT physical panel Hz; request120 is NOT guaranteed physical lock120 or recorded120.\n"];
     NSString *library = H120JailbreakPath(@"/Library/MobileSubstrate/DynamicLibraries/0hello120hzRecording.dylib");
     NSString *filter = H120JailbreakPath(@"/Library/MobileSubstrate/DynamicLibraries/0hello120hzRecording.plist");
     [text appendFormat:@"module=%@\nfilter=%@\nfilter content=%@\n", H120FileCheck(library), H120FileCheck(filter),
@@ -100,7 +109,7 @@ static NSString *H120RecordingSelfCheck(void) {
     [self.view addSubview:self.output];
     self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc] initWithTitle:H120Text(@"Export", @"导出诊断")
         style:UIBarButtonItemStylePlain target:self action:@selector(exportDiagnostic)];
-    self.report = @"设置端正在自检；等待 replayd 真实应答（1.5秒），尚未证明模块已加载…\n";
+    self.report = @"设置端正在自检；等待 replayd 与 SpringBoard 真实应答（各1.5秒），尚未证明模块已加载…\n";
     self.output.text = self.report;
     __weak H120RecordingDiagnosticController *weakSelf = self;
     dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
@@ -130,6 +139,15 @@ static NSString *H120RecordingSelfCheck(void) {
                     [result appendFormat:@"\n--- %@ (max128KiB, read errno=%d) ---\n%@\n", path, error, logs ?: @"unavailable/non-UTF8"];
                 }
                 target.report = result; target.output.text = result;
+                H120DiagnosticProbeNamed(H120_CLIENT_DIAGNOSTIC_PING, 1.5, ^(uint64_t client, unsigned transport) {
+                    H120RecordingDiagnosticController *page = weakSelf; if (!page) return;
+                    [result appendFormat:@"\nSpringBoard 主模块握手 transport=%u raw=%016llx\n", transport, (unsigned long long)client];
+                    if (transport || !client) [result appendString:@"主模块未收到应答：可能未加载/通信受限；Settings 中读到120不代表主模块生效。\n"];
+                    else [result appendFormat:@"主模块真实应答 version=%llu (%@), PID=%llu, installed client hooks=%llu/8, enabled=%d, preferencesReadable=%d, current requested targetFPS=%llu\n该应答仅验证SpringBoard载入与当前请求策略，不证明第三方应用已注入，也不是面板物理Hz。\n", client >> 48,
+                        (client >> 48) == H120_DIAGNOSTIC_VERSION ? @"5.09+full4" : @"版本不匹配", (client >> 24) & 0xffffff,
+                        (client >> 6) & 15, (int)((client >> 10) & 1), (int)((client >> 11) & 1), (client >> 12) & 4095];
+                    page.report = result; page.output.text = result;
+                });
             });
         });
     });

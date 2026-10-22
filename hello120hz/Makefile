@@ -4,7 +4,7 @@ include $(THEOS)/makefiles/common.mk
 
 # Separate target: never mixed into floating HUD, charge or CPU processes.
 TWEAK_NAME = 0hello120hz 0hello120hzRecording
-0hello120hz_FILES = Core/H120Hooks.mm Core/H120RangeTrampolines.S Core/H120Policy.c Shared/H120Preferences.mm
+0hello120hz_FILES = Core/H120Hooks.mm Core/H120RangeTrampolines.S Core/H120Policy.c Shared/H120Preferences.mm Shared/H120RecordingDiagnostics.c
 0hello120hz_CFLAGS = -fobjc-arc -IShared
 0hello120hz_CCFLAGS = -std=c++17
 0hello120hz_FRAMEWORKS = Foundation QuartzCore CoreFoundation

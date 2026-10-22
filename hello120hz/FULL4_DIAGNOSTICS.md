@@ -25,6 +25,14 @@
 
 导出通过系统分享面板合并设置自检、握手回执与可读取的最多128KiB日志；不包含媒体、账户或应用内容，不自动启动录屏、kill、注销或改偏好。
 
+## “120锁不住”：必须区分的三种量
+
+1. Settings 的 wantsFPS=120 只是请求目标，不代表客户端已加载或显示硬件正在120Hz。系统模式的实际主过滤器只针对 SpringBoard/Preferences；全局 UI 模式增加 com.apple.UIKit 客户端，仍不是全部守护进程，且黑名单中的客户端透传。安装 helper 只把精确主过滤器链接到 mobile 可写注入配置；不更改独立录屏过滤器。既有驻留应用的注入情况不能由 Settings 文件存在推出。
+2. 客户端只在目标 QuartzCore 符号存在时安装六个范围 trampoline 与 arbitration/restriction hooks；缺符号会跳过。偏好通过 Darwin 与可用的 Distributed notification 更新，但只影响已经加载的客户端。诊断新增独立的 SpringBoard 主模块随机nonce握手，回传真实 build/PID、实际装上的 Hook 数量0–8、当前 enabled/偏好可读性、当前已生效的请求目标FPS。这个回执不冒充第三方应用全部已加载，也不把目标值当作物理Hz。
+3. dirty-frame/合成器FPS会随静止画面和内容变化下降，不能单独证明物理刷新没有锁住；录屏输出FPS又是另一条 capture/writer/encoder 链。当前没有恢复 backboard cadence，且不绕开热保护、低电量或系统硬件调度，因此本版原本就不具备保证全局物理锁120的能力。
+
+下一步需要同一机型/iOS build/越狱环境、前台应用/系统或全局模式/黑名单、动态运动场景下可验证的物理面板刷新时序或可信系统轨迹，加独立客户端/录屏回执；录屏另外验原始PTS与独立画面。仅看到设置120、浮窗 dirty-frame FPS或视频容器120都不够。不为回应“锁不住”而猜测 backboard 私有ABI或扩大Hook到全部进程。
+
 ## 验证边界
 
 新增原生测试编译并执行同一生产 C IO/notify 实现：没有父目录、权限拒绝、符号链接拒绝和 errno；两个真正进程经 macOS notifyd 的 nonce 应答/超时、状态版本辨别、模块关闭仍可应答，另测 sudo/root responder 与普通 UID client。该测试不使用假的 notify stub；结果以最终CI为准。它不能替代 iOS replayd 沙箱现场回执，故设置页保留通信受限分支。原UIKit/录屏ABI/VSync、字体、触摸、频率、充电等回归全部保留。

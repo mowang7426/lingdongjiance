@@ -11,6 +11,8 @@
 #import "../Shared/H120Preferences.h"
 #include "H120Policy.h"
 #include "H120Runtime.h"
+#include "../Shared/H120RecordingDiagnostics.h"
+#include <unistd.h>
 
 extern "C" {
 alignas(4) uint32_t H120ActiveFPSBits = 0;
@@ -30,6 +32,12 @@ void H120RangeItem(void);
 
 static std::atomic<bool> featureEnabled(false);
 static std::atomic<uint32_t> configuredFPS(120);
+static std::atomic<unsigned> clientHookCount(0);
+static void H120PublishClientDiagnostic(void) {
+    NSString *path = H120PreferencesPath();
+    H120DiagnosticUpdateClient(clientHookCount.load(), featureEnabled.load(),
+        path && access(path.fileSystemRepresentation, R_OK) == 0, configuredFPS.load());
+}
 static bool (*originalArbitration)(void);
 static bool (*originalRestriction)(void);
 uint32_t H120ConfiguredFPS(void) { return configuredFPS.load(std::memory_order_relaxed); }
@@ -44,6 +52,7 @@ static bool H120Install(const char *name, void *replacement, void **original) {
     void *symbol = H120Symbol(name);
     if (!symbol) { NSLog(@"[Hello120Hz] symbol unavailable: %s", name); return false; }
     MSHookFunction(symbol, replacement, original);
+    if (*original) clientHookCount.fetch_add(1);
     return *original != nullptr;
 }
 
@@ -77,6 +86,7 @@ static void H120ReloadPreferences(void) {
     uint32_t bits = 0;
     if (enabled) std::memcpy(&bits, &fps, sizeof(bits));
     __atomic_store_n(&H120ActiveFPSBits, bits, __ATOMIC_RELEASE);
+    H120PublishClientDiagnostic();
 }
 
 static void H120DistributedPreferences(CFNotificationCenterRef center, void *observer,
@@ -105,11 +115,13 @@ static void H120InstallClientHooks(void) {
 // The uploaded backboardd return ABI is not evidenced by the symbol names.
 // No backboardd / replayd injection or guessed function call is shipped.
 __attribute__((constructor)) static void H120Initialize(void) {
+    if (strcmp(getprogname(), "SpringBoard") == 0) H120DiagnosticStartNamed(H120_CLIENT_DIAGNOSTIC_PING);
     @autoreleasepool {
         NSString *process = NSProcessInfo.processInfo.processName;
         if ([process isEqualToString:@"backboardd"] || [process isEqualToString:@"replayd"]) return;
         H120ReloadPreferences(); // initial disabled/default/exclusion state BEFORE installing hooks
         H120InstallClientHooks();
+        H120PublishClientDiagnostic();
         NSLog(@"[Hello120Hz] client hooks installed where symbols exist; backboard cadence unavailable (unverified ABI); recording uses separate replayd-only module");
         static int preferencesToken;
         notify_register_dispatch(H120PreferencesNotification.UTF8String, &preferencesToken,
