@@ -47,7 +47,7 @@ static void H120TestDiagnosticExport(void) {
  assert([check containsString:@"follow-open errno=0"]); // O_NOFOLLOW ELOOP is NOT a cycle
  NSString *loop=[directory stringByAppendingPathComponent:@"loop"];
  assert(symlink("loop",loop.fileSystemRepresentation)==0);
- assert([H120FileCheck(loop) containsString:[NSString stringWithFormat:@"follow-open errno=%d",ELOOP]]);
+ assert(([H120FileCheck(loop) containsString:[NSString stringWithFormat:@"follow-open errno=%d",ELOOP]]));
  [NSFileManager.defaultManager removeItemAtPath:directory error:nil];
  H120TestDiagnostic *page=[H120TestDiagnostic new];[page loadViewIfNeeded];
  H120ProbeChannel recording=H120ProbeBegin(100,1.5), client=H120ProbeBegin(100,1.5);
