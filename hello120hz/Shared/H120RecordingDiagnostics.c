@@ -31,11 +31,10 @@ int H120DiagnosticOpenLogAt(const char *directory, const char *path, int *error)
     struct stat st;
     if (lstat(directory, &st) != 0) { *error = errno; return -1; }
     if (!S_ISDIR(st.st_mode)) { *error = ENOTDIR; return -1; }
-    int fd = open(path, O_CREAT | O_WRONLY | O_APPEND | O_NOFOLLOW | O_CLOEXEC, 0644);
+    int fd = open(path, O_CREAT | O_WRONLY | O_APPEND | O_NOFOLLOW | O_CLOEXEC | O_NONBLOCK, 0644);
     if (fd < 0) { *error = errno; return -1; }
-    if (fstat(fd, &st) != 0 || !S_ISREG(st.st_mode)) {
-        *error = errno ? errno : EINVAL; close(fd); return -1;
-    }
+    if (fstat(fd, &st) != 0) { *error = errno; close(fd); return -1; }
+    if (!S_ISREG(st.st_mode)) { *error = EINVAL; close(fd); return -1; }
     return fd;
 }
 void H120DiagnosticStart(void) {
