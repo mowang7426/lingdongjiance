@@ -55,6 +55,7 @@ include $(THEOS_MAKE_PATH)/tool.mk
 # PreferenceBundle
 SUBPROJECTS += sbcpuprefs
 SUBPROJECTS += SBCPULiquidGlassBackboardd
+SUBPROJECTS += hello120hz
 
 # Control Center Bundle：结构/生命周期参考 CPUthermal 1.6.4-53。
 BUNDLE_NAME = SBCPUFloatingCC

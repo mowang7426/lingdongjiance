@@ -102,4 +102,8 @@ fi
 ps ax 2>/dev/null | grep -i "$DAEMON_NAME" | grep -v grep >>"$INSTLOG" 2>&1
 ilog "===== postinst end ====="
 
+# Independent Hello filter setup; preserves user values and never restarts processes.
+if [ -x "$JB/usr/libexec/hello120hz-install" ]; then
+    "$JB/usr/libexec/hello120hz-install" "$JB" || ilog "Hello filter setup FAILED"
+fi
 exit 0

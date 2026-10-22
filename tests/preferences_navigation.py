@@ -66,7 +66,11 @@ check_resources(entry, info, settings)
 source = (ROOT / 'sbcpuprefs/SBCPUPrefsRootListController.m').read_text()
 assert 'loadSpecifiersFromPlistName:@"Root" target:self' in method(source, 'specifiers')
 assert 'openThermalDiagnostics' not in source
-assert 'pushViewController:' not in source, 'Root must never auto-open a detail'
+assert 'pushViewController:' not in method(source, 'viewDidLoad'), 'Root must never auto-open a detail'
+assert 'pushViewController:' not in method(source, 'viewWillAppear'), 'Root must never auto-open a detail'
+assert source.count('pushViewController:') == 1 and 'pushViewController:' in method(source, 'openHello120Hz')
+hello = [r for r in settings['items'] if r.get('label') == 'Hello 120Hz']
+assert len(hello) == 1 and hello[0]['action'] == 'openHello120Hz'
 assert 'self.title = @"灵动监测"' in method(source, 'viewWillAppear')
 assert 'self.navigationItem.title = @"灵动监测"' in method(source, 'viewWillAppear')
 makefile = (ROOT / 'sbcpuprefs/Makefile').read_text()

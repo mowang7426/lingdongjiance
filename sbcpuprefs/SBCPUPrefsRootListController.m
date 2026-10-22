@@ -99,6 +99,19 @@ static BOOL InsulationWritePref(NSString *key, id value) {
 
 
 
+- (void)openHello120Hz {
+    const char *resolved = jbroot("/Library/PreferenceBundles/hello120hz.bundle");
+    NSString *path = resolved ? [NSString stringWithUTF8String:resolved] : nil;
+    NSBundle *bundle = path ? [NSBundle bundleWithPath:path] : nil;
+    if ([bundle load]) {
+        Class controller = NSClassFromString(@"hello120hzPreRootListController");
+        if (controller) { [self.navigationController pushViewController:[controller new] animated:YES]; return; }
+    }
+    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"Hello 120Hz" message:@"无法加载原设置面板，请重新安装完整软件包。" preferredStyle:UIAlertControllerStyleAlert];
+    [alert addAction:[UIAlertAction actionWithTitle:@"好" style:UIAlertActionStyleDefault handler:nil]];
+    [self presentViewController:alert animated:YES completion:nil];
+}
+
 - (NSArray *)specifiers {
 	if (!_specifiers) {
 		_specifiers = [self loadSpecifiersFromPlistName:@"Root" target:self];
