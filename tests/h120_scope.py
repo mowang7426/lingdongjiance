@@ -40,7 +40,7 @@ with tempfile.TemporaryDirectory() as tmp:
  env=dict(os.environ,PATH=str(tools)+':'+os.environ['PATH'])
  subprocess.run(['sh',str(h/'install-filter.sh'),tmp],check=True,env=env)
  target=b/'var/mobile/Library/Preferences/cn.zqbb.fix120hz.injection.plist'
- assert (b/'Library/MobileSubstrate/DynamicLibraries/0hello120hz.plist').resolve()==target
+ assert (b/'Library/MobileSubstrate/DynamicLibraries/0hello120hz.plist').resolve()==target.resolve()
  target.write_bytes(b'user config preserved')
  subprocess.run(['sh',str(h/'install-filter.sh'),tmp],check=True,env=env)
  assert target.read_bytes()==b'user config preserved'
