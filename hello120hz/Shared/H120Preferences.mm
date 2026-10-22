@@ -3,6 +3,7 @@
 #include <notify.h>
 #include <fcntl.h>
 #include <sys/file.h>
+#include <sys/stat.h>
 #include <unistd.h>
 #include <dlfcn.h>
 #if defined(THEOS_PACKAGE_SCHEME_ROOTHIDE)
@@ -56,6 +57,13 @@ static BOOL H120UpdatePreferences(NSDictionary *replacement, NSString *key, id v
     NSData *data = [NSPropertyListSerialization dataWithPropertyList:preferences
                   format:NSPropertyListBinaryFormat_v1_0 options:0 error:&error];
     BOOL success = data && [data writeToFile:path options:NSDataWritingAtomic error:&error];
+    // Exact preference file only; root replayd reads the same explicit mobile path.
+    // Do not use root's CFPreferences current-user cache or change shared parents.
+    if (success) {
+        int readable = open(path.fileSystemRepresentation, O_RDONLY | O_NOFOLLOW);
+        success = readable >= 0 && fchmod(readable, 0644) == 0;
+        if (readable >= 0) close(readable);
+    }
     flock(fd, LOCK_UN);
     close(fd);
     if (success) H120PostPreferencesChanged();

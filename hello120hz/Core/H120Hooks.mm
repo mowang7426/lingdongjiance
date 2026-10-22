@@ -110,7 +110,7 @@ __attribute__((constructor)) static void H120Initialize(void) {
         if ([process isEqualToString:@"backboardd"] || [process isEqualToString:@"replayd"]) return;
         H120ReloadPreferences(); // initial disabled/default/exclusion state BEFORE installing hooks
         H120InstallClientHooks();
-        NSLog(@"[Hello120Hz] client hooks installed where symbols exist; backboard cadence unavailable (unverified ABI); recording not included");
+        NSLog(@"[Hello120Hz] client hooks installed where symbols exist; backboard cadence unavailable (unverified ABI); recording uses separate replayd-only module");
         static int preferencesToken;
         notify_register_dispatch(H120PreferencesNotification.UTF8String, &preferencesToken,
                                  dispatch_get_main_queue(), ^(int token) {

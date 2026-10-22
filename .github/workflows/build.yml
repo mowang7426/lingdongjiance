@@ -20,6 +20,9 @@ jobs:
           python3 tests/h120_scope.py
           bash tests/h120_ui.sh
 
+      - name: Production recording native ABI and session regression
+        run: python3 tests/h120_recording.py
+
       - name: UIKit FPS glyph budget and clipping regression (iOS Simulator)
         run: |
           python3 tests/text_fps_budget_wiring.py

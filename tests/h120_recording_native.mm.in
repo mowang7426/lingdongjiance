@@ -1,0 +1,172 @@
+#import <Foundation/Foundation.h>
+#import <AVFoundation/AVFoundation.h>
+#import <VideoToolbox/VideoToolbox.h>
+#import <CoreGraphics/CoreGraphics.h>
+#import <objc/runtime.h>
+#import <objc/message.h>
+#include <thread>
+#include <dlfcn.h>
+#include <cassert>
+#include <cstring>
+static NSString *fixtureRoot;
+#define ROOT_PATH_NS_VAR(x) [fixtureRoot stringByAppendingString:(x)]
+// @HEADERS@
+static Class captureClass, writerClass, managerClass, movieClass;
+static bool lateClass;
+static Class FixtureLookup(NSString *name) {
+ if ([name isEqual:@"FigScreenCaptureController"]) return lateClass ? Nil : captureClass;
+ if ([name isEqual:@"AVAssetWriterInput"]) return writerClass;
+ if ([name isEqual:@"RPScreenCaptureManagerIOS"]) return managerClass;
+ if ([name isEqual:@"RPMovieWriter"]) return movieClass;
+ return NSClassFromString(name);
+}
+#define NSClassFromString FixtureLookup
+static int swizzles;
+static void MSHookMessageEx(Class cls, SEL selector, IMP replacement, IMP *original) {
+ Method method=class_getInstanceMethod(cls,selector);assert(method);
+ *original=method_setImplementation(method,replacement);++swizzles;
+}
+static OSStatus fixtureSetStatus=-12900;
+static int lastFPS, createCount, invalidates;
+static OSStatus FixtureSet(VTSessionRef,CFStringRef,CFTypeRef value) {
+ lastFPS=[(id)value intValue];return fixtureSetStatus;
+}
+static OSStatus FixtureCreate(CFAllocatorRef,int32_t,int32_t,CMVideoCodecType,CFDictionaryRef,
+ CFDictionaryRef,CFAllocatorRef,VTCompressionOutputCallback,void *,VTCompressionSessionRef *out) {
+ *out=(VTCompressionSessionRef)(uintptr_t)(++createCount+1024);return noErr;
+}
+static void FixtureInvalidate(VTCompressionSessionRef) { ++invalidates; }
+static decltype(&VTCompressionSessionCreate) hookedCreate=FixtureCreate;
+static decltype(&VTSessionSetProperty) hookedSet=FixtureSet;
+static decltype(&VTCompressionSessionInvalidate) hookedInvalidate=FixtureInvalidate;
+static void *FixtureDlsym(void *handle,const char *name) {
+ if (!strcmp(name,"VTCompressionSessionCreate")) return (void *)FixtureCreate;
+ if (!strcmp(name,"VTSessionSetProperty")) return (void *)FixtureSet;
+ if (!strcmp(name,"VTCompressionSessionInvalidate")) return (void *)FixtureInvalidate;
+ return dlsym(handle,name);
+}
+#define dlsym FixtureDlsym
+static void MSHookFunction(void *address,void *replacement,void **original) {
+ *original=address;
+ if(address==(void *)FixtureCreate)hookedCreate=(decltype(hookedCreate))replacement;
+ else if(address==(void *)FixtureSet)hookedSet=(decltype(hookedSet))replacement;
+ else if(address==(void *)FixtureInvalidate)hookedInvalidate=(decltype(hookedInvalidate))replacement;
+ else abort();
+}
+static int retainedSessions;
+static CFTypeRef FixtureRetain(CFTypeRef value) { ++retainedSessions; return value; }
+static void FixtureRelease(CFTypeRef) { --retainedSessions; }
+#define CFRetain FixtureRetain
+#define CFRelease FixtureRelease
+// @PRODUCTION@
+#undef NSClassFromString
+static bool charABI, systemMovie=true, asyncWork, throwing;
+static SEL factory, initWriter, start, setup;
+static CMTime interval;
+static NSDictionary *settingsSeen;
+static VTCompressionSessionRef encoder;
+static id Capture(id self,SEL,CGSize,CMTime time) { interval=time;return self; }
+static id Writer(id self,SEL,id,NSDictionary *settings) {
+ [settingsSeen release];settingsSeen=[settings copy];
+ hookedCreate(NULL,100,100,kCMVideoCodecType_H264,NULL,NULL,NULL,NULL,NULL,&encoder);
+ return self;
+}
+static void MakeCapture(void) {
+ ((id (*)(id,SEL,CGSize,CMTime))objc_msgSend)(captureClass,factory,CGSizeMake(100,200),CMTimeMake(1,60));
+}
+static void MakeWriter(void) {
+ id obj=[writerClass alloc];
+ ((id (*)(id,SEL,id,id))objc_msgSend)(obj,initWriter,AVMediaTypeVideo,
+  @{AVVideoCompressionPropertiesKey:@{AVVideoExpectedSourceFrameRateKey:@60,AVVideoAverageBitRateKey:@12345}});
+ [obj release];
+}
+template<typename Flag> static void Start(id,SEL,int,CGSize,Flag,id,id,id) {
+ if(throwing)[NSException raise:@"test" format:@"TLS cleanup"];
+ if(asyncWork){std::thread worker([]{@autoreleasepool{MakeCapture();}});worker.join();}
+ else MakeCapture();
+}
+static void Setup(id,SEL,id) {
+ if(throwing)[NSException raise:@"test" format:@"TLS cleanup"];
+ if(asyncWork){std::thread worker([]{@autoreleasepool{MakeWriter();}});worker.join();}
+ else MakeWriter();
+}
+static bool FlagB(id,SEL){return systemMovie;}
+static signed char FlagC(id,SEL){return systemMovie ? -1 : 0;}
+static Class New(const char *name) {Class c=objc_allocateClassPair(NSObject.class,name,0);objc_registerClassPair(c);return c;}
+static void RunStart(id manager,bool system) {
+ if(charABI)((void (*)(id,SEL,int,CGSize,signed char,id,id,id))objc_msgSend)(manager,start,1,CGSizeMake(100,200),system ? -1 : 0,nil,nil,nil);
+ else ((void (*)(id,SEL,int,CGSize,bool,id,id,id))objc_msgSend)(manager,start,1,CGSizeMake(100,200),system,nil,nil,nil);
+}
+static void RunSetup(id movie){((void (*)(id,SEL,id))objc_msgSend)(movie,setup,nil);}
+static int FPS(void){return [settingsSeen[AVVideoCompressionPropertiesKey][AVVideoExpectedSourceFrameRateKey] intValue];}
+int main(int argc,char **argv){@autoreleasepool{
+ assert(argc==2);NSString *mode=@(argv[1]);charABI=[mode isEqual:@"c"];
+ fixtureRoot=[NSTemporaryDirectory() stringByAppendingPathComponent:NSUUID.UUID.UUIDString];
+ captureClass=New("FixtureCapture");writerClass=New("FixtureWriter");managerClass=New("FixtureManager");movieClass=New("FixtureMovie");
+ factory=sel_registerName("screenCaptureControllerWithSize:minIntervalBetweenFrames:");
+ initWriter=sel_registerName("initWithMediaType:outputSettings:");
+ start=sel_registerName("startSessionWithPID:windowSize:systemRecording:contextIDs:outputHandler:didStartHandler:");
+ setup=sel_registerName("setUpAssetWriterWithHandler:");
+ const char *factoryTypes="@64@0:8{CGSize=dd}16{CMTime=qiIq}32";
+ if([mode isEqual:@"bad-size"])factoryTypes="@@:{CGSize=ff}{CMTime=qiIq}";
+ if([mode isEqual:@"bad-time"])factoryTypes="@@:{CGSize=dd}{CMTime=qq}";
+ if([mode isEqual:@"bad-return"])factoryTypes="v@:{CGSize=dd}{CMTime=qiIq}";
+ class_addMethod(object_getClass(captureClass),factory,(IMP)Capture,factoryTypes);
+ class_addMethod(writerClass,initWriter,(IMP)Writer,"@@:@@");
+ const char *startTypes=charABI ? "v64@0:8i16{CGSize=dd}20c36@40@?48@?56" : "v64@0:8i16{CGSize=dd}20B36@40@?48@?56";
+ if([mode isEqual:@"bad-block"])startTypes="v@:i{CGSize=dd}B@@@?";
+ if([mode isEqual:@"bad-flag"])startTypes="v@:i{CGSize=dd}q@@?@?";
+ class_addMethod(managerClass,start,charABI ? (IMP)Start<signed char> : (IMP)Start<bool>,startTypes);
+ class_addMethod(movieClass,setup,(IMP)Setup,"v@:@?");
+ class_addMethod(movieClass,sel_registerName("systemRecording"),charABI ? (IMP)FlagC : (IMP)FlagB,charABI ? "c@:" : "B@:");
+ // Constructor process guard is invoked but must not touch this non-replayd process.
+ InitializeRecording();assert(swizzles==0);
+ if([mode isEqual:@"late"])lateClass=true;
+ ReloadRecording();assert(!H120RecordingActive());
+ assert(H120ReplacePreferences(@{@"wantsEnable":@YES,@"recordingEnabled":@YES,@"selectedApps":@[@"com.apple.replayd"]}));
+ ReloadRecording();assert(H120RecordingActive()); // blacklist is client-only
+ if([mode hasPrefix:@"bad-"]){
+  uint32_t bit=([mode isEqual:@"bad-block"] || [mode isEqual:@"bad-flag"]) ? H120RecordingStartSession : H120RecordingCaptureFactory;
+  assert(!(installedHooks & bit));assert(swizzles==3);
+ }else{
+  if(lateClass){assert(installedHooks==14);lateClass=false;RecordingImageAdded(nullptr,0);
+   NSDate *limit=[NSDate dateWithTimeIntervalSinceNow:2];
+   while(installedHooks!=15 && limit.timeIntervalSinceNow>0)[[NSRunLoop currentRunLoop] runUntilDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
+  }
+  assert(installedHooks==15);int count=swizzles;ReloadRecording();assert(swizzles==count);
+  id manager=[managerClass new],movie=[movieClass new];
+  ObserveRecordingPreferences();
+  assert(H120WritePreference(@"recordingEnabled",@NO));
+  NSDate *disabledLimit=[NSDate dateWithTimeIntervalSinceNow:3];
+  while(H120RecordingActive() && disabledLimit.timeIntervalSinceNow>0)
+   [[NSRunLoop currentRunLoop] runUntilDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
+  assert(!H120RecordingActive()); // production Darwin notification, no direct reload
+  RunStart(manager,true);RunSetup(movie);assert(interval.timescale==60 && FPS()==60);
+  assert(H120WritePreference(@"recordingEnabled",@YES));ReloadRecording();
+  RunStart(manager,true);assert(interval.value==1 && interval.timescale==120);
+  RunStart(manager,false);assert(interval.timescale==60);
+  MakeCapture();assert(interval.timescale==60);
+  RunSetup(movie);assert(FPS()==120 && lastFPS==120);
+  assert([settingsSeen[AVVideoCompressionPropertiesKey][AVVideoAverageBitRateKey] intValue]==12345);
+  VTCompressionSessionRef tagged=encoder;
+  assert(hookedSet(tagged,kVTCompressionPropertyKey_ExpectedFrameRate,(CFTypeRef)@60)==fixtureSetStatus && lastFPS==120);
+  // Once tagged synchronously, later cross-thread properties retain session identity.
+  std::thread worker([=]{@autoreleasepool{hookedSet(tagged,kVTCompressionPropertyKey_ExpectedFrameRate,(CFTypeRef)@60);}});worker.join();assert(lastFPS==120);
+  systemMovie=false;RunSetup(movie);assert(FPS()==60);hookedSet(encoder,kVTCompressionPropertyKey_ExpectedFrameRate,(CFTypeRef)@60);assert(lastFPS==60);systemMovie=true;
+  MakeWriter();assert(FPS()==60);
+  asyncWork=true;RunStart(manager,true);RunSetup(movie);assert(interval.timescale==60 && FPS()==60);asyncWork=false;
+  throwing=true;@try{RunStart(manager,true);}@catch(NSException *e){(void)e;}@try{RunSetup(movie);}@catch(NSException *e){(void)e;}
+  throwing=false;MakeCapture();MakeWriter();assert(interval.timescale==60 && FPS()==60);
+  assert(H120WritePreference(@"wantsEnable",@NO));ReloadRecording();
+  RunStart(manager,true);RunSetup(movie);assert(interval.timescale==60 && FPS()==60);
+  hookedSet(tagged,kVTCompressionPropertyKey_ExpectedFrameRate,(CFTypeRef)@60);assert(lastFPS==60);
+  hookedInvalidate(tagged);assert(invalidates==1);assert(![recordingEncoders containsObject:[NSValue valueWithPointer:tagged]]);
+  [manager release];[movie release];
+ }
+ NSString *logs=[NSString stringWithContentsOfFile:[H120JailbreakPath(@"/var/mobile/Library/Logs/Hello120Hz") stringByAppendingPathComponent:@"recording.jsonl"] encoding:NSUTF8StringEncoding error:NULL];
+ assert([logs containsString:@"configuration-read"] && [logs containsString:@"method-gate"]);
+ if([mode hasPrefix:@"bad-"])assert([logs containsString:@"signature-rejected"]);
+ else assert([logs containsString:@"-12900"] && [logs containsString:@"class-wide-setter-not-session-safe"]);
+ [[NSFileManager defaultManager] removeItemAtPath:fixtureRoot error:NULL];
+ printf("PASS production recording reload/signature/context/VT-return/fail-closed: %s\n",argv[1]);
+}return 0;}

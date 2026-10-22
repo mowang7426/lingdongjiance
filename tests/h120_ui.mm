@@ -32,7 +32,11 @@ int main(void) { @autoreleasepool {
  assert(H120ReplacePreferences(@{@"wantsEnable":@NO,@"wantsFPS":@120,@"selectedApps":@[]}));
  H120TestController *ui=[H120TestController new];[ui loadViewIfNeeded];
  assert(ui.coordinator.sections.count==2);
- assert(ui.coordinator.sections[0].count==2);
+ assert(ui.coordinator.sections[0].count==3);
+ assert(![ui.coordinator.sections[0][2][@"h120Toggle"] boolValue]);
+ ui.coordinator.recordingToggleChanged(YES);
+ assert([H120ReadPreferences()[@"recordingEnabled"] boolValue]);
+ assert(![H120ReadPreferences()[@"wantsEnable"] boolValue]);
  assert(![ui.coordinator.sections[0][0][@"h120Toggle"] boolValue]);
  ui.coordinator.toggleChanged(YES);
  assert([H120ReadPreferences()[@"wantsEnable"] boolValue]);
@@ -52,7 +56,7 @@ int main(void) { @autoreleasepool {
  [ui selectIdentifier:@"system"];assert(!H120GlobalInjectionEnabled());
  NSDictionary *filter=[NSDictionary dictionaryWithContentsOfFile:H120FilterPath()];
  assert([filter[@"Filter"][@"Executables"] isEqual:@[@"SpringBoard"]]);
- [ui reset];NSDictionary *p=H120ReadPreferences();assert(![p[@"wantsEnable"] boolValue]);assert([p[@"wantsFPS"] intValue]==120);assert([p[@"selectedApps"] count]==0);
+ [ui reset];NSDictionary *p=H120ReadPreferences();assert(![p[@"wantsEnable"] boolValue]);assert([p[@"wantsFPS"] intValue]==120);assert([p[@"selectedApps"] count]==0);assert(![p[@"recordingEnabled"] boolValue]);
  [ui respring];assert([ui.lastPresentation isKindOfClass:UIAlertController.class]);
  assert([(UIAlertController *)ui.lastPresentation actions].count==2);
  // Intentionally never invoke a destructive action or HUD/recording API.

@@ -247,6 +247,7 @@ static Class H120ApplicationListClass(void) {
 @property(nonatomic, strong) NSArray<NSString *> *footers;
 @property(nonatomic, copy) void (^selection)(NSString *identifier);
 @property(nonatomic, copy) void (^toggleChanged)(BOOL value);
+@property(nonatomic, copy) void (^recordingToggleChanged)(BOOL value);
 @end
 
 @implementation H120TableCoordinator
@@ -272,6 +273,7 @@ static Class H120ApplicationListClass(void) {
     if (row[@"h120Toggle"]) {
         cell.h120Toggle = [UISwitch new];
         cell.h120Toggle.on = [row[@"h120Toggle"] boolValue];
+        cell.h120Toggle.tag = [row[@"identifier"] isEqual:@"recording"] ? 120 : 0;
         cell.h120Toggle.accessibilityLabel = row[@"title"];
         [cell.h120Toggle addTarget:self action:@selector(switchChanged:) forControlEvents:UIControlEventValueChanged];
         [cell.contentView addSubview:cell.h120Toggle];
@@ -279,7 +281,10 @@ static Class H120ApplicationListClass(void) {
     }
     return cell;
 }
-- (void)switchChanged:(UISwitch *)sender { if (self.toggleChanged) self.toggleChanged(sender.on); }
+- (void)switchChanged:(UISwitch *)sender {
+    if (sender.tag == 120) { if (self.recordingToggleChanged) self.recordingToggleChanged(sender.on); }
+    else if (self.toggleChanged) self.toggleChanged(sender.on);
+}
 - (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
     [tableView deselectRowAtIndexPath:indexPath animated:YES];
     NSString *identifier = self.sections[indexPath.section][indexPath.row][@"identifier"];
@@ -408,6 +413,13 @@ static NSDictionary *H120Row(NSString *identifier, NSString *title, NSString *su
             [owner reloadValues];
         }
     };
+    self.coordinator.recordingToggleChanged = ^(BOOL enabled) {
+        H120SettingsController *owner = weakSelf;
+        if (!H120WritePreference(@"recordingEnabled", @(enabled))) {
+            H120Alert(owner, H120Text(@"Could not save preferences.", @"无法保存配置。"));
+            [owner reloadValues];
+        }
+    };
     self.settingsTable = H120CreateTable(self, self.coordinator);
     [self reloadValues];
 }
@@ -445,8 +457,12 @@ static NSDictionary *H120Row(NSString *identifier, NSString *title, NSString *su
     [actions addObject:H120Row(@"hud", H120HUDEnabled() ? H120Text(@"Disable Debug HUD", @"关闭调试")
         : H120Text(@"Enable Debug HUD", @"打开调试"), H120Text(@"Show system-level debug information", @"显示系统级的调试信息"),
         @"lasso", 50, YES, NO)];
-    self.coordinator.sections = @[@[enabled, rate], actions];
-    self.coordinator.footers = @[H120Text(@"Source 3.3.3-3 · LingDong 5.09+full1", @"来源 3.3.3-3 · 灵动 5.09+full1"), @""];
+    NSMutableDictionary *recording = [H120Row(@"recording", H120Text(@"120 FPS Recording", @"录屏 120 帧"),
+        H120Text(@"System recording · master switch required · diagnostic test", @"仅系统录屏 · 需同时启用调整 · 诊断测试版"),
+        @"record.circle", 66, NO, NO) mutableCopy];
+    recording[@"h120Toggle"] = @([preferences[@"recordingEnabled"] boolValue]);
+    self.coordinator.sections = @[@[enabled, rate, recording], actions];
+    self.coordinator.footers = @[H120Text(@"Source 3.3.3-3 · LingDong 5.09+full2", @"来源 3.3.3-3 · 灵动 5.09+full2"), @""];
     [self.settingsTable reloadData];
 }
 - (void)selectIdentifier:(NSString *)identifier {
@@ -468,7 +484,7 @@ static NSDictionary *H120Row(NSString *identifier, NSString *title, NSString *su
     }
 }
 - (void)reset {
-    if (!H120ReplacePreferences(@{@"wantsEnable":@NO, @"wantsFPS":@120, @"selectedApps":@[]})) {
+    if (!H120ReplacePreferences(@{@"wantsEnable":@NO, @"wantsFPS":@120, @"selectedApps":@[], @"recordingEnabled":@NO})) {
         H120Alert(self, H120Text(@"Could not save preferences.", @"无法保存配置。"));
     }
     [self reloadValues];

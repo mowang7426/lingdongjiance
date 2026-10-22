@@ -9,8 +9,9 @@ for key in ('wantsEnable','wantsFPS','selectedApps'):
  assert key in ui and key in core,key
 assert 'H120ClientEnabled(' in core and 'H120NormalizeFPS(' in core
 assert 'H120ConfirmReload(self)' in ui
-assert 'H120Recording' not in (h/'Makefile').read_text()
-assert not (h/'Core/H120Recording.mm').exists()
+assert '0hello120hzRecording_FILES = Core/H120Recording.mm Shared/H120Preferences.mm' in (h/'Makefile').read_text()
+assert (h/'Core/H120Recording.mm').exists()
+assert plistlib.loads((h/'0hello120hzRecording.plist').read_bytes()) == {'Filter':{'Executables':['replayd']}}
 assert 'H120InstallBackboardHooks' not in core
 assert '__ZNK2CA12WindowServer' not in core
 assert 'com.opa334.altlist' in (r/'control').read_text()
@@ -49,5 +50,6 @@ if '--staged' in sys.argv:
  assert list(stage.rglob('0hello120hz.dylib')) and list(stage.rglob('hello120hz.bundle'))
  for p in stage.rglob('0hello120hz.plist'):
   assert plistlib.loads(p.read_bytes())['Filter']['Executables']==['SpringBoard']
- assert not list(stage.rglob('*Recording*'))
-print('Hello screenshot scope, defaults, exclusions, isolation, filter installer and resources PASS')
+ assert list(stage.rglob('0hello120hzRecording.dylib'))
+ assert all(plistlib.loads(p.read_bytes())=={'Filter':{'Executables':['replayd']}} for p in stage.rglob('0hello120hzRecording.plist'))
+print('Hello original scope plus isolated recording, defaults, exclusions, isolation, filter installer and resources PASS')

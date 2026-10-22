@@ -17,7 +17,7 @@ for path in root.rglob('*'):
     # Only the new, isolated source module and exact shipped bundle/filter/helper
     # are allowed. Old SBCPU/MotionX experiments remain forbidden everywhere.
     isolated = ('hello120hz' in path.parts or 'hello120hz.bundle' in path.parts or
-                path.name in ('0hello120hz.dylib', '0hello120hz.plist', 'hello120hz.plist', 'hello120hz-install'))
+                path.name in ('0hello120hz.dylib', '0hello120hz.plist', '0hello120hzRecording.dylib', '0hello120hzRecording.plist', 'hello120hz.plist', 'hello120hz-install'))
     if isolated:
         continue
     if rel == 'control':
