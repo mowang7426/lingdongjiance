@@ -119,7 +119,7 @@ int main(void) { @autoreleasepool {
  assert([H120ReadSpecifier(picker,@selector(readPreferenceValue:),s) isEqual:@[@"com.example.game"]]);
  [ui selectIdentifier:@"system"];assert(!H120GlobalInjectionEnabled());
  NSDictionary *filter=[NSDictionary dictionaryWithContentsOfFile:H120FilterPath()];
- assert([filter[@"Filter"][@"Executables"] isEqual:@[@"SpringBoard",@"backboardd",@"replayd"]]);
+ assert(([filter[@"Filter"][@"Executables"] isEqual:@[@"SpringBoard",@"backboardd",@"replayd"]]));
  [ui reset];NSDictionary *p=H120ReadPreferences();assert(![p[@"wantsEnable"] boolValue]);assert([p[@"wantsFPS"] intValue]==120);assert([p[@"selectedApps"] count]==0);assert(![p[@"recordingEnabled"] boolValue]);
  [ui selectIdentifier:@"applyRecording"];
  assert([ui.lastPresentation isKindOfClass:UIAlertController.class]);
