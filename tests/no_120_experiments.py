@@ -20,7 +20,11 @@ for path in root.rglob('*'):
                 path.name in ('0hello120hz.dylib', '0hello120hz.plist', '0hello120hzRecording.dylib', '0hello120hzRecording.plist', 'hello120hz.plist', 'hello120hz-install'))
     if isolated:
         continue
-    if rel == 'control':
+    if rel in ('control', 'DEBIAN/control'):
+        # Source and dpkg -e views of the same metadata. Only the exact declared
+        # incompatibilities are exempt, never arbitrary legacy payload content.
+        conflicts = [line for line in text.splitlines() if line.startswith('conflicts:')]
+        assert conflicts == ['conflicts: cn.zqbb.fix120hz, cn.zqbb.fix120hz15, com.zqbb.fix120hz, com.zqbb.dynamic120hz']
         text = '\n'.join(line for line in text.splitlines() if not line.startswith('conflicts:'))
     if path.name == 'Makefile' and rel == 'Makefile':
         text = text.replace('subprojects += hello120hz', '')
