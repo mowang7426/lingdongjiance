@@ -5,7 +5,8 @@
 int main(void) {
     for (int major = 14; major <= 26; ++major)
         for (int minor = 0; minor < 10; ++minor)
-            assert(!SBCPUPeachDockProfileApproved(major, minor));
+            assert(SBCPUPeachDockProfileApproved(major, minor) == (major == 16));
+    assert(!SBCPUPeachDockProfileApproved(16, -1));
     const double widths[] = {320, 375, 390, 393, 414, 430, 844};
     for (unsigned w = 0; w < sizeof(widths)/sizeof(widths[0]); ++w) {
         double width = widths[w], pitch = SBCPUPeachDockPitch(width);
@@ -28,6 +29,6 @@ int main(void) {
             assert(SBCPUPeachDockVisualPolicy(e,low,thermal,motion,transparency) ==
                    (e && !low && thermal < 2 && !motion && !transparency));
         }
-    puts("PASS: production pitch, 35350 forward/inverse cases, closed profiles, visual policy");
+    puts("PASS: production pitch, 35350 forward/inverse cases, iOS 16 candidate envelope, visual policy");
     return 0;
 }

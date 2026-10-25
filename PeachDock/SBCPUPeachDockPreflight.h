@@ -13,11 +13,12 @@ static BOOL SBCPUPeachDockCheck(Class cls, const char *name, const char *types, 
     return YES;
 }
 static BOOL SBCPUPeachDockPreflight(Class dock, Class model, Class provider, Class icon, Class view) {
-    if (!SBCPUPeachDockCapacityReady(dock, model)) return NO;
+    if (!SBCPUPeachDockCapacityReady(dock, model) || !SBCPUPeachDockRestoreReady() ||
+        !SBCPUPeachDockDisableReady()) return NO;
     struct SBCPUPeachDockRequirement { Class cls; const char *selector; const char *types; BOOL optional; };
     const struct SBCPUPeachDockRequirement requirements[] = {
         {object_getClass(dock), "maxIcons", "Q@:", YES},
-        {dock, "originForIconAtCoordinate:numberOfIcons:", "{CGPoint=dd}@:{Coordinate=qq}Q", NO},
+        {dock, "originForIconAtCoordinate:numberOfIcons:", "{CGPoint=dd}@:{Coordinate=qq}Q", YES},
         {dock, "originForIconAtCoordinate:metrics:options:", "{CGPoint=dd}@:{Coordinate=qq}@Q", NO},
         {dock, "centerForIconCoordinate:metrics:", "{CGPoint=dd}@:{Coordinate=qq}@", NO},
         {dock, "columnAtPoint:metrics:fractionOfDistanceThroughColumn:", "Q@:{CGPoint=dd}@^d", NO},
@@ -44,7 +45,6 @@ static BOOL SBCPUPeachDockPreflight(Class dock, Class model, Class provider, Cla
         {icon, "setCenter:", "v@:{CGPoint=dd}", NO},
         {icon, "setFrame:", "v@:{CGRect={CGPoint=dd}{CGSize=dd}}", NO},
         {icon, "icon", "@@:", NO},
-        {model, "initWithFolder:maxIconCount:", "@@:@Q", NO},
         {provider, "layoutForIconLocation:", "@@:@", NO},
         {objc_getClass("SBIconListGridLayout"), "layoutConfiguration", "@@:", NO},
         {objc_getClass("SBIconListGridLayoutConfiguration"), "setNumberOfPortraitRows:", "v@:Q", NO},

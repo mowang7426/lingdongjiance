@@ -1,62 +1,15 @@
-# PeachDock source and implementation status — 5.09+peach1
+# PeachDock source and implementation status — 5.09+peach2
 
-Base: 9eb7e4947e976da22a15c1945a598ce0f81afb63 (5.08).
-Input: user-supplied Peach-2.1.8-1-source.zip, nested
-INFINIDock16-Reborn/INFINIDock16-Reborn. SOURCE-SHA256SUMS records imported
-input files before namespacing. LICENSE, CREDITS.md and ORIGIN.md are preserved
-as supplied. Their historical authorship statements are upstream statements,
-not an independent verification of every later contribution's licensing.
-No images, binaries, Apelin scripts or second PreferenceLoader bundle imported.
+Base: 9eb7e4947e976da22a15c1945a598ce0f81afb63 (5.08). Input: user-provided Peach-2.1.8-1-source.zip (INFINIDock16-Reborn). SOURCE-SHA256SUMS preserves imported input hashes before namespacing; LICENSE, CREDITS.md and ORIGIN.md preserve supplied BSD attribution. Historical authorship is upstream attribution, not an independent audit of all contributions. No Hello source, images, binaries, Apelin scripts or second PreferenceLoader bundle imported.
 
-## Development snapshot, NOT a usable Dock release
+## Conditional experimental implementation
 
-The scrolling, spring, geometry, editing, drop-preview, wrapper ownership and
-bounded edge-rendering source have been isolated under SBCPUPeachDock. Pitch
-uses viewport width/4 consistently for rendering and hit testing, replacing
-89 pt. Owner associations use a retained weak box. Config is latched once at
-SpringBoard start, in the existing preferences domain. Defaults: master OFF,
-paging ON, spring ON, edge OFF. Blur retains 12 samples, at most two pending
-captures per controller, a serial rendering queue and idle display-link stop.
-Low power, serious/critical thermal state and accessibility policy suppress
-edge effects without altering existing thermal controls.
+Master OFF, paging ON, spring ON, edge OFF. iOS 16.x is only a candidate envelope; the constructor installs no hooks unless enabled, no conflicting loaded INFINIDock is detected, every required hook/provider/capacity/restore/drag ABI passes preflight, and the local CFMessagePort is installed. iOS 17 and unknown ABIs remain inactive. The legacy coordinate selector is optional; present-but-mismatched ABI rejects the entire group. This does not prove the Apple 16.x restore call graph, especially iOS 16.2.
 
-IMPORTANT: all runtime profiles remain deliberately disabled. The imported
-comments describe iOS 16.2 {col,row} qq semantics; synthetic fixtures are not
-independent device metadata. The new capacity adapter binds only the actual
-SBDockIconListView.model using a weak owner, checks getter/setter/count/max ABI,
-and invalidates ownership after model replacement. The production constructor
-now checks the full dependent hook/provider-setter group before any installation.
-The macOS capacity test invokes the actual installer via a substitute hook engine;
-it is not a restore/drag test. In particular, binding a view's model happens AFTER
-model construction and does not establish the capacity used by IconState decoding.
-There is still no verified reversible >4-icon persistence lifecycle.
-The generic maxIconCount==4 / RootFolder class heuristic was removed; its init
-hook now passes through unchanged. No Hook/class_addMethod is reached on ANY
-system, including 16.2 and 17.0. The integrated settings page says so and refuses
-writes. This is incomplete implementation, not a claim of iOS 17 support.
+Dock restore capacity hooks target only SBHIconModel's maxIconCountForDock (Q@:) and maxIconCountForDockForIconStateUnarchiver: (Q@:@). Ordinary model init and root/home capacity are untouched. The Dock view's actual model getter/setter establishes retained-weak owner identity, revokes ownership on replacement, and its numberOfIcons provides read-only shutdown count. Pitch is viewport width/4 for display and hit testing. Paging/continuous scrolling, spring, editing/drag/drop preview remain. Edge blur is separately opt-in; 12 samples, at most two pending captures per controller, serial rendering queue and idle display-link stop. Low power, serious/critical thermal and accessibility policies suppress effects without changing original thermal handling.
 
-## Required completion before enabling any profile
+Settings uses the existing com.yourname.sbcpufloating CFPreferences user/any-host domain; flags latch at SpringBoard startup. Shutdown sends a nonce-scoped real cross-process CFMessagePort prepare. On the SpringBoard main loop, preparation requires a bound Dock count <=4, no edit/drag/drop activity and installs admission lock before acknowledging. Settings writes false ONLY on prepared. Cancel tombstones stale nonce; wrong nonce cannot release the active lock; failed/unknown persistence keeps lock unless enabled is confirmed; commit reads persisted false and latches lock through manual respring. After a successful shutdown the current scrolling view remains accessible while icon drag and Dock drop admission are suspended. Re-enable is saved for the next manual respring and does NOT clear the process-local lock. External forced uninstall or direct preference writes are not protected.
 
-1. Evidence-backed Dock-only capacity adapter, never all four-icon models.
-2. Complete preflight of every hook, callback and provider setter ABI; only
-   install the entire dependent group after the complete preflight succeeds.
-3. A recovery controller that retains scroll access while draining extra icons
-   into validated home-screen slots, with verified persistence, rollback and
-   unload/reinstall behavior. Do not delete IconState or trust automatic truncation.
-4. Original INFINIDock detection before loading (including not-yet-loaded dylibs)
-   and load-order testing. Current loaded-image/class detection is supplementary;
-   the closed profile gate is the actual safety boundary in this snapshot.
-5. Rootless/RootHide preference path/runtime tests and real-device lifecycle,
-   RTL, rotation, drag/drop, edit, accessibility and >4-icon recovery validation.
+**Before disable/uninstall:** scroll the Dock and manually move all excess icons back to the home screen; exit edit/drag; ensure <=4; use this panel's close operation and then manually respring. Do not uninstall while excess icons remain. No icon deletion, automatic migration, kill, respring or device installation is performed.
 
-The conservative user procedure for a future verified version is to move every
-extra Dock icon back to the home screen while scrolling remains enabled, verify
-original capacity, then disable and manually restart SpringBoard; uninstall only
-after that. This procedure is not yet implemented as an enforced recovery state
-machine, so capacity remains disabled. No device installation/restart is done.
-
-Existing 5.08 floating/text inversion/CPU/charging/thermal source and filters are
-unchanged. The new filter is SpringBoard-only. This module is not frame locking
-and makes no 120Hz improvement claim. 5.09+peach1 sorts below 5.10; an installer
-would need explicit downgrade approval. Do not install this development artifact
-as a feature-complete replacement. No merge to main or official Release intended.
+Host production-header Foundation fixtures test ABI, Dock-only capacity, real CFMessagePort subprocess round-trip, nonce/lock admission, alongside C geometry and existing core regressions. These are not physical-device lifecycle validation; iOS 16.x minor-version call ordering, RootHide preference runtime, coexistence/load order, layout rotation/RTL/accessibility and uninstall/reinstall need on-device validation. Do not claim iOS 17 support or physical 120 Hz. Existing 5.08 floating/text inversion/CPU/charging/thermal source and filters are unchanged. 5.09+peach2 sorts below 5.10, so upgrading from 5.10 requires explicit downgrade approval. This feature branch is not merged or released.

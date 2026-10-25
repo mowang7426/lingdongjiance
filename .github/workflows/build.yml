@@ -14,7 +14,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Peach Dock production policy regression (closed development profiles)
+      - name: Peach Dock production policy, restore and disable transaction regression
         run: |
           set -e
           python3 tests/peach_dock_wiring.py
@@ -25,6 +25,12 @@ jobs:
           clang -fobjc-arc -framework Foundation -Wall -Wextra -Werror \
             tests/peach_capacity_runtime.m -o /tmp/peach-capacity
           /tmp/peach-capacity
+          clang -fobjc-arc -framework Foundation -Wall -Wextra -Werror \
+            tests/peach_restore_runtime.m -o /tmp/peach-restore
+          /tmp/peach-restore
+          clang -fobjc-arc -framework Foundation -Wall -Wextra -Werror \
+            tests/peach_disable_runtime.m -o /tmp/peach-disable
+          /tmp/peach-disable
 
       - name: UIKit FPS glyph budget and clipping regression (iOS Simulator)
         run: |

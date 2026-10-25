@@ -39,6 +39,7 @@ extern void MSHookMessageEx(Class cls, SEL selector, IMP replacement, IMP *origi
 static const NSUInteger SBCPUPeachDockMaximumDockIcons = 100;
 static const NSUInteger SBCPUPeachDockDefaultIconsPerPage = 4;
 #import "SBCPUPeachDockCapacity.h"
+#import "SBCPUPeachDockRestore.h"
 // The viewport, not a single device's 89 pt measurement, defines slot pitch.
 static CGFloat SBCPUPeachDockIconPitch(SBDockIconListView *list) {
     return SBCPUPeachDockPitch(CGRectGetWidth(list.bounds));
@@ -564,20 +565,6 @@ static void SBCPUPeachDockHookSetFrame(SBIconView *self, SEL _cmd, CGRect frame)
     if (SBCPUPeachDockOriginalSetFrame) SBCPUPeachDockOriginalSetFrame(self, _cmd, frame);
 }
 
-// An init-family IMP consumes its receiver and returns +1. C functions have no
-// method-family inference, so both the original type and replacement spell it out.
-typedef id (*SBCPUPeachDockModelInitIMP)(id self __attribute__((ns_consumed)), SEL _cmd,
-    id folder, unsigned long long maxIconCount) __attribute__((ns_returns_retained));
-static SBCPUPeachDockModelInitIMP SBCPUPeachDockOriginalModelInit;
-static id SBCPUPeachDockHookModelInit(id self __attribute__((ns_consumed)), SEL _cmd,
-    id folder, unsigned long long maxIconCount) __attribute__((ns_returns_retained));
-static id SBCPUPeachDockHookModelInit(id self __attribute__((ns_consumed)), SEL _cmd,
-                           id folder, unsigned long long maxIconCount) {
-    // Init remains transparent: ownership is established from the actual Dock
-    // view's model getter/setter, never from a four-slot count or folder class.
-    return SBCPUPeachDockOriginalModelInit(self, _cmd, folder, maxIconCount);
-}
-
 static id (*SBCPUPeachDockOriginalProviderLayout)(SBHDefaultIconListLayoutProvider *, SEL, id);
 static id SBCPUPeachDockHookProviderLayout(SBHDefaultIconListLayoutProvider *self, SEL _cmd, id iconLocation) {
     id layout = SBCPUPeachDockOriginalProviderLayout(self, _cmd, iconLocation);
@@ -606,6 +593,7 @@ static void SBCPUPeachDockInstallHook(Class cls, SEL selector, IMP replacement, 
     }
 }
 
+#import "SBCPUPeachDockDisable.h"
 #import "SBCPUPeachDockPreflight.h"
 
 __attribute__((constructor)) static void SBCPUPeachDockInitialize(void) {
@@ -626,9 +614,11 @@ __attribute__((constructor)) static void SBCPUPeachDockInitialize(void) {
             if (!SBCPUPeachDockTweakEnabled()) {
                 return;
             }
-            if (version.majorVersion >= 15 && version.majorVersion <= 16 &&
+            if (version.majorVersion == 16 &&
                 dockClass != Nil && modelClass != Nil && iconViewClass != Nil && dockViewClass != Nil &&
                 SBCPUPeachDockPreflight(dockClass, modelClass, providerClass, iconViewClass, dockViewClass)) {
+                if (!SBCPUPeachDockInstallDisable()) return;
+                SBCPUPeachDockInstallRestore();
                 SBCPUPeachDockInstallCapacity(dockClass, modelClass);
                 SBCPUPeachDockInstallHook(object_getClass(dockClass), @selector(maxIcons),
                     (IMP)SBCPUPeachDockHookMaxIcons, (IMP *)&SBCPUPeachDockOriginalMaxIcons, "Q@:");
@@ -663,8 +653,6 @@ __attribute__((constructor)) static void SBCPUPeachDockInitialize(void) {
                     (IMP)SBCPUPeachDockHookSetCenter, (IMP *)&SBCPUPeachDockOriginalSetCenter, NULL);
                 SBCPUPeachDockInstallHook(iconViewClass, @selector(setFrame:),
                     (IMP)SBCPUPeachDockHookSetFrame, (IMP *)&SBCPUPeachDockOriginalSetFrame, NULL);
-                SBCPUPeachDockInstallHook(modelClass, @selector(initWithFolder:maxIconCount:),
-                    (IMP)SBCPUPeachDockHookModelInit, (IMP *)&SBCPUPeachDockOriginalModelInit, NULL);
                 if (providerClass != Nil) {
                     SBCPUPeachDockInstallHook(providerClass, @selector(layoutForIconLocation:),
                         (IMP)SBCPUPeachDockHookProviderLayout, (IMP *)&SBCPUPeachDockOriginalProviderLayout, NULL);

@@ -14,7 +14,20 @@ assert t.index('SBCPUPeachDockPreflight(dockClass, modelClass, providerClass, ic
 c=(p/'SBCPUPeachDockCapacity.h').read_text()
 assert 'if (!SBCPUPeachDockCapacityReady(dockClass, modelClass)) return;' in c
 assert 'SBCPUPeachDockReadBoundCount' in c and 'SBCPUPeachDockOwnsModel(model)' in c
-assert 'tests/peach_capacity_runtime.m' in (root/'.github/workflows/build.yml').read_text()
+workflow=(root/'.github/workflows/build.yml').read_text()
+for fixture in ('peach_capacity_runtime.m','peach_restore_runtime.m','peach_disable_runtime.m'):
+    assert 'tests/'+fixture in workflow
+restore=(p/'SBCPUPeachDockRestore.h').read_text()
+disable=(p/'SBCPUPeachDockDisable.h').read_text()
+preflight=(p/'SBCPUPeachDockPreflight.h').read_text()
+assert 'maxIconCountForDockForIconStateUnarchiver:' in restore and 'Q@:@' in restore
+assert 'SBCPUPeachDockRestoreReady()' in preflight and 'SBCPUPeachDockDisableReady()' in preflight
+assert 'if (count > 4)' in disable and 'SBCPUPeachDockDisableIdle()' in disable
+assert disable.index('SBCPUPeachDockDisableNonce = [nonce copy]') < disable.index('status = @"prepared"')
+assert 'SBCPUPeachDockPersistedDisabled() == 1' in disable
+assert 'initWithFolder:maxIconCount:' not in t
+assert 'SBCPUPeachDockInstallDisable()) return;' in t
+assert (p/'SBCPUPeachDockPolicy.h').read_text().count('return major == 16 && minor >= 0;') == 1
 assert 'SBCPUPeachDockPitch(CGRectGetWidth(list.bounds))' in t
 assert 'SBCPUPeachDockIconPitch(self)' in (p/'SBCPUPeachDockDockDropMapping.h').read_text()
 e=(p/'SBCPUPeachDockEdgeTransition.m').read_text()
@@ -22,6 +35,6 @@ assert 'SBCPUPeachDockEffects()' in e and 'if (pending >= 2)' in e
 assert '[_displayLink invalidate]' in e and 'MaximumSamples = 12' in e
 items=plistlib.loads((root/'sbcpuprefs/Resources/Root.plist').read_bytes())['items']
 assert sum(i.get('detail')=='SBCPUPeachDockController' for i in items)==1
-assert 'Version: 5.09+peach1' in (root/'control').read_text()
+assert 'Version: 5.09+peach2' in (root/'control').read_text()
 assert (root/'SBCPUPeachDock.plist').read_text().strip()=='{ Filter = { Bundles = ("com.apple.springboard"); }; }'
-print('PASS: preserved 5.08 production core, weak ownership, snapshot, closed gate, settings, filter')
+print('PASS: preserved 5.08 production core, weak ownership, snapshot, conditional runtime gate, settings, filter')
