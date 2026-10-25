@@ -69,7 +69,7 @@ static unsigned long long SBCPUPeachDockHookListMaximum(id self, SEL cmd) {
 
 // Read-only recovery evidence. Unknown/unbound is NOT proof of an empty Dock.
 // Caller can refuse disable/uninstall without moving or deleting any icons.
-static BOOL SBCPUPeachDockReadBoundCount(unsigned long long *count) {
+static inline BOOL SBCPUPeachDockReadBoundCount(unsigned long long *count) {
     if (![NSThread isMainThread] || SBCPUPeachDockBoundLists.count == 0) return NO;
     unsigned long long largest = 0;
     BOOL observed = NO;
