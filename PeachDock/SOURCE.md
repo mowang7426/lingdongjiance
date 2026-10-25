@@ -20,10 +20,16 @@ captures per controller, a serial rendering queue and idle display-link stop.
 Low power, serious/critical thermal state and accessibility policy suppress
 edge effects without altering existing thermal controls.
 
-IMPORTANT: all runtime profiles are deliberately disabled. The imported
+IMPORTANT: all runtime profiles remain deliberately disabled. The imported
 comments describe iOS 16.2 {col,row} qq semantics; synthetic fixtures are not
-independent device metadata. There is no proved Dock-only model identity,
-full-group ABI evidence or verified reversible >4-icon persistence migration.
+independent device metadata. The new capacity adapter binds only the actual
+SBDockIconListView.model using a weak owner, checks getter/setter/count/max ABI,
+and invalidates ownership after model replacement. The production constructor
+now checks the full dependent hook/provider-setter group before any installation.
+The macOS capacity test invokes the actual installer via a substitute hook engine;
+it is not a restore/drag test. In particular, binding a view's model happens AFTER
+model construction and does not establish the capacity used by IconState decoding.
+There is still no verified reversible >4-icon persistence lifecycle.
 The generic maxIconCount==4 / RootFolder class heuristic was removed; its init
 hook now passes through unchanged. No Hook/class_addMethod is reached on ANY
 system, including 16.2 and 17.0. The integrated settings page says so and refuses

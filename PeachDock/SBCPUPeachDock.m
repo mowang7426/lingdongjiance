@@ -38,6 +38,7 @@ extern void MSHookMessageEx(Class cls, SEL selector, IMP replacement, IMP *origi
 
 static const NSUInteger SBCPUPeachDockMaximumDockIcons = 100;
 static const NSUInteger SBCPUPeachDockDefaultIconsPerPage = 4;
+#import "SBCPUPeachDockCapacity.h"
 // The viewport, not a single device's 89 pt measurement, defines slot pitch.
 static CGFloat SBCPUPeachDockIconPitch(SBDockIconListView *list) {
     return SBCPUPeachDockPitch(CGRectGetWidth(list.bounds));
@@ -455,6 +456,7 @@ static void SBCPUPeachDockHookListAddSubview(SBDockIconListView *self, SEL _cmd,
 
 static void (*SBCPUPeachDockOriginalListLayout)(SBDockIconListView *, SEL);
 static void SBCPUPeachDockHookListLayout(SBDockIconListView *self, SEL _cmd) {
+    SBCPUPeachDockBindModel(self, SBCPUPeachDockReadModel(self));
     SBCPUPeachDockInstallScrollViewIfNeeded(self);
     if (SBCPUPeachDockDockInteractionActive(self)) {
         SBCPUPeachDockCancelSpringSettle(SBCPUPeachDockScrollView(self));
@@ -571,9 +573,8 @@ static id SBCPUPeachDockHookModelInit(id self __attribute__((ns_consumed)), SEL 
     id folder, unsigned long long maxIconCount) __attribute__((ns_returns_retained));
 static id SBCPUPeachDockHookModelInit(id self __attribute__((ns_consumed)), SEL _cmd,
                            id folder, unsigned long long maxIconCount) {
-    // RootFolderWithDock also owns non-Dock lists. Neither its class nor a
-    // count of four proves that this model is the Dock. Until an independently
-    // evidenced identity adapter exists, NEVER expand a generic list model.
+    // Init remains transparent: ownership is established from the actual Dock
+    // view's model getter/setter, never from a four-slot count or folder class.
     return SBCPUPeachDockOriginalModelInit(self, _cmd, folder, maxIconCount);
 }
 
@@ -605,6 +606,8 @@ static void SBCPUPeachDockInstallHook(Class cls, SEL selector, IMP replacement, 
     }
 }
 
+#import "SBCPUPeachDockPreflight.h"
+
 __attribute__((constructor)) static void SBCPUPeachDockInitialize(void) {
     @autoreleasepool {
         @try {
@@ -624,7 +627,9 @@ __attribute__((constructor)) static void SBCPUPeachDockInitialize(void) {
                 return;
             }
             if (version.majorVersion >= 15 && version.majorVersion <= 16 &&
-                dockClass != Nil && modelClass != Nil && iconViewClass != Nil && dockViewClass != Nil) {
+                dockClass != Nil && modelClass != Nil && iconViewClass != Nil && dockViewClass != Nil &&
+                SBCPUPeachDockPreflight(dockClass, modelClass, providerClass, iconViewClass, dockViewClass)) {
+                SBCPUPeachDockInstallCapacity(dockClass, modelClass);
                 SBCPUPeachDockInstallHook(object_getClass(dockClass), @selector(maxIcons),
                     (IMP)SBCPUPeachDockHookMaxIcons, (IMP *)&SBCPUPeachDockOriginalMaxIcons, "Q@:");
                 SBCPUPeachDockInstallHook(dockClass, @selector(originForIconAtCoordinate:numberOfIcons:),

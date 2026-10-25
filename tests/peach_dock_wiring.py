@@ -10,6 +10,11 @@ assert 'OBJC_ASSOCIATION_ASSIGN' not in t
 assert 'exactFourIconModel' not in t and 'likelyStockDockModel' not in t
 assert 'CFPreferencesCopy' not in t
 assert t.index('if (!SBCPUPeachDockProfileApproved') < t.index('SBCPUPeachDockInstallHook(object_getClass(dockClass)')
+assert t.index('SBCPUPeachDockPreflight(dockClass, modelClass, providerClass, iconViewClass, dockViewClass)') < t.index('SBCPUPeachDockInstallCapacity(dockClass, modelClass)')
+c=(p/'SBCPUPeachDockCapacity.h').read_text()
+assert 'if (!SBCPUPeachDockCapacityReady(dockClass, modelClass)) return;' in c
+assert 'SBCPUPeachDockReadBoundCount' in c and 'SBCPUPeachDockOwnsModel(model)' in c
+assert 'tests/peach_capacity_runtime.m' in (root/'.github/workflows/build.yml').read_text()
 assert 'SBCPUPeachDockPitch(CGRectGetWidth(list.bounds))' in t
 assert 'SBCPUPeachDockIconPitch(self)' in (p/'SBCPUPeachDockDockDropMapping.h').read_text()
 e=(p/'SBCPUPeachDockEdgeTransition.m').read_text()
