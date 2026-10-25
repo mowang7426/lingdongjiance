@@ -14,6 +14,15 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Peach Dock production policy regression (closed development profiles)
+        run: |
+          set -e
+          python3 tests/peach_dock_wiring.py
+          clang -std=c11 -Wall -Wextra -Werror -pedantic tests/peach_dock_policy.c -o /tmp/peach-policy
+          /tmp/peach-policy
+          clang++ -x c++ -std=c++11 -Wall -Wextra -Werror -pedantic tests/peach_dock_policy.c -o /tmp/peach-policy-cxx
+          /tmp/peach-policy-cxx
+
       - name: UIKit FPS glyph budget and clipping regression (iOS Simulator)
         run: |
           python3 tests/text_fps_budget_wiring.py

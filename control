@@ -1,6 +1,6 @@
 Package: com.sbcpu.floating
 Name: 灵动监测
-Version: 5.08
+Version: 5.09+peach1
 Architecture: iphoneos-arm64
 Maintainer: MoWang
 Author: MoWang

@@ -5,6 +5,11 @@
 	<key>items</key>
 	<array>
 		<dict>
+			<key>cell</key><string>PSLinkCell</string>
+			<key>label</key><string>滚动 Dock（实验性）</string>
+			<key>detail</key><string>SBCPUPeachDockController</string>
+		</dict>
+		<dict>
 			<key>cell</key>
 			<string>PSGroupCell</string>
 			<key>label</key>

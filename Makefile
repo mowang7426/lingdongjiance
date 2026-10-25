@@ -3,7 +3,13 @@ TARGET = iphone:clang:16.5:14.0
 
 include $(THEOS)/makefiles/common.mk
 
-TWEAK_NAME = SBCPUFloating SBCPUPowerd SBCPUFloatingCCRegistration
+TWEAK_NAME = SBCPUFloating SBCPUPowerd SBCPUFloatingCCRegistration SBCPUPeachDock
+
+SBCPUPeachDock_FILES = PeachDock/SBCPUPeachDock.m PeachDock/SBCPUPeachDockEdgeTransition.m PeachDock/SBCPUPeachDockConfig.m
+SBCPUPeachDock_CFLAGS = -fobjc-arc -IPeachDock
+SBCPUPeachDock_FRAMEWORKS = UIKit Foundation QuartzCore Accelerate
+SBCPUPeachDock_LIBRARIES = substrate
+SBCPUPeachDock_INSTALL_TARGET_PROCESSES = SpringBoard
 
 # 1. 桌面 UI、悬浮窗、FPS 监测、通知管理
 SBCPUFloating_FILES = Tweak.xm SBCPUTextBackdropLabel.m Shared/LGLiveBackdropView.m Shared/LGWallpaperBlurCache.m Shared/LGSharedSupport.m SBCPUPCoreFrequency.m
@@ -72,6 +78,8 @@ include $(THEOS_MAKE_PATH)/aggregate.mk
 
 # 确保 Control Center bundle 的资源和注册过滤器一定进入最终 DEB。
 after-stage::
+	$(ECHO_NOTHING)mkdir -p "$(THEOS_STAGING_DIR)/usr/share/doc/sbcpufloating/PeachDock"$(ECHO_END)
+	$(ECHO_NOTHING)cp "$(THEOS_PROJECT_DIR)"/PeachDock/LICENSE "$(THEOS_PROJECT_DIR)"/PeachDock/CREDITS.md "$(THEOS_PROJECT_DIR)"/PeachDock/ORIGIN.md "$(THEOS_PROJECT_DIR)"/PeachDock/SOURCE.md "$(THEOS_STAGING_DIR)/usr/share/doc/sbcpufloating/PeachDock/"$(ECHO_END)
 	$(ECHO_NOTHING)mkdir -p "$(THEOS_STAGING_DIR)/usr/share/doc/sbcpufloating"$(ECHO_END)
 	$(ECHO_NOTHING)cp "$(THEOS_PROJECT_DIR)/LICENSE.TrollSpeed" "$(THEOS_PROJECT_DIR)/TEXT_ONLY_MODE.md" "$(THEOS_STAGING_DIR)/usr/share/doc/sbcpufloating/"$(ECHO_END)
 	$(ECHO_NOTHING)mkdir -p "$(THEOS_STAGING_DIR)/Library/MobileSubstrate/DynamicLibraries"$(ECHO_END)
