@@ -10,6 +10,66 @@
 			<key>cell</key>
 			<string>PSGroupCell</string>
 			<key>label</key>
+			<string>数据间距（两个文字浮窗）</string>
+			<key>footerText</key>
+			<string>调整相邻指标固定槽位之间的间隔，不是字距、标识符与数值距离，也不是两个浮窗的位置距离。默认 4pt（4.97 槽位尾部留白），范围 -15–12pt；负值会让相邻固定槽位紧凑重叠，数值位数变化不会移动槽位。两个窗口独立保存并即时生效，间距增大可能换行。</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSSliderCell</string>
+			<key>label</key>
+			<string>窗口1 数据间距（pt）</string>
+			<key>key</key>
+			<string>floatingTextOnlyDataGap</string>
+			<key>defaults</key>
+			<string>com.yourname.sbcpufloating</string>
+			<key>get</key>
+			<string>getPreferenceValue:</string>
+			<key>set</key>
+			<string>setPreferenceValue:specifier:</string>
+			<key>default</key>
+			<integer>4</integer>
+			<key>min</key>
+			<integer>-15</integer>
+			<key>max</key>
+			<integer>12</integer>
+			<key>showValue</key>
+			<true/>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSSliderCell</string>
+			<key>label</key>
+			<string>窗口2 数据间距（pt）</string>
+			<key>key</key>
+			<string>floatingTextOnly2DataGap</string>
+			<key>defaults</key>
+			<string>com.yourname.sbcpufloating</string>
+			<key>get</key>
+			<string>getPreferenceValue:</string>
+			<key>set</key>
+			<string>setPreferenceValue:specifier:</string>
+			<key>default</key>
+			<integer>4</integer>
+			<key>min</key>
+			<integer>-15</integer>
+			<key>max</key>
+			<integer>12</integer>
+			<key>showValue</key>
+			<true/>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSButtonCell</string>
+			<key>label</key>
+			<string>将窗口1数据间距同时应用到窗口2</string>
+			<key>action</key>
+			<string>applyDataGapToSecond</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
 			<string>纯文字浮窗</string>
 			<key>footerText</key>
 			<string>默认关闭。仅隐藏浮窗背景与装饰，保留实时监测文字。开启时不避让灵动岛，顶部文字可能被硬件遮挡；状态栏吸附、自动折叠及键盘避让临时不生效，普通配置不变。关闭后恢复普通外观与位置。</string>
@@ -36,79 +96,191 @@
 			<key>label</key>
 			<string>独立显示项目</string>
 			<key>footerText</key>
-			<string>以下开关只影响纯文字浮窗，初始默认全部开启，不继承或改写普通浮窗开关。◉ 为 CPU 占用，▰ 为电量；MHz / fps / °C / mA 为频率、帧率、温度、电流；S1 / S2 为各卡 dBm 信号强度，不显示运营商、频段或制式。-- 表示未取得数值。不显示温控运行和充电状态；全关则不显示文字。</string>
+			<string>以下开关只影响纯文字浮窗，原有项目默认开启，上传/下载网速默认关闭，不继承或改写普通浮窗开关。网速按真实 Wi-Fi/蜂窝接口字节差分显示，单位 B/s、KB/s、MB/s（1024 进制），不重复计入回环或 VPN 隧道；复用原有低频刷新，隐藏/关闭时不采样。初次采样、网络切换、休眠恢复或数据不可用显示 --。◉ 为 CPU 占用，▰ 为电量；MHz / fps / °C / mA 为频率、帧率、温度、电流；S1 / S2 为各卡 dBm 信号强度，不显示运营商、频段或制式。-- 表示未取得数值。不显示温控运行和充电状态；全关则不显示文字。</string>
 		</dict>
 		<dict>
-			<key>defaults</key><string>com.yourname.sbcpufloating</string>
-			<key>get</key><string>getPreferenceValue:</string>
-			<key>set</key><string>setPreferenceValue:specifier:</string>
-			<key>cell</key><string>PSSwitchCell</string>
-			<key>label</key><string>CPU 占用（◉）</string>
-			<key>key</key><string>floatingTextOnlyShowCPU</string>
-			<key>default</key><true/>
+			<key>defaults</key>
+			<string>com.yourname.sbcpufloating</string>
+			<key>get</key>
+			<string>getPreferenceValue:</string>
+			<key>set</key>
+			<string>setPreferenceValue:specifier:</string>
+			<key>cell</key>
+			<string>PSSwitchCell</string>
+			<key>label</key>
+			<string>CPU 占用（◉）</string>
+			<key>key</key>
+			<string>floatingTextOnlyShowCPU</string>
+			<key>default</key>
+			<true/>
 		</dict>
 		<dict>
-			<key>defaults</key><string>com.yourname.sbcpufloating</string>
-			<key>get</key><string>getPreferenceValue:</string>
-			<key>set</key><string>setPreferenceValue:specifier:</string>
-			<key>cell</key><string>PSSwitchCell</string>
-			<key>label</key><string>CPU 频率（MHz）</string>
-			<key>key</key><string>floatingTextOnlyShowFrequency</string>
-			<key>default</key><true/>
+			<key>defaults</key>
+			<string>com.yourname.sbcpufloating</string>
+			<key>get</key>
+			<string>getPreferenceValue:</string>
+			<key>set</key>
+			<string>setPreferenceValue:specifier:</string>
+			<key>cell</key>
+			<string>PSSwitchCell</string>
+			<key>label</key>
+			<string>上传网速（↑）</string>
+			<key>key</key>
+			<string>floatingTextOnlyShowUploadNetwork</string>
+			<key>default</key>
+			<false/>
 		</dict>
 		<dict>
-			<key>defaults</key><string>com.yourname.sbcpufloating</string>
-			<key>get</key><string>getPreferenceValue:</string>
-			<key>set</key><string>setPreferenceValue:specifier:</string>
-			<key>cell</key><string>PSSwitchCell</string>
-			<key>label</key><string>帧率（fps）</string>
-			<key>key</key><string>floatingTextOnlyShowFPS</string>
-			<key>default</key><true/>
+			<key>defaults</key>
+			<string>com.yourname.sbcpufloating</string>
+			<key>get</key>
+			<string>getPreferenceValue:</string>
+			<key>set</key>
+			<string>setPreferenceValue:specifier:</string>
+			<key>cell</key>
+			<string>PSSwitchCell</string>
+			<key>label</key>
+			<string>下载网速（↓）</string>
+			<key>key</key>
+			<string>floatingTextOnlyShowDownloadNetwork</string>
+			<key>default</key>
+			<false/>
 		</dict>
 		<dict>
-			<key>defaults</key><string>com.yourname.sbcpufloating</string>
-			<key>get</key><string>getPreferenceValue:</string>
-			<key>set</key><string>setPreferenceValue:specifier:</string>
-			<key>cell</key><string>PSSwitchCell</string>
-			<key>label</key><string>电量（▰）</string>
-			<key>key</key><string>floatingTextOnlyShowBattery</string>
-			<key>default</key><true/>
+			<key>defaults</key>
+			<string>com.yourname.sbcpufloating</string>
+			<key>get</key>
+			<string>getPreferenceValue:</string>
+			<key>set</key>
+			<string>setPreferenceValue:specifier:</string>
+			<key>cell</key>
+			<string>PSSwitchCell</string>
+			<key>label</key>
+			<string>CPU 频率（MHz）</string>
+			<key>key</key>
+			<string>floatingTextOnlyShowFrequency</string>
+			<key>default</key>
+			<true/>
 		</dict>
 		<dict>
-			<key>defaults</key><string>com.yourname.sbcpufloating</string>
-			<key>get</key><string>getPreferenceValue:</string>
-			<key>set</key><string>setPreferenceValue:specifier:</string>
-			<key>cell</key><string>PSSwitchCell</string>
-			<key>label</key><string>电池温度（°C）</string>
-			<key>key</key><string>floatingTextOnlyShowTemperature</string>
-			<key>default</key><true/>
+			<key>defaults</key>
+			<string>com.yourname.sbcpufloating</string>
+			<key>get</key>
+			<string>getPreferenceValue:</string>
+			<key>set</key>
+			<string>setPreferenceValue:specifier:</string>
+			<key>cell</key>
+			<string>PSSwitchCell</string>
+			<key>label</key>
+			<string>帧率（fps）</string>
+			<key>key</key>
+			<string>floatingTextOnlyShowFPS</string>
+			<key>default</key>
+			<true/>
 		</dict>
 		<dict>
-			<key>defaults</key><string>com.yourname.sbcpufloating</string>
-			<key>get</key><string>getPreferenceValue:</string>
-			<key>set</key><string>setPreferenceValue:specifier:</string>
-			<key>cell</key><string>PSSwitchCell</string>
-			<key>label</key><string>电流（mA）</string>
-			<key>key</key><string>floatingTextOnlyShowCurrent</string>
-			<key>default</key><true/>
+			<key>defaults</key>
+			<string>com.yourname.sbcpufloating</string>
+			<key>get</key>
+			<string>getPreferenceValue:</string>
+			<key>set</key>
+			<string>setPreferenceValue:specifier:</string>
+			<key>cell</key>
+			<string>PSSwitchCell</string>
+			<key>label</key>
+			<string>电量（▰）</string>
+			<key>key</key>
+			<string>floatingTextOnlyShowBattery</string>
+			<key>default</key>
+			<true/>
 		</dict>
 		<dict>
-			<key>defaults</key><string>com.yourname.sbcpufloating</string>
-			<key>get</key><string>getPreferenceValue:</string>
-			<key>set</key><string>setPreferenceValue:specifier:</string>
-			<key>cell</key><string>PSSwitchCell</string>
-			<key>label</key><string>SIM 1 信号（S1）</string>
-			<key>key</key><string>floatingTextOnlyShowSIM1</string>
-			<key>default</key><true/>
+			<key>defaults</key>
+			<string>com.yourname.sbcpufloating</string>
+			<key>get</key>
+			<string>getPreferenceValue:</string>
+			<key>set</key>
+			<string>setPreferenceValue:specifier:</string>
+			<key>cell</key>
+			<string>PSSwitchCell</string>
+			<key>label</key>
+			<string>电池温度（°C）</string>
+			<key>key</key>
+			<string>floatingTextOnlyShowTemperature</string>
+			<key>default</key>
+			<true/>
 		</dict>
 		<dict>
-			<key>defaults</key><string>com.yourname.sbcpufloating</string>
-			<key>get</key><string>getPreferenceValue:</string>
-			<key>set</key><string>setPreferenceValue:specifier:</string>
-			<key>cell</key><string>PSSwitchCell</string>
-			<key>label</key><string>SIM 2 信号（S2）</string>
-			<key>key</key><string>floatingTextOnlyShowSIM2</string>
-			<key>default</key><true/>
+			<key>defaults</key>
+			<string>com.yourname.sbcpufloating</string>
+			<key>get</key>
+			<string>getPreferenceValue:</string>
+			<key>set</key>
+			<string>setPreferenceValue:specifier:</string>
+			<key>cell</key>
+			<string>PSSwitchCell</string>
+			<key>label</key>
+			<string>电流（mA）</string>
+			<key>key</key>
+			<string>floatingTextOnlyShowCurrent</string>
+			<key>default</key>
+			<true/>
+		</dict>
+		<dict>
+			<key>defaults</key>
+			<string>com.yourname.sbcpufloating</string>
+			<key>get</key>
+			<string>getPreferenceValue:</string>
+			<key>set</key>
+			<string>setPreferenceValue:specifier:</string>
+			<key>cell</key>
+			<string>PSSwitchCell</string>
+			<key>label</key>
+			<string>SIM 1 信号（S1）</string>
+			<key>key</key>
+			<string>floatingTextOnlyShowSIM1</string>
+			<key>default</key>
+			<true/>
+		</dict>
+		<dict>
+			<key>defaults</key>
+			<string>com.yourname.sbcpufloating</string>
+			<key>get</key>
+			<string>getPreferenceValue:</string>
+			<key>set</key>
+			<string>setPreferenceValue:specifier:</string>
+			<key>cell</key>
+			<string>PSSwitchCell</string>
+			<key>label</key>
+			<string>SIM 2 信号（S2）</string>
+			<key>key</key>
+			<string>floatingTextOnlyShowSIM2</string>
+			<key>default</key>
+			<true/>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
+			<string>窗口1 剩余内存（RAM）</string>
+			<key>footerText</key>
+			<string>显示系统空闲 RAM，不是存储空间或进程内存限额。剩余=min(HOST_VM_INFO64 free_count × 系统页大小, 物理内存)，不额外加入 inactive 或 purgeable；free 已含 speculative。按 1024 进制显示 RAM256MB / RAM1.25GB。读取失败显示 RAM--。默认关闭，开启后追加在原指标末尾，不改变原顺序。</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSSwitchCell</string>
+			<key>label</key>
+			<string>窗口1 剩余内存（RAM）</string>
+			<key>key</key>
+			<string>floatingTextOnlyShowMemory</string>
+			<key>default</key>
+			<false/>
+			<key>defaults</key>
+			<string>com.yourname.sbcpufloating</string>
+			<key>get</key>
+			<string>getPreferenceValue:</string>
+			<key>set</key>
+			<string>setPreferenceValue:specifier:</string>
 		</dict>
 		<dict>
 			<key>cell</key>
@@ -116,7 +288,7 @@
 			<key>label</key>
 			<string>字号</string>
 			<key>footerText</key>
-			<string>独立基准字号 8–24 pt，不改变普通浮窗字号或缩放。所有选中项目始终单行显示；超过屏幕可用宽度会整体缩字，必要时低于 8 pt，不换行、不省略。若字太小可减少显示项目。</string>
+			<string>独立字号 8–24 pt，不改变普通浮窗字号或缩放。两个文字浮窗每项使用独立固定槽位和系统等宽数字，不随数值位数、网速单位变化调整字体或推挤其他项。换行只取决于选中指标、字号和屏幕方向；超长异常值限制在自身槽位内，不溢出邻项。温度、电流使用小温度计和闪电。</string>
 		</dict>
 		<dict>
 			<key>defaults</key>
@@ -139,6 +311,22 @@
 			<integer>24</integer>
 			<key>showValue</key>
 			<true/>
+		</dict>
+		<dict>
+			<key>defaults</key>
+			<string>com.yourname.sbcpufloating</string>
+			<key>get</key>
+			<string>getPreferenceValue:</string>
+			<key>set</key>
+			<string>setPreferenceValue:specifier:</string>
+			<key>cell</key>
+			<string>PSSwitchCell</string>
+			<key>label</key>
+			<string>文字粗体</string>
+			<key>key</key>
+			<string>floatingTextOnlyBold</string>
+			<key>default</key>
+			<false/>
 		</dict>
 		<dict>
 			<key>cell</key>
@@ -241,22 +429,31 @@
 			<string>PSButtonCell</string>
 			<key>label</key>
 			<string>自动模式</string>
-            <key>textColorMode</key><integer>0</integer>
-            <key>action</key>
+			<key>textColorMode</key>
+			<integer>0</integer>
+			<key>action</key>
 			<string>automaticText</string>
 		</dict>
-        <dict>
-            <key>cell</key><string>PSButtonCell</string>
-            <key>label</key><string>实时反色</string>
-            <key>textColorMode</key><integer>4</integer>
-            <key>action</key><string>realtimeInvertText</string>
-        </dict>
-        <dict>
-            <key>cell</key><string>PSButtonCell</string>
-            <key>label</key><string>自定义文字颜色</string>
-            <key>textColorMode</key><integer>3</integer>
-            <key>action</key><string>customText</string>
-        </dict>
+		<dict>
+			<key>cell</key>
+			<string>PSButtonCell</string>
+			<key>label</key>
+			<string>实时反色</string>
+			<key>textColorMode</key>
+			<integer>4</integer>
+			<key>action</key>
+			<string>realtimeInvertText</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSButtonCell</string>
+			<key>label</key>
+			<string>自定义文字颜色</string>
+			<key>textColorMode</key>
+			<integer>3</integer>
+			<key>action</key>
+			<string>customText</string>
+		</dict>
 		<dict>
 			<key>cell</key>
 			<string>PSButtonCell</string>
@@ -264,7 +461,8 @@
 			<string>固定白字（深色背景）</string>
 			<key>action</key>
 			<string>whiteText</string>
-            <key>textColorMode</key><integer>1</integer>
+			<key>textColorMode</key>
+			<integer>1</integer>
 		</dict>
 		<dict>
 			<key>cell</key>
@@ -273,7 +471,308 @@
 			<string>固定黑字（浅色背景）</string>
 			<key>action</key>
 			<string>blackText</string>
-            <key>textColorMode</key><integer>2</integer>
+			<key>textColorMode</key>
+			<integer>2</integer>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
+			<string>纯文字浮窗 2（独立）</string>
+			<key>footerText</key>
+			<string>默认关闭。与原纯文字浮窗独立开关、指标、字号、粗体和位置；共享同一次现有采样，不创建额外定时器。固定数字槽位，刷新数值不会推动其他列或反复缩放换行。位置调整后保存；旋转/配置变化才重新布局。</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSSwitchCell</string>
+			<key>label</key>
+			<string>启用纯文字浮窗 2</string>
+			<key>key</key>
+			<string>floatingTextOnlyMode2</string>
+			<key>get</key>
+			<string>getPreferenceValue:</string>
+			<key>set</key>
+			<string>setPreferenceValue:specifier:</string>
+			<key>default</key>
+			<false/>
+			<key>defaults</key>
+			<string>com.yourname.sbcpufloating</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
+			<string>窗口2 网速布局</string>
+			<key>footerText</key>
+			<string>仅影响窗口2网速，默认关闭。上传和下载同时开启时，打开此开关在固定宽度网络块内上行显示 ↑速率、下行显示 ↓速率；关闭则横向显示 ↑ ↓（空间不足沿用自然换行）。只启用一个方向只显示一行，不留空行；均关闭不显示网络块。其他指标不分组、不缩小，仍按宽度自然换行，窗口1完全不受此开关影响。数据间距 -15 至 12 仅用于横向项目间距，网速纵向间距固定。数值变化不改变槽位。</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSSwitchCell</string>
+			<key>label</key>
+			<string>窗口2 网速双行显示</string>
+			<key>key</key>
+			<string>floatingTextOnly2NetworkDualLine</string>
+			<key>defaults</key>
+			<string>com.yourname.sbcpufloating</string>
+			<key>get</key>
+			<string>getPreferenceValue:</string>
+			<key>set</key>
+			<string>setPreferenceValue:specifier:</string>
+			<key>default</key>
+			<false/>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSSwitchCell</string>
+			<key>label</key>
+			<string>CPU 占用 2（◉）</string>
+			<key>key</key>
+			<string>floatingTextOnly2ShowCPU</string>
+			<key>get</key>
+			<string>getPreferenceValue:</string>
+			<key>set</key>
+			<string>setPreferenceValue:specifier:</string>
+			<key>default</key>
+			<true/>
+			<key>defaults</key>
+			<string>com.yourname.sbcpufloating</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSSwitchCell</string>
+			<key>label</key>
+			<string>上传网速 2（↑）</string>
+			<key>key</key>
+			<string>floatingTextOnly2ShowUploadNetwork</string>
+			<key>get</key>
+			<string>getPreferenceValue:</string>
+			<key>set</key>
+			<string>setPreferenceValue:specifier:</string>
+			<key>default</key>
+			<false/>
+			<key>defaults</key>
+			<string>com.yourname.sbcpufloating</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSSwitchCell</string>
+			<key>label</key>
+			<string>下载网速 2（↓）</string>
+			<key>key</key>
+			<string>floatingTextOnly2ShowDownloadNetwork</string>
+			<key>get</key>
+			<string>getPreferenceValue:</string>
+			<key>set</key>
+			<string>setPreferenceValue:specifier:</string>
+			<key>default</key>
+			<false/>
+			<key>defaults</key>
+			<string>com.yourname.sbcpufloating</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSSwitchCell</string>
+			<key>label</key>
+			<string>CPU 频率 2</string>
+			<key>key</key>
+			<string>floatingTextOnly2ShowFrequency</string>
+			<key>get</key>
+			<string>getPreferenceValue:</string>
+			<key>set</key>
+			<string>setPreferenceValue:specifier:</string>
+			<key>default</key>
+			<true/>
+			<key>defaults</key>
+			<string>com.yourname.sbcpufloating</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSSwitchCell</string>
+			<key>label</key>
+			<string>FPS 2</string>
+			<key>key</key>
+			<string>floatingTextOnly2ShowFPS</string>
+			<key>get</key>
+			<string>getPreferenceValue:</string>
+			<key>set</key>
+			<string>setPreferenceValue:specifier:</string>
+			<key>default</key>
+			<true/>
+			<key>defaults</key>
+			<string>com.yourname.sbcpufloating</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSSwitchCell</string>
+			<key>label</key>
+			<string>电量 2</string>
+			<key>key</key>
+			<string>floatingTextOnly2ShowBattery</string>
+			<key>get</key>
+			<string>getPreferenceValue:</string>
+			<key>set</key>
+			<string>setPreferenceValue:specifier:</string>
+			<key>default</key>
+			<true/>
+			<key>defaults</key>
+			<string>com.yourname.sbcpufloating</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSSwitchCell</string>
+			<key>label</key>
+			<string>温度 2（温度计）</string>
+			<key>key</key>
+			<string>floatingTextOnly2ShowTemperature</string>
+			<key>get</key>
+			<string>getPreferenceValue:</string>
+			<key>set</key>
+			<string>setPreferenceValue:specifier:</string>
+			<key>default</key>
+			<true/>
+			<key>defaults</key>
+			<string>com.yourname.sbcpufloating</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSSwitchCell</string>
+			<key>label</key>
+			<string>电流 2（闪电）</string>
+			<key>key</key>
+			<string>floatingTextOnly2ShowCurrent</string>
+			<key>get</key>
+			<string>getPreferenceValue:</string>
+			<key>set</key>
+			<string>setPreferenceValue:specifier:</string>
+			<key>default</key>
+			<true/>
+			<key>defaults</key>
+			<string>com.yourname.sbcpufloating</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSSwitchCell</string>
+			<key>label</key>
+			<string>SIM 1 信号 2</string>
+			<key>key</key>
+			<string>floatingTextOnly2ShowSIM1</string>
+			<key>get</key>
+			<string>getPreferenceValue:</string>
+			<key>set</key>
+			<string>setPreferenceValue:specifier:</string>
+			<key>default</key>
+			<true/>
+			<key>defaults</key>
+			<string>com.yourname.sbcpufloating</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSSwitchCell</string>
+			<key>label</key>
+			<string>SIM 2 信号 2</string>
+			<key>key</key>
+			<string>floatingTextOnly2ShowSIM2</string>
+			<key>get</key>
+			<string>getPreferenceValue:</string>
+			<key>set</key>
+			<string>setPreferenceValue:specifier:</string>
+			<key>default</key>
+			<true/>
+			<key>defaults</key>
+			<string>com.yourname.sbcpufloating</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
+			<string>窗口2 剩余内存（RAM）</string>
+			<key>footerText</key>
+			<string>显示系统空闲 RAM，不是存储空间或进程内存限额。剩余=min(HOST_VM_INFO64 free_count × 系统页大小, 物理内存)，不额外加入 inactive 或 purgeable；free 已含 speculative。按 1024 进制显示 RAM256MB / RAM1.25GB。读取失败显示 RAM--。默认关闭，开启后追加在原指标末尾，不改变原顺序。</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSSwitchCell</string>
+			<key>label</key>
+			<string>窗口2 剩余内存（RAM）</string>
+			<key>key</key>
+			<string>floatingTextOnly2ShowMemory</string>
+			<key>default</key>
+			<false/>
+			<key>defaults</key>
+			<string>com.yourname.sbcpufloating</string>
+			<key>get</key>
+			<string>getPreferenceValue:</string>
+			<key>set</key>
+			<string>setPreferenceValue:specifier:</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSSwitchCell</string>
+			<key>label</key>
+			<string>粗体数字 2</string>
+			<key>key</key>
+			<string>floatingTextOnly2Bold</string>
+			<key>get</key>
+			<string>getPreferenceValue:</string>
+			<key>set</key>
+			<string>setPreferenceValue:specifier:</string>
+			<key>default</key>
+			<false/>
+			<key>defaults</key>
+			<string>com.yourname.sbcpufloating</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSSliderCell</string>
+			<key>label</key>
+			<string>字号 2（8–24 pt）</string>
+			<key>key</key>
+			<string>floatingTextOnly2FontSize</string>
+			<key>min</key>
+			<real>8.0</real>
+			<key>max</key>
+			<real>24.0</real>
+			<key>default</key>
+			<real>13.0</real>
+			<key>get</key>
+			<string>getPreferenceValue:</string>
+			<key>set</key>
+			<string>setPreferenceValue:specifier:</string>
+			<key>defaults</key>
+			<string>com.yourname.sbcpufloating</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
+			<string>浮窗 2 位置</string>
+			<key>footerText</key>
+			<string>X/Y 偏移保存于浮窗 2，锁定与原浮窗互不覆盖；实际位置始终限制在安全区内。</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSSwitchCell</string>
+			<key>label</key>
+			<string>锁定浮窗 2 位置</string>
+			<key>key</key>
+			<string>floatingTextOnly2Locked</string>
+			<key>get</key>
+			<string>getPreferenceValue:</string>
+			<key>set</key>
+			<string>setPreferenceValue:specifier:</string>
+			<key>default</key>
+			<false/>
+			<key>defaults</key>
+			<string>com.yourname.sbcpufloating</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSButtonCell</string>
+			<key>label</key>
+			<string>浮窗 2 顶部居中</string>
+			<key>action</key>
+			<string>secondTopCenter</string>
 		</dict>
 	</array>
 </dict>

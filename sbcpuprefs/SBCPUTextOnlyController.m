@@ -4,6 +4,7 @@
 #import <notify.h>
 #import "../SBCPUTextOnlyPolicy.h"
 #import "../SBCPUTextOnlyColor.h"
+#import "../SBCPUTextSlotPolicy.h"
 
 @interface SBCPUTextOnlyController : PSListController <UIColorPickerViewControllerDelegate, UIAdaptivePresentationControllerDelegate>
 @property(nonatomic, strong) NSArray *pendingTextRGBA;
@@ -31,8 +32,14 @@
 }
 - (void)setPreferenceValue:(id)value specifier:(PSSpecifier *)specifier {
     NSString *key = [specifier propertyForKey:@"key"];
-    if ([key isEqualToString:@"floatingTextOnlyFontSize"]) value = @(SBCPUTextOnlyBound([value doubleValue], 8, 24, 13));
+    if ([key isEqualToString:@"floatingTextOnlyFontSize"] || [key isEqualToString:@"floatingTextOnly2FontSize"]) value = @(SBCPUTextOnlyBound([value doubleValue], 8, 24, 13));
+    if ([key isEqualToString:@"floatingTextOnlyDataGap"] || [key isEqualToString:@"floatingTextOnly2DataGap"]) value = @(SBCPUTextDataGap([value doubleValue]));
     [self writeValues:@{key:value}];
+}
+- (void)applyDataGapToSecond {
+    double gap = SBCPUTextDataGap([[self valueForKeyName:@"floatingTextOnlyDataGap" fallback:@4] doubleValue]);
+    [self writeValues:@{@"floatingTextOnly2DataGap":@(gap)}];
+    [self reloadSpecifiers];
 }
 - (void)preset:(NSInteger)preset {
     [self writeValues:@{@"floatingTextOnlyPreset":@(preset), @"floatingTextOnlyX":@0, @"floatingTextOnlyY":@0}];
@@ -143,6 +150,7 @@
         cell.imageView.tintColor = [UIColor colorWithRed:c.red green:c.green blue:c.blue alpha:1];
     }
 }
+- (void)secondTopCenter { [self writeValues:@{@"floatingTextOnly2Preset":@1, @"floatingTextOnly2X":@0, @"floatingTextOnly2Y":@70}]; [self reloadSpecifiers]; }
 - (void)viewWillAppear:(BOOL)animated { [super viewWillAppear:animated]; [self reloadSpecifiers]; }
 - (void)viewDidLoad { [super viewDidLoad]; self.title = @"纯文字浮窗"; }
 @end

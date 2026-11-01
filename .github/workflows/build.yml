@@ -6,7 +6,7 @@ on:
 
 jobs:
   build:
-    runs-on: macos-14
+    runs-on: macos-15
 
     steps:
       - name: Checkout
@@ -14,21 +14,116 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: UIKit FPS glyph budget and clipping regression (iOS Simulator)
+        run: |
+          python3 tests/text_fps_budget_wiring.py
+          python3 tests/text_memory_wiring.py
+          bash tests/text_fps_uikit.sh
+          bash tests/text_memory_uikit.sh
+          bash tests/text_spacing_uikit.sh
+
+      - name: Read-only P-core production algorithm and A16 evidence regression
+        run: |
+          set -e
+          python3 tests/pcore_frequency_wiring.py
+          TMP_PCORE=$(mktemp -d)
+          clang -fobjc-arc -fblocks -framework Foundation -framework IOKit -Wall -Wextra -Werror \
+            tests/pcore_frequency.m -o "$TMP_PCORE/pcore"
+          "$TMP_PCORE/pcore"
+          python3 tests/pcore_a16_evidence.py
+          clang -fobjc-arc -fblocks -framework Foundation -framework IOKit -Wall -Wextra -Werror \
+            tests/pcore_a16.m -o "$TMP_PCORE/a16"
+          "$TMP_PCORE/a16"
+          clang -fobjc-arc -fblocks -framework Foundation -framework IOKit -Wall -Wextra -Werror \
+            tests/pcore_structural.m -o "$TMP_PCORE/structural"
+          "$TMP_PCORE/structural"
+
+      - name: Second HUD production event-tree lock and drag regression
+        run: |
+          set -e
+          python3 tests/second_touch_wiring.py
+          TMP_TOUCH=$(mktemp -d)
+          python3 tests/second_touch_wiring.py --emit-native "$TMP_TOUCH/event-tree.m"
+          clang -fobjc-arc -framework Foundation -framework CoreGraphics -I. -Wall -Wextra -Werror \
+            "$TMP_TOUCH/event-tree.m" -o "$TMP_TOUCH/event-tree"
+          "$TMP_TOUCH/event-tree"
+          clang -std=c11 -Wall -Wextra -Werror -pedantic tests/second_touch_policy.c -o "$TMP_TOUCH/touch"
+          "$TMP_TOUCH/touch"
+          clang++ -x c++ -std=c++11 -Wall -Wextra -Werror -pedantic tests/second_touch_policy.c -o "$TMP_TOUCH/touch-cxx"
+          "$TMP_TOUCH/touch-cxx"
+
+      - name: Dual text rows and right-edge regression
+        run: |
+          set -e
+          python3 tests/text_dual_edge_wiring.py
+          TMP_DUAL=$(mktemp -d)
+          clang -std=c11 -Wall -Wextra -Werror -pedantic tests/text_dual_edge_policy.c -o "$TMP_DUAL/dual"
+          "$TMP_DUAL/dual"
+          clang++ -x c++ -std=c++11 -Wall -Wextra -Werror -pedantic tests/text_dual_edge_policy.c -o "$TMP_DUAL/dual-cxx"
+          "$TMP_DUAL/dual-cxx"
+
+      - name: Text network and no-experiment regressions
+        run: |
+          set -e
+          python3 tests/text_network_wiring.py
+          python3 tests/no_120_experiments.py
+          python3 tests/fps_counter_policy.py
+          TMP_NET=$(mktemp -d)
+          clang++ -std=c++11 -fobjc-arc -framework Foundation -Wall -Wextra -Werror \
+            tests/text_network.mm -o "$TMP_NET/network"
+          "$TMP_NET/network"
+
       - name: Floating position lock regression
         run: |
           set -e
           python3 tests/floating_lock.py
+          python3 tests/lock_feedback.py
           TMP_LOCK=$(mktemp -d)
           clang -std=c11 -Wall -Wextra -Werror -pedantic tests/floating_lock_policy.c -lm -o "$TMP_LOCK/lock"
           "$TMP_LOCK/lock"
           clang++ -x c++ -std=c++11 -Wall -Wextra -Werror -pedantic tests/floating_lock_policy.c -o "$TMP_LOCK/lock-cxx"
           "$TMP_LOCK/lock-cxx"
 
+      - name: Text anchor and refresh lifecycle regressions
+        run: |
+          set -e
+          python3 tests/text_anchor_wiring.py
+          python3 tests/island_protection_wiring.py
+          python3 tests/switch_persistence.py
+          TMP_NEW=$(mktemp -d)
+          for src in island_protection_policy text_anchor_policy; do
+            clang -std=c11 -Wall -Wextra -Werror -pedantic tests/$src.c -o "$TMP_NEW/$src"
+            "$TMP_NEW/$src"
+            clang++ -x c++ -std=c++11 -Wall -Wextra -Werror -pedantic tests/$src.c -o "$TMP_NEW/$src-cxx"
+            "$TMP_NEW/$src-cxx"
+          done
+
+      - name: Clean fixed separators regression
+        run: |
+          set -e
+          clang -std=c11 -Wall -Wextra -Werror -pedantic tests/text_clean_slots_policy.c -o /tmp/clean-slots
+          /tmp/clean-slots
+          clang++ -x c++ -std=c++11 -Wall -Wextra -Werror -pedantic tests/text_clean_slots_policy.c -o /tmp/clean-slots-cxx
+          /tmp/clean-slots-cxx
+
       - name: Text-only presentation policy regression
         run: |
           set -e
+          python3 tests/text_fit_wiring.py
+          python3 tests/text_slots_wiring.py
+          python3 tests/text_spacing_icons.py
+          python3 tests/text_data_gap_wiring.py
+          TMP_SLOTS=$(mktemp -d)
+          clang -std=c11 -Wall -Wextra -Werror -pedantic tests/text_slots_policy.c -o "$TMP_SLOTS/slots"
+          "$TMP_SLOTS/slots"
+          clang++ -x c++ -std=c++11 -Wall -Wextra -Werror -pedantic tests/text_slots_policy.c -o "$TMP_SLOTS/slots-cxx"
+          "$TMP_SLOTS/slots-cxx"
           python3 tests/text_only_mode.py
           TMP_TEXT=$(mktemp -d)
+          clang -std=c11 -Wall -Wextra -Werror -pedantic tests/text_fit_policy.c -lm -o "$TMP_TEXT/fit"
+          "$TMP_TEXT/fit"
+          clang++ -x c++ -std=c++11 -Wall -Wextra -Werror -pedantic tests/text_fit_policy.c -o "$TMP_TEXT/fit-cxx"
+          "$TMP_TEXT/fit-cxx"
           clang -std=c11 -Wall -Wextra -Werror -pedantic tests/text_only_policy.c -o "$TMP_TEXT/policy"
           "$TMP_TEXT/policy"
           clang -fobjc-arc -framework Foundation -Wall -Wextra -Werror \
@@ -48,6 +143,12 @@ jobs:
         run: |
           python3 tests/thermal_removed.py
           python3 tests/preferences_navigation.py
+          python3 tests/insulation_sync.py
+          TMP_THERMAL=$(mktemp -d)
+          python3 tests/thermal_specifier_binding.py --emit-native "$TMP_THERMAL/thermal.m"
+          clang -fobjc-arc -framework Foundation -Wall -Wextra -Werror \
+            "$TMP_THERMAL/thermal.m" -o "$TMP_THERMAL/thermal"
+          "$TMP_THERMAL/thermal" "$GITHUB_WORKSPACE/sbcpuprefs/Resources/Root.plist"
 
       - name: Native respring policy regression
         run: python3 tests/respring_native_policy.py
@@ -83,6 +184,9 @@ jobs:
             tests/battery_metrics.m -o "$TMP_PANEL/battery-cxx"
           "$TMP_PANEL/battery-cxx"
           sh tests/memory_metrics.sh
+          TMP_MEM=$(mktemp -d)
+          clang -fobjc-arc -framework Foundation -Wall -Wextra -Werror tests/text_memory_sample.m -o "$TMP_MEM/mem"
+          "$TMP_MEM/mem"
           clang -std=c11 -Wall -Wextra -Werror -pedantic \
             tests/floating_display_policy.c -o "$TMP_PANEL/display"
           "$TMP_PANEL/display"
@@ -174,6 +278,8 @@ jobs:
             python3 tests/panel_branding.py --staged "$STAGED_ICONS"
             python3 tests/preferences_navigation.py --staged "$STAGED_ICONS"
             python3 tests/text_only_mode.py --staged "$STAGED_ICONS"
+            python3 tests/no_120_experiments.py --staged "$STAGED_ICONS"
+            python3 tests/island_protection_wiring.py --staged "$STAGED_ICONS"
             rm -rf "$STAGED_ICONS"
           done
 
@@ -183,3 +289,9 @@ jobs:
           name: LingDongMonitor
           path: build/*.deb
 
+
+      - name: Upload UIKit fixture (not real device)
+        uses: actions/upload-artifact@v4
+        with:
+          name: mem4-UIKit-fixture
+          path: test-output/

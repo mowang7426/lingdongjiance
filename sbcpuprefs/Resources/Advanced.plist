@@ -30,6 +30,30 @@
 		</dict>
 		<dict>
 			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>footerText</key>
+			<string>胶囊避让灵动岛，纯文字始终允许拖到屏幕顶端，文字可能被摄像头/系统显示遮挡。</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSSwitchCell</string>
+			<key>label</key>
+			<string>灵动岛保护</string>
+			<key>key</key>
+			<string>dynamicIslandProtectionEnable</string>
+			<key>default</key>
+			<true/>
+			<key>get</key>
+			<string>getPreferenceValue:</string>
+			<key>set</key>
+			<string>setPreferenceValue:specifier:</string>
+			<key>PostNotification</key>
+			<string>com.yourname.sbcpufloating.prefschanged</string>
+			<key>defaults</key>
+			<string>com.yourname.sbcpufloating</string>
+		</dict>
+		<dict>
+			<key>cell</key>
 			<string>PSSwitchCell</string>
 			<key>label</key>
 			<string>记忆浮窗位置</string>

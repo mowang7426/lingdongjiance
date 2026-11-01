@@ -43,40 +43,11 @@ static BOOL readBoolPref(CFStringRef key, BOOL fallback) {
     return result;
 }
 
-// Only current/power limiting knobs belong here. In particular, never block
-// ChargeInhibit/ChargeBlocked/ChargeLimit/FullyCharged or thermal safety keys.
-static BOOL isFastChargeProperty(CFStringRef propertyName) {
-    if (!propertyName) return NO;
-    NSString *s = (__bridge NSString *)propertyName;
-    static NSArray<NSString *> *names;
-    static dispatch_once_t onceToken;
-    dispatch_once(&onceToken, ^{
-        names = @[
-            @"ChargeCurrentLimit",
-            @"MaxChargeCurrent",
-            @"AdapterPowerLimit",
-            @"AdapterCurrentLimit",
-            @"ChargingPowerLimit",
-            @"ChargingCurrentLimit",
-            @"USBPDCurrentLimit",
-            @"USBPDPowerLimit"
-        ];
-    });
-    for (NSString *name in names) {
-        if ([s caseInsensitiveCompare:name] == NSOrderedSame ||
-            [s rangeOfString:name options:NSCaseInsensitiveSearch].location != NSNotFound) {
-            return YES;
-        }
-    }
-    return NO;
-}
-
+// This helper passes every write through to Apple's original IOKit setters;
+// it does not override Apple's thermal/current safety controls.
 static kern_return_t hook_IORegistryEntrySetCFProperty(io_registry_entry_t entry,
                                                          CFStringRef propertyName,
                                                          CFTypeRef property) {
-    if (gForceFastCharge && isFastChargeProperty(propertyName)) {
-        return KERN_SUCCESS;
-    }
     return orig_IORegistryEntrySetCFProperty
         ? orig_IORegistryEntrySetCFProperty(entry, propertyName, property)
         : KERN_FAILURE;
@@ -85,9 +56,6 @@ static kern_return_t hook_IORegistryEntrySetCFProperty(io_registry_entry_t entry
 static kern_return_t hook_IOServiceSetCFProperty(io_service_t service,
                                                   CFStringRef propertyName,
                                                   CFTypeRef property) {
-    if (gForceFastCharge && isFastChargeProperty(propertyName)) {
-        return KERN_SUCCESS;
-    }
     return orig_IOServiceSetCFProperty
         ? orig_IOServiceSetCFProperty(service, propertyName, property)
         : KERN_FAILURE;
@@ -97,7 +65,7 @@ static void updateChargeState(void) {
     BOOL enabled = readBoolPref(CFSTR("forceFastChargeEnable"), NO);
     if (enabled == gForceFastCharge) return;
     gForceFastCharge = enabled;
-    NSLog(@"[SBCPUPowerd] fast-charge current-limit override: %@",
+    NSLog(@"[SBCPUPowerd] fast-charge request flag: %@ (system writes are passed through)",
           enabled ? @"ON" : @"OFF");
 }
 

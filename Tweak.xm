@@ -1,9 +1,15 @@
 #import "SBCPUTextOnlyPolicy.h"
+#import "SBCPUTextAnchorPolicy.h"
 #import "SBCPUTextOnlyColor.h"
 #import "SBCPUTextBackdropLabel.h"
 #import "SBCPUCapsuleTextPolicy.h"
 #import "SBCPUTextOnlyFormat.h"
+#import "SBCPUTextOnlyTypography.h"
+#import "SBCPUTextSlotPolicy.h"
+#import "SBCPUTextFPSBudget.h"
 #import "SBCPUTextOnlyCurrent.h"
+#import "SBCPUTextNetwork.h"
+#import <net/if_dl.h>
 
 #import <Foundation/Foundation.h>
 #import <UIKit/UIKit.h>
@@ -31,6 +37,16 @@
 #import <objc/runtime.h>
 #import <dlfcn.h>
 #import <substrate.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+// TrollSpeed's no-hook compositor counter: counts globally committed display frames.
+// Weak import keeps the tweak safe on OS builds that do not export the symbol.
+CFIndex CARenderServerGetDirtyFrameCount(void *) __attribute__((weak_import));
+#ifdef __cplusplus
+}
+#endif
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
@@ -38,8 +54,12 @@
 #import "SBCPUChargeDayNight.h"
 #import "SBCPUBatteryMetrics.h"
 #import "SBCPUMemoryMetrics.h"
+#import "SBCPUMemorySample.h"
+#import "SBCPUTextMemory.h"
+#import "SBCPUPCoreFrequency.h"
 #import "SBCPUFloatingDisplayPolicy.h"
 #import "SBCPUFloatingLockPolicy.h"
+#import "SBCPUSecondTouchPolicy.h"
 #import "Shared/LGLiveBackdropView.h"
 
 #ifndef kIOMainPortDefault
@@ -238,6 +258,9 @@ typedef struct {
 @property (nonatomic, assign) BOOL positionLocked;
 @property (nonatomic, assign) CGPoint lockedCenter;
 @property (nonatomic, strong) UITapGestureRecognizer *doubleTapGesture;
+@property (nonatomic, assign) BOOL panBlockedByLock;
+@property (nonatomic, strong) UILabel *lockFeedbackLabel;
+- (void)showLockFeedback:(NSString *)message;
 @property (nonatomic, strong) UITapGestureRecognizer *singleTapGesture;
 @property (nonatomic, strong) UILongPressGestureRecognizer *longPressGesture;
 
@@ -342,15 +365,91 @@ static BOOL statusBarDockEnable = NO; // 开启后浮窗吸附到顶部状态栏
 
 // Presentation-only mode: never overwrite normal docking/geometry preferences.
 static BOOL floatingTextOnlyMode = NO;
+static BOOL dynamicIslandProtectionEnable = YES;
 static NSInteger floatingTextOnlyPreset = 1;
 static CGFloat floatingTextOnlyX = 0, floatingTextOnlyY = 0;
 static CGFloat floatingTextOnlyFontSize = 13;
+static CGFloat floatingTextOnlyDataGap = 4, floatingTextOnly2DataGap = 4;
+static BOOL textOnly2NetworkDualLine = NO;
 static NSInteger floatingTextOnlyColor = 0; // 0 system appearance, 1 white, 2 black, 3 custom, 4 realtime invert
 static SBCPUTextRGBA textOnlyCustomRGBA = {0, 122.0/255.0, 1, 1};
+static BOOL textOnlyShowMemory = NO, textOnly2ShowMemory = NO;
+static SBCPUMemoryMetrics textOnlyMemorySample={false,0,0,0}; /* Inspector-style free-only source; used/total retained for detail panel. */
 static BOOL textOnlyShowCPU = YES, textOnlyShowFrequency = YES, textOnlyShowFPS = YES;
 static BOOL textOnlyShowBattery = YES, textOnlyShowTemperature = YES, textOnlyShowCurrent = YES;
 static BOOL textOnlyShowSIM1 = YES, textOnlyShowSIM2 = YES;
+static BOOL textOnlyBold = NO;
+static NSString *textOnlyPlainText = @"";
+static BOOL textOnlyShowUploadNetwork = NO;
+static BOOL textOnlyShowDownloadNetwork = NO;
+// Independent second text HUD. It shares the sampled label values/network snapshot.
+static BOOL floatingTextOnlyMode2 = NO, textOnly2Bold = NO, textOnly2Locked = NO;
+static CGFloat floatingTextOnly2FontSize = 13, floatingTextOnly2X = 0, floatingTextOnly2Y = 70;
+static NSInteger floatingTextOnly2Preset = 1;
+static BOOL textOnly2ShowCPU = YES, textOnly2ShowFrequency = YES, textOnly2ShowFPS = YES;
+static BOOL textOnly2ShowBattery = YES, textOnly2ShowTemperature = YES, textOnly2ShowCurrent = YES;
+static BOOL textOnly2ShowSIM1 = YES, textOnly2ShowSIM2 = YES;
+static BOOL textOnly2ShowUploadNetwork = NO, textOnly2ShowDownloadNetwork = NO;
+static SBCPUTextBackdropLabel *textOnly2Label = nil;
+static NSDictionary *textNetworkPrevious = nil;
+static double textNetworkUptime = 0;
+static NSString *textNetworkRow = nil;
+static BOOL textNetworkSampleValid = NO;
+static double textNetworkDownloadRate = 0, textNetworkUploadRate = 0;
 static NSArray<NSDictionary *> *textOnlySignals = nil;
+
+static void resetTextNetwork(void) {
+    textNetworkPrevious = nil;
+    textNetworkUptime = 0;
+    textNetworkRow = nil;
+    textNetworkSampleValid = NO;
+    textNetworkDownloadRate = textNetworkUploadRate = 0;
+}
+
+// Called only by the existing low-frequency data refresh, never by layout or FPS.
+static unsigned textSlotMask(BOOL second);
+static void sampleTextNetwork(void) {
+    BOOL visible = cpuWindow && !cpuWindow.hidden && cpuWindow.alpha > 0.01;
+    BOOL firstVisible = floatingView && floatingView.window && !floatingView.hidden && floatingView.alpha > 0.01;
+    BOOL secondVisible = textOnly2Label && textOnly2Label.window && !textOnly2Label.hidden && textOnly2Label.alpha > 0.01;
+    BOOL needed = SBCPUTextNetworkNeeded(isEnabled, visible,
+        floatingTextOnlyMode && firstVisible ? textSlotMask(NO) : 0,
+        floatingTextOnlyMode2 && secondVisible ? textSlotMask(YES) : 0);
+    if (!needed) { resetTextNetwork(); return; }
+    static int blankToken = -1;
+    if (blankToken == -1) {
+        int token = -1;
+        if (notify_register_check("com.apple.springboard.hasBlankedScreen", &token) == NOTIFY_STATUS_OK)
+            blankToken = token;
+    }
+    uint64_t blanked = 0;
+    if (blankToken != -1 && notify_get_state(blankToken, &blanked) == NOTIFY_STATUS_OK && blanked) {
+        resetTextNetwork(); return;
+    }
+    struct ifaddrs *interfaces = NULL;
+    NSMutableDictionary *snapshot = [NSMutableDictionary dictionary];
+    if (getifaddrs(&interfaces) != 0) { resetTextNetwork(); return; }
+    for (struct ifaddrs *p = interfaces; p; p = p->ifa_next) {
+        if (!p->ifa_addr || p->ifa_addr->sa_family != AF_LINK || !p->ifa_data ||
+            !(p->ifa_flags & IFF_UP) || !(p->ifa_flags & IFF_RUNNING) ||
+            (p->ifa_flags & IFF_LOOPBACK) || !SBCPUNetworkInterface(p->ifa_name)) continue;
+        struct sockaddr_dl *link = (struct sockaddr_dl *)p->ifa_addr;
+        struct if_data *data = (struct if_data *)p->ifa_data;
+        NSString *key = [NSString stringWithFormat:@"%s:%u", p->ifa_name, (unsigned)link->sdl_index];
+        // Dictionary identity deduplicates link records; IPv4/IPv6 are not counted again.
+        snapshot[key] = @[@((uint64_t)data->ifi_ibytes), @((uint64_t)data->ifi_obytes)];
+    }
+    freeifaddrs(interfaces);
+    double now = NSProcessInfo.processInfo.systemUptime, download = 0, upload = 0;
+    BOOL valid = SBCPUNetworkDelta(textNetworkPrevious, snapshot, now - textNetworkUptime, &download, &upload);
+    textNetworkSampleValid = valid;
+    textNetworkDownloadRate = download; textNetworkUploadRate = upload;
+    textNetworkRow = SBCPUNetworkTextDirections(valid, download, upload,
+        textOnlyShowUploadNetwork || textOnly2ShowUploadNetwork,
+        textOnlyShowDownloadNetwork || textOnly2ShowDownloadNetwork);
+    textNetworkPrevious = snapshot.count ? snapshot : nil;
+    textNetworkUptime = now;
+}
 // Updated on the existing UI sampling tick; never reuse the ordinary label's
 // smart-stop zero or the legacy 150 mA fallback.
 static NSNumber *textOnlyBatteryCurrent = nil;
@@ -480,6 +579,7 @@ static void openDetailView(void);
 static void checkHighCPU(double cpu);
 static void updateCPU(void);
 static void applyTextOnlyMode(void);
+static void updateTextOnlySecond(void);
 static void applyTextOnlyTextFilter(void);
 static void handleTextOnlyModeTransition(BOOL wasEnabled);
 static void LGRemoveLabelShadowInView(UIView *view);
@@ -1030,14 +1130,38 @@ static void LoadPreferences(void) {
     rememberPositionEnable = getBoolPref(CFSTR("rememberPositionEnable"), YES);
     statusBarDockEnable = getBoolPref(CFSTR("statusBarDockEnable"), NO);
     floatingTextOnlyMode = getBoolPref(CFSTR("floatingTextOnlyMode"), NO);
+    floatingTextOnlyMode2 = getBoolPref(CFSTR("floatingTextOnlyMode2"), NO);
+    textOnly2NetworkDualLine = getBoolPref(CFSTR("floatingTextOnly2NetworkDualLine"), NO);
+    floatingTextOnly2Preset = MAX(0, MIN(2, getIntPref(CFSTR("floatingTextOnly2Preset"), 1)));
+    floatingTextOnly2X = SBCPUTextOnlyBound(getFloatPref(CFSTR("floatingTextOnly2X"), 0), -1000, 1000, 0);
+    floatingTextOnly2Y = SBCPUTextOnlyBound(getFloatPref(CFSTR("floatingTextOnly2Y"), 70), -1000, 1000, 70);
+    floatingTextOnlyDataGap = SBCPUTextDataGap(getFloatPref(CFSTR("floatingTextOnlyDataGap"), 4));
+    floatingTextOnly2DataGap = SBCPUTextDataGap(getFloatPref(CFSTR("floatingTextOnly2DataGap"), 4));
+    floatingTextOnly2FontSize = SBCPUTextOnlyBound(getFloatPref(CFSTR("floatingTextOnly2FontSize"), 13), 8, 24, 13);
+    textOnly2Bold = getBoolPref(CFSTR("floatingTextOnly2Bold"), NO);
+    textOnly2Locked = getBoolPref(CFSTR("floatingTextOnly2Locked"), NO);
+    textOnly2ShowCPU = getBoolPref(CFSTR("floatingTextOnly2ShowCPU"), YES);
+    textOnly2ShowMemory = getBoolPref(CFSTR("floatingTextOnly2ShowMemory"), NO);
+    textOnly2ShowFrequency = getBoolPref(CFSTR("floatingTextOnly2ShowFrequency"), YES);
+    textOnly2ShowFPS = getBoolPref(CFSTR("floatingTextOnly2ShowFPS"), YES);
+    textOnly2ShowBattery = getBoolPref(CFSTR("floatingTextOnly2ShowBattery"), YES);
+    textOnly2ShowTemperature = getBoolPref(CFSTR("floatingTextOnly2ShowTemperature"), YES);
+    textOnly2ShowCurrent = getBoolPref(CFSTR("floatingTextOnly2ShowCurrent"), YES);
+    textOnly2ShowSIM1 = getBoolPref(CFSTR("floatingTextOnly2ShowSIM1"), YES);
+    textOnly2ShowSIM2 = getBoolPref(CFSTR("floatingTextOnly2ShowSIM2"), YES);
+    textOnly2ShowUploadNetwork = getBoolPref(CFSTR("floatingTextOnly2ShowUploadNetwork"), NO);
+    textOnly2ShowDownloadNetwork = getBoolPref(CFSTR("floatingTextOnly2ShowDownloadNetwork"), NO);
+    dynamicIslandProtectionEnable = getBoolPref(CFSTR("dynamicIslandProtectionEnable"), YES);
     floatingTextOnlyPreset = MAX(0, MIN(2, getIntPref(CFSTR("floatingTextOnlyPreset"), 1)));
     floatingTextOnlyX = SBCPUTextOnlyBound(getFloatPref(CFSTR("floatingTextOnlyX"), 0), -1000, 1000, 0);
     floatingTextOnlyY = SBCPUTextOnlyBound(getFloatPref(CFSTR("floatingTextOnlyY"), 0), -1000, 1000, 0);
     floatingTextOnlyFontSize = SBCPUTextOnlyBound(getFloatPref(CFSTR("floatingTextOnlyFontSize"), 13), 8, 24, 13);
     floatingTextOnlyColor = SBCPUTextColorMode(getIntPref(CFSTR("floatingTextOnlyColor"), 0));
     textOnlyCustomRGBA = SBCPUTextDecodeRGBA(getArrayPref(CFSTR("floatingTextOnlyRGBA"), nil));
+    textOnlyBold = getBoolPref(CFSTR("floatingTextOnlyBold"), NO);
     // Independent defaults: ordinary show flags never govern this row.
     textOnlyShowCPU = getBoolPref(CFSTR("floatingTextOnlyShowCPU"), YES);
+    textOnlyShowMemory = getBoolPref(CFSTR("floatingTextOnlyShowMemory"), NO);
     textOnlyShowFrequency = getBoolPref(CFSTR("floatingTextOnlyShowFrequency"), YES);
     textOnlyShowFPS = getBoolPref(CFSTR("floatingTextOnlyShowFPS"), YES);
     textOnlyShowBattery = getBoolPref(CFSTR("floatingTextOnlyShowBattery"), YES);
@@ -1045,6 +1169,26 @@ static void LoadPreferences(void) {
     textOnlyShowCurrent = getBoolPref(CFSTR("floatingTextOnlyShowCurrent"), YES);
     textOnlyShowSIM1 = getBoolPref(CFSTR("floatingTextOnlyShowSIM1"), YES);
     textOnlyShowSIM2 = getBoolPref(CFSTR("floatingTextOnlyShowSIM2"), YES);
+    BOOL wasUploadNetwork = textOnlyShowUploadNetwork;
+    BOOL wasDownloadNetwork = textOnlyShowDownloadNetwork;
+    CFTypeRef uploadPref = CFPreferencesCopyValue(CFSTR("floatingTextOnlyShowUploadNetwork"), kPrefAppID, kCFPreferencesCurrentUser, kCFPreferencesAnyHost);
+    CFTypeRef downloadPref = CFPreferencesCopyValue(CFSTR("floatingTextOnlyShowDownloadNetwork"), kPrefAppID, kCFPreferencesCurrentUser, kCFPreferencesAnyHost);
+    if (!uploadPref && !downloadPref) {
+        // One-time compatibility migration: the former combined switch enabled both directions.
+        BOOL legacy = getBoolPref(CFSTR("floatingTextOnlyShowNetwork"), NO);
+        textOnlyShowUploadNetwork = legacy;
+        textOnlyShowDownloadNetwork = legacy;
+        setBoolPref(CFSTR("floatingTextOnlyShowUploadNetwork"), legacy);
+        setBoolPref(CFSTR("floatingTextOnlyShowDownloadNetwork"), legacy);
+        CFPreferencesSynchronize(kPrefAppID, kCFPreferencesCurrentUser, kCFPreferencesAnyHost);
+    } else {
+        textOnlyShowUploadNetwork = getBoolPref(CFSTR("floatingTextOnlyShowUploadNetwork"), NO);
+        textOnlyShowDownloadNetwork = getBoolPref(CFSTR("floatingTextOnlyShowDownloadNetwork"), NO);
+    }
+    if (uploadPref) CFRelease(uploadPref);
+    if (downloadPref) CFRelease(downloadPref);
+    if (wasUploadNetwork != textOnlyShowUploadNetwork || wasDownloadNetwork != textOnlyShowDownloadNetwork || wasTextOnly != floatingTextOnlyMode || !isEnabled)
+        resetTextNetwork();
     statusDockReturnDelay = MAX(1, MIN(30, getIntPref(CFSTR("statusDockReturnDelay"), 5)));
     floatingValueRefreshInterval = MAX(1.0, MIN(2.0, getFloatPref(CFSTR("floatingValueRefreshInterval"), 1.0f)));
     statusDockShowCPU = getBoolPref(CFSTR("statusDockShowCPU"), YES);
@@ -1118,9 +1262,10 @@ static void LoadPreferences(void) {
     if ([[NSProcessInfo processInfo].processName isEqualToString:@"SpringBoard"]) {
         applyVisibility();
         if (floatingView && wasTextOnly != floatingTextOnlyMode) handleTextOnlyModeTransition(wasTextOnly);
-        if (floatingView && floatingTextOnlyMode) applyTextOnlyMode();
+        if (floatingView) applyTextOnlyMode();
+        if (!SBCPUTextNetworkNeeded(isEnabled, YES, floatingTextOnlyMode?textSlotMask(NO):0, floatingTextOnlyMode2?textSlotMask(YES):0)) resetTextNetwork();
         [floatingView applyCapsuleTextFilter]; // preference changes do not wait for the metric tick
-        if (showFps || collapsedDisplayMode == 1 || (floatingTextOnlyMode && textOnlyShowFPS)) {
+        if (showFps || collapsedDisplayMode == 1 || ((floatingTextOnlyMode && textOnlyShowFPS) || (floatingTextOnlyMode2 && textOnly2ShowFPS))) {
             [[SBCPUFPSHelper sharedInstance] startMonitoring];
         } else {
             [[SBCPUFPSHelper sharedInstance] stopMonitoring];
@@ -1191,7 +1336,7 @@ static void SavePreferencesAndNotify(void) {
 
     CFPreferencesSynchronize(kPrefAppID, kCFPreferencesCurrentUser, kCFPreferencesAnyHost);
 
-    if (showFps || collapsedDisplayMode == 1 || (floatingTextOnlyMode && textOnlyShowFPS)) {
+    if (showFps || collapsedDisplayMode == 1 || ((floatingTextOnlyMode && textOnlyShowFPS) || (floatingTextOnlyMode2 && textOnly2ShowFPS))) {
         [[SBCPUFPSHelper sharedInstance] startMonitoring];
     } else {
         [[SBCPUFPSHelper sharedInstance] stopMonitoring];
@@ -1653,7 +1798,7 @@ static NSDictionary *getRealBatteryDetails(void) {
             dict[@"CycleCount"] = pDict[@"CycleCount"];
             dict[@"Temperature"] = pDict[@"Temperature"];
             dict[@"Amperage"] = pDict[@"Amperage"] ?: pDict[@"InstantAmperage"];
-            if (floatingTextOnlyMode && textOnlyShowCurrent)
+            if ((floatingTextOnlyMode && textOnlyShowCurrent) || (floatingTextOnlyMode2 && textOnly2ShowCurrent))
                 dict[@"SBCPUTextOnlyCurrentMA"] = SBCPUTextOnlyBatteryCurrent(pDict);
             dict[@"Voltage"] = pDict[@"Voltage"];
             dict[@"Manufacturer"] = SBCPUBatteryManufacturerFromProperties(pDict);
@@ -2088,228 +2233,10 @@ static double getTotalCPUUsage(void) {
     return cpuUsage;
 }
 
-// 当前频率 = IOReport P-State residency × AppleARMIODevice DVFS 表。
-typedef struct IOReportSubscriptionRef *SBIOReportSubscription;
-typedef CFMutableDictionaryRef (*SBIOReportCopyChannelsFn)(NSString *, NSString *, uint64_t, uint64_t, uint64_t);
-typedef SBIOReportSubscription (*SBIOReportCreateSubscriptionFn)(void *, CFMutableDictionaryRef, CFMutableDictionaryRef *, uint64_t, CFTypeRef);
-typedef CFDictionaryRef (*SBIOReportCreateSamplesFn)(SBIOReportSubscription, CFMutableDictionaryRef, CFTypeRef);
-typedef CFDictionaryRef (*SBIOReportCreateSamplesDeltaFn)(CFDictionaryRef, CFDictionaryRef, CFTypeRef);
-typedef int (*SBIOReportIterateFn)(CFDictionaryRef, int (^)(CFDictionaryRef));
-typedef NSString *(*SBIOReportChannelNameFn)(CFDictionaryRef);
-typedef NSString *(*SBIOReportGroupFn)(CFDictionaryRef);
-typedef NSString *(*SBIOReportSubGroupFn)(CFDictionaryRef);
-typedef int (*SBIOReportStateCountFn)(CFDictionaryRef);
-typedef uint64_t (*SBIOReportStateResidencyFn)(CFDictionaryRef, int);
-typedef NSString *(*SBIOReportStateNameFn)(CFDictionaryRef, int);
-
-static struct {
-    void *handle;
-    SBIOReportCopyChannelsFn copyChannels;
-    SBIOReportCreateSubscriptionFn createSubscription;
-    SBIOReportCreateSamplesFn createSamples;
-    SBIOReportCreateSamplesDeltaFn createDelta;
-    SBIOReportIterateFn iterate;
-    SBIOReportChannelNameFn channelName;
-    SBIOReportGroupFn group;
-    SBIOReportSubGroupFn subgroup;
-    SBIOReportStateCountFn stateCount;
-    SBIOReportStateNameFn stateName;
-    SBIOReportStateResidencyFn stateResidency;
-    CFMutableDictionaryRef subscribedChannels;
-    NSArray *ecpuDVFS;
-    NSArray *pcpuDVFS;
-    SBIOReportSubscription subscription;
-    CFTypeRef previousSample;
-    BOOL ready;
-} gIOReport = {0};
-
-static NSArray *readDVFSTable(CFStringRef propertyKey) {
-    io_iterator_t iterator = IO_OBJECT_NULL;
-    CFMutableDictionaryRef matching = IOServiceMatching("AppleARMIODevice");
-    if (!matching || IOServiceGetMatchingServices(kIOMainPortDefault, matching, &iterator) != KERN_SUCCESS) return @[];
-    NSArray *result = @[];
-    io_service_t service = IOIteratorNext(iterator);
-    while (service) {
-        CFTypeRef value = IORegistryEntryCreateCFProperty(service, propertyKey, kCFAllocatorDefault, 0);
-        if (value && CFGetTypeID(value) == CFDataGetTypeID()) {
-            CFDataRef data = (CFDataRef)value;
-            CFIndex length = CFDataGetLength(data);
-            const UInt8 *bytes = CFDataGetBytePtr(data);
-            NSMutableArray *table = [NSMutableArray arrayWithObject:@0.0];
-            for (CFIndex offset = 0; offset + 8 <= length; offset += 8) {
-                uint32_t hz = 0;
-                memcpy(&hz, bytes + offset, sizeof(hz));
-                double mhz = (double)hz / 1000000.0;
-                [table addObject:(mhz > 0.0 && mhz < 6000.0) ? @(mhz) : @0.0];
-            }
-            if (table.count > 1) result = [table copy];
-        }
-        if (value) CFRelease(value);
-        IOObjectRelease(service);
-        if (result.count > 1) break;
-        service = IOIteratorNext(iterator);
-    }
-    IOObjectRelease(iterator);
-    return result;
-}
-
-static void initIOReportFrequency(void) {
-    static dispatch_once_t once;
-    dispatch_once(&once, ^{
-        gIOReport.handle = dlopen("/usr/lib/libIOReport.dylib", RTLD_LAZY);
-        if (!gIOReport.handle) return;
-        gIOReport.copyChannels = (SBIOReportCopyChannelsFn)dlsym(gIOReport.handle, "IOReportCopyChannelsInGroup");
-        gIOReport.createSubscription = (SBIOReportCreateSubscriptionFn)dlsym(gIOReport.handle, "IOReportCreateSubscription");
-        gIOReport.createSamples = (SBIOReportCreateSamplesFn)dlsym(gIOReport.handle, "IOReportCreateSamples");
-        gIOReport.createDelta = (SBIOReportCreateSamplesDeltaFn)dlsym(gIOReport.handle, "IOReportCreateSamplesDelta");
-        gIOReport.iterate = (SBIOReportIterateFn)dlsym(gIOReport.handle, "IOReportIterate");
-        gIOReport.channelName = (SBIOReportChannelNameFn)dlsym(gIOReport.handle, "IOReportChannelGetChannelName");
-        gIOReport.group = (SBIOReportGroupFn)dlsym(gIOReport.handle, "IOReportChannelGetGroup");
-        gIOReport.subgroup = (SBIOReportSubGroupFn)dlsym(gIOReport.handle, "IOReportChannelGetSubGroup");
-        gIOReport.stateCount = (SBIOReportStateCountFn)dlsym(gIOReport.handle, "IOReportStateGetCount");
-        gIOReport.stateName = (SBIOReportStateNameFn)dlsym(gIOReport.handle, "IOReportStateGetNameForIndex");
-        gIOReport.stateResidency = (SBIOReportStateResidencyFn)dlsym(gIOReport.handle, "IOReportStateGetResidency");
-        gIOReport.ready = gIOReport.copyChannels && gIOReport.createSubscription && gIOReport.createSamples &&
-                          gIOReport.createDelta && gIOReport.iterate && gIOReport.channelName && gIOReport.group &&
-                          gIOReport.subgroup && gIOReport.stateCount && gIOReport.stateName && gIOReport.stateResidency;
-        gIOReport.ecpuDVFS = readDVFSTable(CFSTR("voltage-states1-sram"));
-        gIOReport.pcpuDVFS = readDVFSTable(CFSTR("voltage-states5-sram"));
-    });
-}
-
-static double readFrequencyFromIOReport(void) {
-    initIOReportFrequency();
-    if (!gIOReport.ready || (!gIOReport.ecpuDVFS.count && !gIOReport.pcpuDVFS.count)) return 0.0;
-    if (!gIOReport.subscription) {
-        CFMutableDictionaryRef channels = gIOReport.copyChannels(@"CPU Stats", nil, 0, 0, 0);
-        if (!channels) return 0.0;
-        gIOReport.subscription = gIOReport.createSubscription(NULL, channels, &gIOReport.subscribedChannels, 0, NULL);
-        CFRelease(channels);
-        if (!gIOReport.subscription) return 0.0;
-    }
-    CFDictionaryRef first = gIOReport.createSamples(gIOReport.subscription, gIOReport.subscribedChannels, NULL);
-    if (!first) return 0.0;
-    [NSThread sleepForTimeInterval:0.12];
-    CFDictionaryRef last = gIOReport.createSamples(gIOReport.subscription, gIOReport.subscribedChannels, NULL);
-    if (!last) { CFRelease(first); return 0.0; }
-    CFDictionaryRef delta = gIOReport.createDelta(first, last, NULL);
-    CFRelease(first); CFRelease(last);
-    if (!delta) return 0.0;
-
-    __block double pcpuSum = 0.0, pcpuWeight = 0.0, ecpuSum = 0.0, ecpuWeight = 0.0;
-    gIOReport.iterate(delta, ^int(CFDictionaryRef channel) {
-        NSString *group = gIOReport.group(channel);
-        NSString *subgroup = gIOReport.subgroup(channel);
-        if (![group isEqualToString:@"CPU Stats"]) return 0;
-        if (![subgroup isEqualToString:@"CPU Complex Performance States"] &&
-            ![subgroup isEqualToString:@"CPU Core Performance States"]) return 0;
-        NSString *name = gIOReport.channelName(channel);
-        NSArray *table = [name containsString:@"E"] ? gIOReport.ecpuDVFS : gIOReport.pcpuDVFS;
-        if (!table.count) return 0;
-        int count = MIN(gIOReport.stateCount(channel), (int)table.count);
-        uint64_t active = 0;
-        for (int i = 1; i < count; i++) {
-            NSString *state = gIOReport.stateName(channel, i);
-            if (![state containsString:@"P"] && ![state containsString:@"V"]) continue;
-            uint64_t residency = gIOReport.stateResidency(channel, i);
-            double mhz = [table[i] doubleValue];
-            if (mhz <= 0.0) continue;
-            active += residency;
-            if ([name containsString:@"E"]) ecpuSum += mhz * residency;
-            else pcpuSum += mhz * residency;
-        }
-        if ([name containsString:@"E"]) ecpuWeight += active;
-        else pcpuWeight += active;
-        return 0;
-    });
-    CFRelease(delta);
-    if (pcpuWeight > 0.0) return pcpuSum / pcpuWeight;
-    if (ecpuWeight > 0.0) return ecpuSum / ecpuWeight;
-    return 0.0;
-}
-
-static double frequencyMHzFromCFValue(CFTypeRef value) {
-    if (!value) return 0.0;
-    double raw = 0.0;
-    if (CFGetTypeID(value) == CFNumberGetTypeID()) {
-        if (!CFNumberGetValue((CFNumberRef)value, kCFNumberDoubleType, &raw)) return 0.0;
-    } else if (CFGetTypeID(value) == CFDataGetTypeID()) {
-        CFIndex length = CFDataGetLength((CFDataRef)value);
-        if (length == 4) {
-            uint32_t v = 0; CFDataGetBytes((CFDataRef)value, CFRangeMake(0, 4), (UInt8 *)&v); raw = v;
-        } else if (length == 8) {
-            uint64_t v = 0; CFDataGetBytes((CFDataRef)value, CFRangeMake(0, 8), (UInt8 *)&v); raw = (double)v;
-        }
-    }
-    if (raw >= 100000000.0 && raw <= 10000000000.0) return raw / 1000000.0;
-    if (raw >= 100000.0 && raw <= 10000000.0) return raw / 1000.0;
-    if (raw >= 100.0 && raw <= 6000.0) return raw;
-    return 0.0;
-}
-
-static __attribute__((unused)) double readFrequencyFromIORegistry(void) {
-    // 全量枚举 IOService，并沿父链搜索当前频率属性；不读取 *_max 或设备标称值。
-    const char *services[] = {"AppleARMPlatform", "ApplePMGR", "AppleARMIODevice", "AppleCLPC", "IOCPU", NULL};
-    const CFStringRef keys[] = {
-        CFSTR("current-frequency"), CFSTR("CurrentFrequency"),
-        CFSTR("actual-frequency"), CFSTR("ActualFrequency"),
-        CFSTR("cpu-frequency"), CFSTR("CPUFrequency"),
-        CFSTR("frequency"), CFSTR("Frequency"),
-        CFSTR("clock-frequency"), CFSTR("ClockFrequency"), NULL
-    };
-    for (int si = 0; services[si]; si++) {
-        io_iterator_t iterator = IO_OBJECT_NULL;
-        CFMutableDictionaryRef matching = IOServiceMatching(services[si]);
-        if (!matching || IOServiceGetMatchingServices(kIOMainPortDefault, matching, &iterator) != KERN_SUCCESS) continue;
-        io_service_t service = IOIteratorNext(iterator);
-        while (service) {
-            io_registry_entry_t node = service;
-            for (int depth = 0; node && depth < 10; depth++) {
-                for (int ki = 0; keys[ki]; ki++) {
-                    CFTypeRef value = IORegistryEntryCreateCFProperty(node, keys[ki], kCFAllocatorDefault, 0);
-                    double mhz = frequencyMHzFromCFValue(value);
-                    if (value) CFRelease(value);
-                    if (mhz > 100.0) {
-                        if (node != service) IOObjectRelease(node);
-                        IOObjectRelease(service); IOObjectRelease(iterator);
-                        return mhz;
-                    }
-                }
-                io_registry_entry_t parent = IO_OBJECT_NULL;
-                if (IORegistryEntryGetParentEntry(node, kIOServicePlane, &parent) != KERN_SUCCESS) parent = IO_OBJECT_NULL;
-                if (node != service) IOObjectRelease(node);
-                node = parent;
-            }
-            if (node && node != service) IOObjectRelease(node);
-            IOObjectRelease(service);
-            service = IOIteratorNext(iterator);
-        }
-        IOObjectRelease(iterator);
-    }
-    return 0.0;
-}
-
+// 5.04 diagnostic: single read-only P-core source shared by HUD and detail panel.
 static double getRealCPUFrequency(double currentCpuUsage) {
     (void)currentCpuUsage;
-    static double lastFrequencyMHz = 0.0;
-    static BOOL started = NO;
-    static dispatch_queue_t queue;
-    static NSObject *lock;
-    if (!started) {
-        started = YES;
-        queue = dispatch_queue_create("com.sbcpu.dvfs-frequency", DISPATCH_QUEUE_SERIAL);
-        lock = [NSObject new];
-        dispatch_async(queue, ^{
-            for (;;) {
-                double frequency = readFrequencyFromIOReport();
-                if (frequency > 100.0) {
-                    @synchronized (lock) { lastFrequencyMHz = frequency; }
-                }
-                [NSThread sleepForTimeInterval:0.25];
-            }
-        });
-    }
-    @synchronized (lock) { return lastFrequencyMHz; }
+    return SBCPUReadPcoreFrequency();
 }
 
 static UIWindowScene *getWindowScene(void) {
@@ -2363,10 +2290,76 @@ static UIInterfaceOrientation getEffectiveFloatingOrientation(void) {
     return UIInterfaceOrientationLandscapeRight;
 }
 
+// Text-only anchors live in the currently displayed orientation, never physical pixels.
+static SBCPUTextAnchor lockedTextAnchor;
+static BOOL lockedTextAnchorValid = NO;
+typedef struct {
+    CGRect bounds;
+    int rotation;
+    double width, height, left, top, right, bottom;
+} SBCPUTextGeometry;
+static SBCPUTextGeometry textOnlyGeometryForView(UIView *parent, BOOL second) {
+    SBCPUTextGeometry g = {};
+    g.bounds = parent.bounds;
+    if (CGRectIsEmpty(g.bounds)) g.bounds = UIScreen.mainScreen.bounds;
+    UIInterfaceOrientation o = getEffectiveFloatingOrientation();
+    // UIWindowScene can already supply an oriented container. Rotate only a
+    // portrait-shaped host representing landscape; otherwise UIKit did it for us.
+    if (g.bounds.size.width < g.bounds.size.height && UIInterfaceOrientationIsLandscape(o))
+        g.rotation = o == UIInterfaceOrientationLandscapeRight ? 1 : -1;
+    else if (o == UIInterfaceOrientationPortraitUpsideDown && cpuWindow.windowScene.interfaceOrientation != o)
+        g.rotation = 2;
+    BOOL swap = g.rotation == 1 || g.rotation == -1;
+    g.width = swap ? g.bounds.size.height : g.bounds.size.width;
+    g.height = swap ? g.bounds.size.width : g.bounds.size.height;
+    UIEdgeInsets safe = parent.safeAreaInsets;
+    // Transform safe rect exactly once into display-direction coordinates.
+    SBCPUTextPoint a = SBCPUTextToLogical(SBCPUTextPointMake(safe.left, safe.top), g.bounds.size.width, g.bounds.size.height, g.rotation);
+    SBCPUTextPoint b = SBCPUTextToLogical(SBCPUTextPointMake(g.bounds.size.width-safe.right, g.bounds.size.height-safe.bottom), g.bounds.size.width, g.bounds.size.height, g.rotation);
+    g.left = MAX(second?0:4, MIN(a.x,b.x));
+    g.right = MAX(second?0:4, g.width-MAX(a.x,b.x)); g.bottom = MAX(10, g.height-MAX(a.y,b.y));
+    // Display top is ALWAYS reachable for pure text, including locked rotation.
+    // Retain transformed side/bottom bounds; never feed status-bar top back in.
+    g.top = SBCPUFloatingProtectedTop(1, dynamicIslandProtectionEnable, 0);
+    return g;
+}
+static SBCPUTextGeometry textOnlyGeometry(void) {
+    return textOnlyGeometryForView(floatingView.superview, NO);
+}
+static SBCPUTextGeometry textOnlySecondGeometry(void) {
+    return textOnlyGeometryForView(cpuWindow.rootViewController.view, YES);
+}
+static SBCPUTextPoint textOnlyLogicalCenter(CGPoint center, SBCPUTextGeometry g) {
+    return SBCPUTextToLogical(SBCPUTextPointMake(center.x-g.bounds.origin.x, center.y-g.bounds.origin.y), g.bounds.size.width, g.bounds.size.height, g.rotation);
+}
+static CGPoint textOnlyContainerCenter(SBCPUTextPoint p, SBCPUTextGeometry g) {
+    p = SBCPUTextFromLogical(p, g.bounds.size.width, g.bounds.size.height, g.rotation);
+    return CGPointMake(p.x+g.bounds.origin.x,p.y+g.bounds.origin.y);
+}
+static void saveLockedTextAnchor(void) {
+    if (!lockedTextAnchorValid) return;
+    [[NSUserDefaults standardUserDefaults] setObject:@{@"version":@1, @"right":@(lockedTextAnchor.right), @"bottom":@(lockedTextAnchor.bottom),
+        @"x":@(lockedTextAnchor.xMargin), @"y":@(lockedTextAnchor.yMargin)} forKey:@"SBCPU.LockedTextAnchor"];
+}
+static void captureLockedTextAnchor(CGPoint center) {
+    SBCPUTextGeometry g = textOnlyGeometry();
+    lockedTextAnchor = SBCPUTextCaptureAnchor(textOnlyLogicalCenter(center,g),g.width,g.height,
+        floatingView.bounds.size.width/2,floatingView.bounds.size.height/2,g.left,g.top,g.right,g.bottom);
+    lockedTextAnchorValid = YES;
+    saveLockedTextAnchor();
+}
+static CGPoint resolveLockedTextCenter(void) {
+    SBCPUTextGeometry g = textOnlyGeometry();
+    SBCPUTextPoint p = SBCPUTextResolveAnchor(lockedTextAnchor,g.width,g.height,
+        floatingView.bounds.size.width/2,floatingView.bounds.size.height/2,g.left,g.top,g.right,g.bottom);
+    return textOnlyContainerCenter(p,g);
+}
+
 static CGFloat floatingTopSafeMargin(UIView *container) {
     CGFloat safeTop = 0.0f;
     if (@available(iOS 11.0, *)) safeTop = container.safeAreaInsets.top;
-    return SBCPUTextOnlyTop(floatingTextOnlyMode, safeTop, sbcpuStatusBarDockEffective());
+    return SBCPUFloatingProtectedTop(floatingTextOnlyMode, dynamicIslandProtectionEnable,
+        SBCPUTextOnlyTop(floatingTextOnlyMode, safeTop, sbcpuStatusBarDockEffective()));
 }
 
 // 状态栏胶囊尺寸：接近灵动岛，独立于普通竖屏/横屏折叠尺寸。
@@ -2385,6 +2378,15 @@ static void clampAndPositionFloatingView(CGPoint targetCenter, BOOL animate) {
     if (!floatingView || !floatingView.superview) return;
     if (floatingView.positionLocked) {
         floatingView.center = floatingView.lockedCenter; // safety-only correction after size/rotation changes
+        return;
+    }
+    // Every caller (including a metric tick during dragging) shares logical text bounds.
+    if (floatingTextOnlyMode) {
+        SBCPUTextGeometry g = textOnlyGeometry();
+        SBCPUTextPoint p = textOnlyLogicalCenter(targetCenter,g);
+        p.x = SBCPUTextSafeCoordinate(p.x,g.left+floatingView.bounds.size.width/2,g.width-g.right-floatingView.bounds.size.width/2);
+        p.y = SBCPUTextSafeCoordinate(p.y,g.top+floatingView.bounds.size.height/2,g.height-g.bottom-floatingView.bounds.size.height/2);
+        floatingView.center = textOnlyContainerCenter(p,g);
         return;
     }
     // Periodic layout must not cancel the user-selected undocked interval.
@@ -2469,36 +2471,173 @@ static void clampAndPositionFloatingView(CGPoint targetCenter, BOOL animate) {
     } else layoutBlock();
 }
 
-static void applyTextOnlyTextFilter(void) {
-    if (!textOnlyLabel) return;
-    // Always clear the obsolete compositor filter, including fixed/custom modes.
-    textOnlyLabel.layer.compositingFilter = nil;
-    if (!floatingTextOnlyMode) {
-        textOnlyLabel.realtimeInvertEnabled = NO;
-        return;
+static unsigned textSlotMask(BOOL second) {
+    BOOL flags[11] = {second?textOnly2ShowCPU:textOnlyShowCPU, second?textOnly2ShowFrequency:textOnlyShowFrequency,
+        second?textOnly2ShowFPS:textOnlyShowFPS, second?textOnly2ShowBattery:textOnlyShowBattery,
+        second?textOnly2ShowTemperature:textOnlyShowTemperature, second?textOnly2ShowCurrent:textOnlyShowCurrent,
+        second?textOnly2ShowSIM1:textOnlyShowSIM1, second?textOnly2ShowSIM2:textOnlyShowSIM2,
+        second?textOnly2ShowUploadNetwork:textOnlyShowUploadNetwork, second?textOnly2ShowDownloadNetwork:textOnlyShowDownloadNetwork, second?textOnly2ShowMemory:textOnlyShowMemory};
+    unsigned mask=0; for (int i=0;i<11;i++) if(flags[i]) mask |= 1u<<i;
+    return mask;
+}
+static void clearTextSlots(SBCPUTextBackdropLabel *host) {
+    host.realtimeInvertEnabled = NO;
+    for (SBCPUTextBackdropLabel *slot in host.subviews.copy) {
+        if (![slot isKindOfClass:SBCPUTextBackdropLabel.class]) continue;
+        slot.realtimeInvertEnabled = NO; [slot removeFromSuperview];
     }
-    // SpringBoard's main-screen environment is authoritative, not foreground-app
-    // traits or sampled pixels. Its own overlay window is the unspecified fallback.
+}
+static UIColor *textSlotColor(void) {
     int style = SBCPUTextSystemStyle((int)UIScreen.mainScreen.traitCollection.userInterfaceStyle,
                                     (int)cpuWindow.traitCollection.userInterfaceStyle);
-    if (floatingTextOnlyColor == 3) {
-        textOnlyLabel.textColor = [UIColor colorWithRed:textOnlyCustomRGBA.red green:textOnlyCustomRGBA.green
-                                                  blue:textOnlyCustomRGBA.blue alpha:textOnlyCustomRGBA.alpha];
-    } else {
-        textOnlyLabel.textColor = SBCPUTextUsesWhite((int)floatingTextOnlyColor, style) ? UIColor.whiteColor : UIColor.blackColor;
+    if (floatingTextOnlyColor == 3) return [UIColor colorWithRed:textOnlyCustomRGBA.red green:textOnlyCustomRGBA.green
+        blue:textOnlyCustomRGBA.blue alpha:textOnlyCustomRGBA.alpha];
+    return SBCPUTextUsesWhite((int)floatingTextOnlyColor, style) ? UIColor.whiteColor : UIColor.blackColor;
+}
+static void colorTextSlots(SBCPUTextBackdropLabel *host, BOOL second) {
+    for (SBCPUTextBackdropLabel *slot in host.subviews) {
+        if (![slot isKindOfClass:SBCPUTextBackdropLabel.class]) continue;
+        slot.layer.compositingFilter = nil; slot.textColor = textSlotColor();
+        slot.attributedText = SBCPUTextOnlyAttributedRow(slot.text,slot.font,slot.textColor);
+        slot.realtimeInvertEnabled = isEnabled && !cpuWindow.hidden && floatingTextOnlyColor == 4 && slot.text.length > 0;
     }
-    textOnlyLabel.realtimeInvertEnabled = (floatingTextOnlyColor == 4 && textOnlyLabel.text.length > 0);
+}
+static CGSize layoutTextSlots(SBCPUTextBackdropLabel *host, BOOL second, SBCPUTextGeometry g) {
+    unsigned mask=textSlotMask(second);
+    CGFloat fs=SBCPUTextOnlyBound(second?floatingTextOnly2FontSize:floatingTextOnlyFontSize,8,24,13);
+    UIFont *font=[UIFont monospacedDigitSystemFontOfSize:fs weight:(second?textOnly2Bold:textOnlyBold)?UIFontWeightBold:UIFontWeightRegular];
+    CGFloat available=MAX(1,g.width-g.left-g.right);
+    SBCPUTextSlot frames[11];
+    CGFloat fpsWidth=SBCPUTextFPSConfiguredWidth(font);
+    CGFloat height=SBCPUTextSlotsLayoutMemoryConfigured(mask,fs,available,second?floatingTextOnly2DataGap:floatingTextOnlyDataGap,second && textOnly2NetworkDualLine,fpsWidth,(mask&(1u<<5))?SBCPUTextCurrentConfiguredWidth(font):0,(mask&(1u<<10))?SBCPUTextMemoryConfiguredWidth(font):0,(mask&1u)?SBCPUTextCPUConfiguredWidth(font):0,frames);
+    NSMutableArray *parts=[NSMutableArray array];
+    for (int i=0;i<11;i++) {
+        SBCPUTextBackdropLabel *slot=(id)[host viewWithTag:4950+i];
+        if (!(mask&(1u<<i))) { slot.realtimeInvertEnabled=NO; [slot removeFromSuperview]; continue; }
+        if (!slot) { slot=[[SBCPUCapsuleBackdropLabel alloc] initWithFrame:CGRectZero]; slot.tag=4950+i;
+            slot.userInteractionEnabled=NO; slot.backgroundColor=UIColor.clearColor; [host addSubview:slot]; }
+        SBCPUTextOnlyFields f={i==0,i==1,i==2,i==3,i==4,i==5,i==6,i==7};
+        NSString *value=i==10?SBCPUTextMemoryValue(textOnlyMemorySample):i<8?SBCPUTextOnlyRow(f,floatingView.cpuValueLabel.text,floatingView.cpuFreqLabel.text,
+            floatingView.fpsValueLabel.text,floatingView.batteryValueLabel.text,floatingView.tempValueLabel.text,
+            SBCPUTextOnlyCurrentText(textOnlyBatteryCurrent,textOnlyCurrentUptime,NSProcessInfo.processInfo.systemUptime),textOnlySignals):
+            SBCPUNetworkTextDirections(textNetworkSampleValid,textNetworkDownloadRate,textNetworkUploadRate,i==8,i==9);
+        UIFont *slotFont=font;
+        slot.font=slotFont; slot.text=value; slot.numberOfLines=1; slot.adjustsFontSizeToFitWidth=NO;
+        slot.lineBreakMode=NSLineBreakByClipping; slot.textAlignment=SBCPUTextMetricAlignment(i);
+        slot.clipsToBounds=YES;
+        slot.frame=CGRectMake(frames[i].x,frames[i].y,frames[i].width,frames[i].height);
+        [parts addObject:value];
+    }
+    for (int i=0;i<11;i++) {
+        SBCPUTextSlot frame=SBCPUTextSeparatorFrame(mask,i,second && textOnly2NetworkDualLine,frames);
+        SBCPUTextBackdropLabel *dot=(id)[host viewWithTag:4970+i];
+        if (frame.width<=0) { dot.realtimeInvertEnabled=NO; [dot removeFromSuperview]; continue; }
+        if (!dot) { dot=[[SBCPUCapsuleBackdropLabel alloc] initWithFrame:CGRectZero]; dot.tag=4970+i;
+            dot.userInteractionEnabled=NO; dot.backgroundColor=UIColor.clearColor; [host addSubview:dot]; }
+        dot.font=font; dot.text=@"·"; dot.numberOfLines=1; dot.adjustsFontSizeToFitWidth=NO;
+        dot.lineBreakMode=NSLineBreakByClipping; dot.textAlignment=NSTextAlignmentCenter; dot.clipsToBounds=YES;
+        dot.frame=CGRectMake(frame.x,frame.y,frame.width,frame.height);
+    }
+    host.text=@""; host.hidden=mask==0;
+    if (!second) textOnlyPlainText=[parts componentsJoinedByString:@" "];
+    colorTextSlots(host, second);
+    CGFloat width=1; for (int i=0;i<11;i++) width=MAX(width,frames[i].x+frames[i].width);
+    return CGSizeMake(width,height);
+}
+static void applyTextOnlyTextFilter(void) {
+    if (!floatingTextOnlyMode) clearTextSlots(textOnlyLabel);
+    else colorTextSlots(textOnlyLabel, NO);
+    colorTextSlots(textOnly2Label, YES);
+}
+static BOOL textOnly2Dragging=NO;
+static void syncSecondTextInteraction(void) {
+    // Re-enable the SAME recognizer on OFF; cancellation on ON must not keep
+    // the layout in dragging mode. Never disable the shared window/root view.
+    if (textOnly2Locked) textOnly2Dragging=NO;
+    textOnly2Label.userInteractionEnabled=!textOnly2Locked;
+    for (UIGestureRecognizer *gesture in textOnly2Label.gestureRecognizers)
+        gesture.enabled=!textOnly2Locked;
+}
+@implementation SBCPURootViewController (SBCPUSecondTextHUD)
+- (void)sbcpu_secondTextPan:(UIPanGestureRecognizer *)pan {
+    if (textOnly2Locked || !textOnly2Label || pan.view!=textOnly2Label || textOnly2Label.window!=cpuWindow) return;
+    SBCPUTextGeometry g=textOnlySecondGeometry();
+    UIView *host=textOnly2Label.superview;
+    CGPoint d=[pan translationInView:host];
+    if (pan.state==UIGestureRecognizerStateBegan) {
+        textOnly2Dragging=YES; [pan setTranslation:CGPointZero inView:host];
+    }
+    if (pan.state==UIGestureRecognizerStateChanged) {
+        textOnly2Label.center=CGPointMake(textOnly2Label.center.x+d.x,textOnly2Label.center.y+d.y);
+        [pan setTranslation:CGPointZero inView:host];
+    }
+    if (pan.state==UIGestureRecognizerStateEnded || pan.state==UIGestureRecognizerStateCancelled) {
+        SBCPUTextPoint p=textOnlyLogicalCenter(textOnly2Label.center,g);
+        CGFloat hw=textOnly2Label.bounds.size.width/2,hh=textOnly2Label.bounds.size.height/2;
+        p.x=SBCPUTextSafeCoordinate(p.x,g.left+hw,g.width-g.right-hw);
+        p.y=SBCPUTextSafeCoordinate(p.y,g.top+hh,g.height-g.bottom-hh);
+        floatingTextOnly2X=p.x-SBCPUTextOnlyAnchorX((int)floatingTextOnly2Preset,g.width,hw);
+        floatingTextOnly2Y=p.y-hh;
+        setFloatPref(CFSTR("floatingTextOnly2X"),floatingTextOnly2X);
+        setFloatPref(CFSTR("floatingTextOnly2Y"),floatingTextOnly2Y);
+        CFPreferencesSynchronize(kPrefAppID,kCFPreferencesCurrentUser,kCFPreferencesAnyHost);
+        SBCPUTextAnchor anchor=SBCPUTextCaptureAnchor(p,g.width,g.height,hw,hh,g.left,g.top,g.right,g.bottom);
+        [[NSUserDefaults standardUserDefaults] setObject:@{@"right":@(anchor.right),@"bottom":@(anchor.bottom),
+            @"x":@(anchor.xMargin),@"y":@(anchor.yMargin),@"offsetX":@(floatingTextOnly2X),@"offsetY":@(floatingTextOnly2Y),@"preset":@(floatingTextOnly2Preset)} forKey:@"SBCPU.SecondTextAnchor"];
+        textOnly2Dragging=NO; updateTextOnlySecond();
+    }
+}
+@end
+static void updateTextOnlySecond(void) {
+    if (!NSThread.isMainThread) {
+        dispatch_async(dispatch_get_main_queue(), ^{ updateTextOnlySecond(); }); return;
+    }
+    if (!SBCPUTextHUDShouldExist(isEnabled,floatingTextOnlyMode2,cpuWindow!=nil,cpuWindow.rootViewController!=nil)) {
+        clearTextSlots(textOnly2Label); [textOnly2Label removeFromSuperview]; textOnly2Label=nil; textOnly2Dragging=NO; return;
+    }
+    // Reuse the proven 5.01 SpringBoard window/event context. A second visible
+    // UIWindow is not evidence that BackBoard routes cross-app touches to it.
+    UIView *host=cpuWindow.rootViewController.view;
+    if (!textOnly2Label || textOnly2Label.superview!=host) {
+        clearTextSlots(textOnly2Label); [textOnly2Label removeFromSuperview];
+        textOnly2Label=[[SBCPUTextBackdropLabel alloc] initWithFrame:CGRectZero];
+        textOnly2Label.backgroundColor=UIColor.clearColor;
+        UIPanGestureRecognizer *pan=[[UIPanGestureRecognizer alloc] initWithTarget:cpuWindow.rootViewController action:@selector(sbcpu_secondTextPan:)];
+        [textOnly2Label addGestureRecognizer:pan]; [host addSubview:textOnly2Label];
+    }
+    syncSecondTextInteraction();
+    SBCPUTextGeometry g=textOnlySecondGeometry();
+    CGSize size=layoutTextSlots(textOnly2Label,YES,g);
+    textOnly2Label.bounds=(CGRect){CGPointZero,size};
+    int r=g.rotation;
+    textOnly2Label.transform=CGAffineTransformMakeRotation(r==2?M_PI:r*M_PI_2);
+    if (!textOnly2Dragging) {
+        CGFloat hw=size.width/2,hh=size.height/2;
+        SBCPUTextPoint p=SBCPUTextPointMake(SBCPUTextOnlyAnchorX((int)floatingTextOnly2Preset,g.width,hw)+floatingTextOnly2X,hh+floatingTextOnly2Y);
+        NSDictionary *saved=[[NSUserDefaults standardUserDefaults] dictionaryForKey:@"SBCPU.SecondTextAnchor"];
+        if (saved && SBCPUTextAnchorOffsetsMatch([saved[@"offsetX"] doubleValue],[saved[@"offsetY"] doubleValue],floatingTextOnly2X,floatingTextOnly2Y) && [saved[@"preset"] integerValue]==floatingTextOnly2Preset) {
+            SBCPUTextAnchor anchor={[saved[@"right"] intValue],[saved[@"bottom"] intValue],
+                [saved[@"x"] doubleValue],[saved[@"y"] doubleValue]};
+            p=SBCPUTextResolveAnchor(anchor,g.width,g.height,hw,hh,g.left,g.top,g.right,g.bottom);
+        }
+        p.x=SBCPUTextSafeCoordinate(p.x,g.left+hw,g.width-g.right-hw);
+        p.y=SBCPUTextSafeCoordinate(p.y,g.top+hh,g.height-g.bottom-hh);
+        textOnly2Label.center=textOnlyContainerCenter(p,g);
+    }
+    textOnly2Label.hidden=textOnly2Label.hidden || floatingView.hidden;
 }
 
 static void applyTextOnlyMode(void) {
     [floatingView applyCapsuleTextFilter]; // entering text-only clears every capsule mask
+    updateTextOnlySecond();
+    if (!isEnabled) { clearTextSlots(textOnlyLabel); return; }
     if (!floatingView || !floatingTextOnlyMode) return;
     if (!textOnlyLabel || textOnlyLabel.superview != floatingView) {
         [textOnlyLabel removeFromSuperview];
         textOnlyLabel = [[SBCPUTextBackdropLabel alloc] initWithFrame:CGRectZero];
         textOnlyLabel.numberOfLines = 1;
-        textOnlyLabel.lineBreakMode = NSLineBreakByClipping;
-        textOnlyLabel.adjustsFontSizeToFitWidth = YES;
+        textOnlyLabel.lineBreakMode = NSLineBreakByWordWrapping;
+        textOnlyLabel.adjustsFontSizeToFitWidth = NO;
         textOnlyLabel.baselineAdjustment = UIBaselineAdjustmentAlignCenters;
         textOnlyLabel.textAlignment = NSTextAlignmentCenter;
         textOnlyLabel.backgroundColor = UIColor.clearColor;
@@ -2513,26 +2652,20 @@ static void applyTextOnlyMode(void) {
     floatingView.layer.borderWidth = 0;
     floatingView.alpha = 1;
     floatingView.isCollapsed = NO;
-    SBCPUTextOnlyFields fields = {textOnlyShowCPU, textOnlyShowFrequency, textOnlyShowFPS,
-        textOnlyShowBattery, textOnlyShowTemperature, textOnlyShowCurrent, textOnlyShowSIM1, textOnlyShowSIM2};
-    NSString *netCurrent = SBCPUTextOnlyCurrentText(textOnlyBatteryCurrent,
-        textOnlyCurrentUptime, [NSProcessInfo processInfo].systemUptime);
-    textOnlyLabel.text = SBCPUTextOnlyRow(fields, floatingView.cpuValueLabel.text,
-        floatingView.cpuFreqLabel.text, floatingView.fpsValueLabel.text, floatingView.batteryValueLabel.text,
-        floatingView.tempValueLabel.text, netCurrent, textOnlySignals);
-    textOnlyLabel.hidden = (textOnlyLabel.text.length == 0);
-    textOnlyLabel.font = [UIFont monospacedSystemFontOfSize:floatingTextOnlyFontSize weight:UIFontWeightMedium];
-    CGRect container = floatingView.superview.bounds;
-    UIInterfaceOrientation orientation = getEffectiveFloatingOrientation();
-    BOOL rotated = UIInterfaceOrientationIsLandscape(orientation);
-    CGFloat available = SBCPUTextOnlyAvailableWidth(container.size.width, container.size.height, rotated);
-    CGFloat naturalWidth = ceil([textOnlyLabel.text sizeWithAttributes:@{NSFontAttributeName:textOnlyLabel.font}].width);
-    textOnlyLabel.minimumScaleFactor = SBCPUTextOnlyMinimumScale(naturalWidth, available);
-    // Single physical row; retain every selected value even on narrow screens.
-    CGFloat rowWidth = textOnlyLabel.hidden ? 1 : MAX(1, MIN(available, naturalWidth + 2));
-    CGFloat rowHeight = textOnlyLabel.hidden ? 1 : ceil(textOnlyLabel.font.lineHeight);
-    floatingView.bounds = CGRectMake(0, 0, rowWidth, rowHeight);
-    textOnlyLabel.frame = floatingView.bounds;
+    SBCPUTextGeometry textGeometry = textOnlyGeometry();
+    CGSize slotSize=layoutTextSlots(textOnlyLabel,NO,textGeometry);
+    CGFloat rowWidth=slotSize.width,rowHeight=slotSize.height;
+    floatingView.bounds=CGRectMake(0,0,rowWidth,rowHeight);
+    textOnlyLabel.frame=floatingView.bounds;
+    // Resize can happen mid-drag or during a locked refresh, before updateFloatingSize.
+    // Re-clamp now as well, in logical display coordinates; do not rewrite saved anchors.
+    SBCPUTextPoint p = floatingView.positionLocked && lockedTextAnchorValid
+        ? SBCPUTextResolveAnchor(lockedTextAnchor,textGeometry.width,textGeometry.height,rowWidth/2,rowHeight/2,
+            textGeometry.left,textGeometry.top,textGeometry.right,textGeometry.bottom)
+        : textOnlyLogicalCenter(floatingView.center,textGeometry);
+    p.x = SBCPUTextSafeCoordinate(p.x,textGeometry.left+rowWidth/2,textGeometry.width-textGeometry.right-rowWidth/2);
+    p.y = SBCPUTextSafeCoordinate(p.y,textGeometry.top+rowHeight/2,textGeometry.height-textGeometry.bottom-rowHeight/2);
+    floatingView.center = textOnlyContainerCenter(p,textGeometry);
     applyTextOnlyTextFilter();
 }
 
@@ -2559,11 +2692,12 @@ static void handleTextOnlyModeTransition(BOOL wasEnabled) {
         floatingView.isCollapsed = NO;
         applyTextOnlyMode();
     } else {
+        clearTextSlots(textOnlyLabel);
         textOnlyLabel.realtimeInvertEnabled = NO;
         textOnlyLabel.layer.compositingFilter = nil;
         [textOnlyLabel removeFromSuperview];
         textOnlyLabel = nil;
-        textOnlySignals = nil;
+        if (!floatingTextOnlyMode2) textOnlySignals = nil;
         for (UIView *view in floatingView.subviews) {
             NSNumber *hidden = [textOnlyHiddenSnapshot objectForKey:view];
             if (hidden) view.hidden = hidden.boolValue;
@@ -2585,6 +2719,7 @@ static void handleTextOnlyModeTransition(BOOL wasEnabled) {
 }
 
 static void updateFloatingSize(void) {
+    updateTextOnlySecond();
     if (!floatingView) return;
     // 展开/收起动画自己管理 bounds/transform；每秒刷新不能在中途抢回布局。
     if (floatingView.layoutTransitionAnimating) return;
@@ -2629,14 +2764,27 @@ static void updateFloatingSize(void) {
         case UIInterfaceOrientationPortrait: default: rotationAngle = 0.0; break;
     }
 
+    if (floatingTextOnlyMode) {
+        int r = textOnlyGeometry().rotation;
+        rotationAngle = r == 2 ? M_PI : r * M_PI_2;
+    }
     CGAffineTransform finalTransform = CGAffineTransformConcat(CGAffineTransformMakeScale(floatingTextOnlyMode ? 1 : floatingScale, floatingTextOnlyMode ? 1 : floatingScale), CGAffineTransformMakeRotation(rotationAngle));
     floatingView.transform = finalTransform;
     if (floatingTextOnlyMode && !textOnlyDragging) {
-        CGRect bounds = floatingView.superview.bounds;
-        CGFloat halfW = floatingView.frame.size.width * 0.5;
-        CGFloat halfH = floatingView.frame.size.height * 0.5;
-        CGFloat anchorX = SBCPUTextOnlyAnchorX((int)floatingTextOnlyPreset, bounds.size.width, halfW);
-        floatingView.center = CGPointMake(anchorX + floatingTextOnlyX, halfH + 2 + floatingTextOnlyY);
+        if (floatingView.positionLocked) {
+            // Legacy centers are migrated only after text bounds/rotation exist.
+            if (!lockedTextAnchorValid) captureLockedTextAnchor(floatingView.lockedCenter);
+            floatingView.center = resolveLockedTextCenter();
+        } else {
+            SBCPUTextGeometry g = textOnlyGeometry();
+            CGFloat halfW = floatingView.bounds.size.width * 0.5;
+            CGFloat halfH = floatingView.bounds.size.height * 0.5;
+            CGFloat x = SBCPUTextOnlyAnchorX((int)floatingTextOnlyPreset, g.width, halfW) + floatingTextOnlyX;
+            SBCPUTextPoint p = SBCPUTextPointMake(SBCPUTextSafeCoordinate(x,g.left+halfW,g.width-g.right-halfW),
+                SBCPUTextSafeCoordinate(halfH+floatingTextOnlyY,g.top+halfH,g.height-g.bottom-halfH));
+            floatingView.center = textOnlyContainerCenter(p,g);
+        }
+        return; // Do not clamp logical text a second time with physical capsule geometry.
     }
     clampAndPositionFloatingView(floatingView.center, NO);
 }
@@ -2670,6 +2818,19 @@ static void createCPUWindow(void) {
 
     // Dedicated SpringBoard defaults, like LastFrame; independent of rememberPositionEnable.
     NSUserDefaults *positionDefaults = [NSUserDefaults standardUserDefaults];
+    NSDictionary *textAnchor = [positionDefaults dictionaryForKey:@"SBCPU.LockedTextAnchor"];
+    lockedTextAnchorValid = [textAnchor[@"version"] isKindOfClass:NSNumber.class] &&
+        [textAnchor[@"version"] integerValue] == 1 &&
+        [textAnchor[@"right"] isKindOfClass:NSNumber.class] && [textAnchor[@"bottom"] isKindOfClass:NSNumber.class] &&
+        [textAnchor[@"x"] isKindOfClass:NSNumber.class] && [textAnchor[@"y"] isKindOfClass:NSNumber.class] &&
+        isfinite([textAnchor[@"x"] doubleValue]) && isfinite([textAnchor[@"y"] doubleValue]) &&
+        [textAnchor[@"x"] doubleValue] >= 0 && [textAnchor[@"y"] doubleValue] >= 0;
+    if (lockedTextAnchorValid) {
+        lockedTextAnchor.right = [textAnchor[@"right"] boolValue];
+        lockedTextAnchor.bottom = [textAnchor[@"bottom"] boolValue];
+        lockedTextAnchor.xMargin = [textAnchor[@"x"] doubleValue];
+        lockedTextAnchor.yMargin = [textAnchor[@"y"] doubleValue];
+    }
     NSString *lockedPoint = [positionDefaults stringForKey:@"SBCPU.LockedCenter"];
     if ([positionDefaults boolForKey:@"SBCPU.PositionLocked"] && lockedPoint.length) {
         CGPoint point = CGPointFromString(lockedPoint);
@@ -2759,7 +2920,9 @@ static void updateCPU(void) {
         return;
     }
     double cpu = getSpringBoardCPUUsage();
-    double cpuFreq = getRealCPUFrequency(cpu);
+    BOOL frequencyNeeded = showCpuFrequency || statusDockShowFrequency ||
+        (floatingTextOnlyMode && textOnlyShowFrequency) || (floatingTextOnlyMode2 && textOnly2ShowFrequency);
+    double cpuFreq = frequencyNeeded ? getRealCPUFrequency(cpu) : 0.0;
     double fps = [SBCPUFPSHelper sharedInstance].currentFPS;
 
     checkHighCPU(cpu);
@@ -2813,8 +2976,10 @@ static void updateCPU(void) {
         NSDictionary *chargeInfo = getRealBatteryDetails();
         // Same registry sample as charge-power display; cache before updateData
         // builds the text row. Missing data invalidates the previous sample.
-        if (floatingTextOnlyMode) {
-            textOnlyBatteryCurrent = textOnlyShowCurrent ? chargeInfo[@"SBCPUTextOnlyCurrentMA"] : nil;
+        if ((floatingTextOnlyMode && textOnlyShowMemory) || (floatingTextOnlyMode2 && textOnly2ShowMemory))
+            textOnlyMemorySample=SBCPUMemoryCachedSample();
+        if (floatingTextOnlyMode || floatingTextOnlyMode2) {
+            textOnlyBatteryCurrent = ((floatingTextOnlyMode && textOnlyShowCurrent) || (floatingTextOnlyMode2 && textOnly2ShowCurrent)) ? chargeInfo[@"SBCPUTextOnlyCurrentMA"] : nil;
             textOnlyCurrentUptime = [NSProcessInfo processInfo].systemUptime;
         }
         double chargeWatts = [chargeInfo[@"CalculatedWatts"] doubleValue];
@@ -2948,11 +3113,10 @@ static void updateCPU(void) {
 #pragma mark - 7. 所有的 Objective-C 类实现区块
 
 @implementation SBCPUFPSHelper {
-    CADisplayLink *_displayLink;
-    CFTimeInterval _lastTimestamp;
-    NSInteger _frameCount;
-    CFTimeInterval _sampleElapsed;
-    double _smoothedFPS;
+    NSTimer *_sampleTimer;
+    CFIndex _previousDirtyFrameCount;
+    CFTimeInterval _previousFPSTime;
+    BOOL _hasFPSBaseline;
 }
 
 + (instancetype)sharedInstance {
@@ -2964,56 +3128,58 @@ static void updateCPU(void) {
     return instance;
 }
 
-
-
 - (void)startMonitoring {
-    if (_displayLink) return;
-    _displayLink = [CADisplayLink displayLinkWithTarget:self selector:@selector(tick:)];
-    [_displayLink addToRunLoop:[NSRunLoop mainRunLoop] forMode:NSRunLoopCommonModes];
+    if (_sampleTimer) return;
+
+    // Follow TrollSpeed: sample the compositor's global dirty-frame counter,
+    // rather than counting callbacks delivered by SpringBoard's run loop.
+    // This is observational (no frame-rate hook, range request, or 120-Hz API).
+    _hasFPSBaseline = NO;
+    _previousDirtyFrameCount = 0;
+    _currentFPS = 0.0;
+    if (!CARenderServerGetDirtyFrameCount) return;
+    _sampleTimer = [NSTimer timerWithTimeInterval:1.0
+                                             target:self
+                                           selector:@selector(sampleFPS:)
+                                           userInfo:nil
+                                            repeats:YES];
+    [[NSRunLoop mainRunLoop] addTimer:_sampleTimer forMode:NSRunLoopCommonModes];
 }
 
 - (void)stopMonitoring {
-    if (_displayLink) {
-        [_displayLink invalidate];
-        _displayLink = nil;
-    }
-    _lastTimestamp = 0;
-    _frameCount = 0;
-    _sampleElapsed = 0;
-    _smoothedFPS = 0;
+    [_sampleTimer invalidate];
+    _sampleTimer = nil;
+    _previousDirtyFrameCount = 0;
+    _hasFPSBaseline = NO;
     _currentFPS = 0.0;
 }
 
+- (void)sampleFPS:(NSTimer *)timer {
+    if (!CARenderServerGetDirtyFrameCount) return;
+    CFIndex dirtyFrameCount = CARenderServerGetDirtyFrameCount(NULL);
+    CFTimeInterval now = CACurrentMediaTime();
+    CFTimeInterval elapsed = now - _previousFPSTime;
+    if (!_hasFPSBaseline || elapsed <= 0.0 || elapsed > 5.0) {
+        _previousDirtyFrameCount = dirtyFrameCount;
+        _previousFPSTime = now;
+        _hasFPSBaseline = YES;
+        _currentFPS = 0.0;
+        return;
+    }
 
-- (void)tick:(CADisplayLink *)link {
-    CFTimeInterval timestamp = link.timestamp;
-    if (_lastTimestamp == 0 || timestamp <= _lastTimestamp) {
-        _lastTimestamp = timestamp;
-        _frameCount = 0;
-        _sampleElapsed = 0;
-        return;
-    }
-    CFTimeInterval interval = timestamp - _lastTimestamp;
-    _lastTimestamp = timestamp;
-    // 后台切换/主线程卡顿会产生很大的时间洞，不能把它算进屏幕刷新率。
-    if (interval <= 0.0 || interval > 0.25) {
-        _frameCount = 0;
-        _sampleElapsed = 0;
-        return;
-    }
-    _frameCount++;
-    _sampleElapsed += interval;
-    // 约四分之一秒采样一次：降低显示延迟，同时保留足够的帧数抗抖动。
-    if (_sampleElapsed >= 0.25) {
-        double measured = (double)_frameCount / _sampleElapsed;
-        if (measured >= 1.0 && measured <= 240.0) {
-            // 轻度平滑，避免 60/120Hz 之间因单次抖动跳变；不再使用 1 秒滞后窗口。
-            _smoothedFPS = (_smoothedFPS > 0.0) ? (_smoothedFPS * 0.35 + measured * 0.65) : measured;
-            self.currentFPS = _smoothedFPS;
-        }
-        _frameCount = 0;
-        _sampleElapsed = 0;
-    }
+    CFIndex frameDiff = dirtyFrameCount - _previousDirtyFrameCount;
+    _previousDirtyFrameCount = dirtyFrameCount;
+    _previousFPSTime = now;
+    if (frameDiff < 0) frameDiff = 0; // counter reset/restart
+
+    // Do not cap to the host screen's advertised maximum: in SpringBoard
+    // that value can describe SpringBoard's own 60-Hz surface, not the
+    // foreground app/compositor refresh rate.
+    // Use real monotonic elapsed time, not the timer's nominal interval:
+    // a delayed main thread must not turn 60 FPS into a spurious 120.
+    double measured = (double)frameDiff / elapsed;
+    if (measured > 240.0) measured = 240.0;
+    _currentFPS = measured;
 }
 @end
 
@@ -3331,6 +3497,8 @@ static void LGRemoveLabelShadowInView(UIView *view) {
         self.doubleTapGesture.delegate = self;
         [self addGestureRecognizer:self.doubleTapGesture];
         [self.singleTapGesture requireGestureRecognizerToFail:self.doubleTapGesture];
+        // A two-tap lock wins over incidental movement; real drags make the tap fail.
+        [pan requireGestureRecognizerToFail:self.doubleTapGesture];
 
 
         self.longPressGesture = [[UILongPressGestureRecognizer alloc] initWithTarget:self action:@selector(handleLongPress:)];
@@ -3742,6 +3910,10 @@ return self;
 // Keep the anchor unchanged; only constrain the rendered center when geometry would hide it.
 - (void)setCenter:(CGPoint)center {
     if (self.positionLocked) {
+        if (floatingTextOnlyMode && lockedTextAnchorValid) {
+            [super setCenter:resolveLockedTextCenter()];
+            return;
+        }
         center = self.lockedCenter;
         if (self.superview) {
             CGRect bounds = self.superview.bounds;
@@ -3753,14 +3925,79 @@ return self;
     [super setCenter:center];
 }
 
+- (void)showLockFeedback:(NSString *)message {
+    // A sibling toast, never a metric label: no change to text bounds/style/anchor.
+    [self.lockFeedbackLabel removeFromSuperview];
+    UIView *host = self.superview;
+    if (!host) return;
+    UILabel *toast = [[UILabel alloc] initWithFrame:CGRectZero];
+    toast.text = message;
+    toast.font = [UIFont systemFontOfSize:13 weight:UIFontWeightMedium];
+    toast.textColor = UIColor.whiteColor;
+    toast.backgroundColor = [UIColor colorWithWhite:0.08 alpha:0.85];
+    toast.textAlignment = NSTextAlignmentCenter;
+    toast.userInteractionEnabled = NO;
+    toast.layer.cornerRadius = 8;
+    toast.clipsToBounds = YES;
+    [toast sizeToFit];
+    CGSize size = CGSizeMake(MIN(host.bounds.size.width, toast.bounds.size.width+24), 30);
+    CGRect anchor = self.frame;
+    CGFloat x = MIN(MAX(CGRectGetMidX(anchor)-size.width/2,0), MAX(0,host.bounds.size.width-size.width));
+    CGFloat y = MIN(MAX(CGRectGetMaxY(anchor)+8,host.safeAreaInsets.top), MAX(0,host.bounds.size.height-size.height));
+    toast.frame = CGRectMake(x,y,size.width,size.height);
+    toast.transform = self.transform;
+    [host addSubview:toast];
+    self.lockFeedbackLabel = toast;
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW,(int64_t)(1.2*NSEC_PER_SEC)),dispatch_get_main_queue(), ^{
+        [toast removeFromSuperview];
+        if (self.lockFeedbackLabel == toast) self.lockFeedbackLabel = nil;
+    });
+}
+
 - (void)handleDoubleTap:(UITapGestureRecognizer *)tap {
     if (tap.state != UIGestureRecognizerStateEnded) return;
-    if (!self.positionLocked) {
-        CALayer *presentation = (CALayer *)self.layer.presentationLayer;
-        CGPoint anchor = presentation ? presentation.position : self.center;
+    NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+    BOOL wasLocked = self.positionLocked;
+    BOOL requestedLocked = !wasLocked;
+    NSArray *keys = @[@"SBCPU.LockedCenter", @"SBCPU.PositionLocked", @"SBCPU.LockedTextAnchor"];
+    NSMutableDictionary *previous = [NSMutableDictionary dictionary];
+    for (NSString *key in keys) previous[key] = [defaults objectForKey:key] ?: NSNull.null;
+    SBCPUTextAnchor previousAnchor = lockedTextAnchor;
+    BOOL previousAnchorValid = lockedTextAnchorValid;
+    CALayer *presentation = (CALayer *)self.layer.presentationLayer;
+    CGPoint anchor = requestedLocked && presentation ? presentation.position : self.center;
+    if (requestedLocked) {
+        if (floatingTextOnlyMode) captureLockedTextAnchor(anchor);
+        else {
+            lockedTextAnchorValid = NO;
+            [defaults removeObjectForKey:@"SBCPU.LockedTextAnchor"];
+        }
+        [defaults setObject:NSStringFromCGPoint(anchor) forKey:@"SBCPU.LockedCenter"];
+    }
+    NSDictionary *expectedTextAnchor = [defaults dictionaryForKey:@"SBCPU.LockedTextAnchor"];
+    [defaults setBool:requestedLocked forKey:@"SBCPU.PositionLocked"];
+    BOOL saved = [defaults synchronize];
+    BOOL storedLocked = [defaults boolForKey:@"SBCPU.PositionLocked"];
+    BOOL centerMatches = !requestedLocked || [[defaults stringForKey:@"SBCPU.LockedCenter"] isEqualToString:NSStringFromCGPoint(anchor)];
+    NSDictionary *storedTextAnchor = [defaults dictionaryForKey:@"SBCPU.LockedTextAnchor"];
+    BOOL textAnchorMatches = expectedTextAnchor ? [expectedTextAnchor isEqual:storedTextAnchor] : !storedTextAnchor;
+    if (!saved || storedLocked != requestedLocked || !centerMatches || !textAnchorMatches) {
+        for (NSString *key in keys) {
+            id old = previous[key];
+            if (old == NSNull.null) [defaults removeObjectForKey:key];
+            else [defaults setObject:old forKey:key];
+        }
+        [defaults synchronize]; // best-effort rollback; never claim persistence succeeded
+        lockedTextAnchor = previousAnchor;
+        lockedTextAnchorValid = previousAnchorValid;
+        [self showLockFeedback:wasLocked ? @"保存失败，仍已锁定" : @"保存失败，仍已解锁"];
+        return;
+    }
+    // Publish only the verified stored state, not an optimistic toggle.
+    if (storedLocked) {
         [self.layer removeAllAnimations];
         self.layoutTransitionAnimating = NO;
-        self.lockedCenter = anchor;
+        self.lockedCenter = CGPointFromString([defaults stringForKey:@"SBCPU.LockedCenter"]);
         self.positionLocked = YES;
         self.center = anchor;
         [self.statusDockReturnTimer invalidate];
@@ -3770,12 +4007,18 @@ return self;
         keyboardMoved = NO; // Never restore a stale pre-lock keyboard frame.
     } else {
         self.positionLocked = NO;
+        if (floatingTextOnlyMode) {
+            SBCPUTextGeometry g = textOnlyGeometry();
+            SBCPUTextPoint p = textOnlyLogicalCenter(self.center,g);
+            floatingTextOnlyX = p.x-SBCPUTextOnlyAnchorX((int)floatingTextOnlyPreset,g.width,self.bounds.size.width/2);
+            floatingTextOnlyY = p.y-self.bounds.size.height/2;
+            setFloatPref(CFSTR("floatingTextOnlyX"), floatingTextOnlyX);
+            setFloatPref(CFSTR("floatingTextOnlyY"), floatingTextOnlyY);
+            CFPreferencesAppSynchronize(kPrefAppID);
+        }
         if (sbcpuStatusBarDockEffective() && self.isCollapsed) [self scheduleStatusDockReturn];
     }
-    NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
-    [defaults setObject:NSStringFromCGPoint(self.lockedCenter) forKey:@"SBCPU.LockedCenter"];
-    [defaults setBool:self.positionLocked forKey:@"SBCPU.PositionLocked"];
-    [defaults synchronize];
+    [self showLockFeedback:storedLocked ? @"已锁定" : @"已解锁"];
     [self resetInactivityTimer];
     UIImpactFeedbackGenerator *feedback = [[UIImpactFeedbackGenerator alloc] initWithStyle:UIImpactFeedbackStyleMedium];
     [feedback prepare];
@@ -3783,7 +4026,10 @@ return self;
 }
 
 - (BOOL)gestureRecognizerShouldBegin:(UIGestureRecognizer *)gestureRecognizer {
-    if (self.positionLocked && [gestureRecognizer isKindOfClass:[UIPanGestureRecognizer class]]) return NO;
+    if ([gestureRecognizer isKindOfClass:[UIPanGestureRecognizer class]]) {
+        self.panBlockedByLock = self.positionLocked;
+        if (self.panBlockedByLock) return NO;
+    }
     return YES;
 }
 
@@ -3899,7 +4145,9 @@ return self;
 }
 
 - (void)handlePan:(UIPanGestureRecognizer *)pan {
+    self.panBlockedByLock = SBCPUPanLockBlocked(self.positionLocked,self.panBlockedByLock,pan.state == UIGestureRecognizerStateBegan);
     if (self.positionLocked) return;
+    if (self.panBlockedByLock) return; // A blocked gesture cannot resume by unlocking mid-stream.
     [self resetInactivityTimer];
 
     if (pan.state == UIGestureRecognizerStateBegan) {
@@ -3912,6 +4160,14 @@ return self;
         CGPoint translation = [pan translationInView:self.superview];
         CGPoint targetCenter = CGPointMake(self.lastPoint.x + translation.x, self.lastPoint.y + translation.y);
 
+        if (floatingTextOnlyMode) {
+            SBCPUTextGeometry g = textOnlyGeometry();
+            SBCPUTextPoint p = textOnlyLogicalCenter(targetCenter,g);
+            p.x = SBCPUTextSafeCoordinate(p.x,g.left+self.bounds.size.width/2,g.width-g.right-self.bounds.size.width/2);
+            p.y = SBCPUTextSafeCoordinate(p.y,g.top+self.bounds.size.height/2,g.height-g.bottom-self.bounds.size.height/2);
+            self.center = textOnlyContainerCenter(p,g);
+            return;
+        }
         UIView *parent = self.superview;
         CGRect containerBounds = parent ? parent.bounds : [UIScreen mainScreen].bounds;
         CGRect realFrame = self.frame;
@@ -3935,9 +4191,10 @@ return self;
     } else if (pan.state == UIGestureRecognizerStateEnded || pan.state == UIGestureRecognizerStateCancelled) {
         if (floatingTextOnlyMode) {
             textOnlyDragging = NO;
-            CGPoint translation = CGPointMake(self.center.x - self.lastPoint.x, self.center.y - self.lastPoint.y);
-            floatingTextOnlyX = MAX(-1000, MIN(1000, floatingTextOnlyX + translation.x));
-            floatingTextOnlyY = MAX(-1000, MIN(1000, floatingTextOnlyY + translation.y));
+            SBCPUTextGeometry g = textOnlyGeometry();
+            SBCPUTextPoint p = textOnlyLogicalCenter(self.center,g);
+            floatingTextOnlyX = MAX(-1000, MIN(1000, p.x-SBCPUTextOnlyAnchorX((int)floatingTextOnlyPreset,g.width,self.bounds.size.width/2)));
+            floatingTextOnlyY = MAX(-1000, MIN(1000, p.y-self.bounds.size.height/2));
             setFloatPref(CFSTR("floatingTextOnlyX"), floatingTextOnlyX);
             setFloatPref(CFSTR("floatingTextOnlyY"), floatingTextOnlyY);
             CFPreferencesAppSynchronize(kPrefAppID);
@@ -4925,7 +5182,7 @@ return self;
     _cpuValueLabel.text = [NSString stringWithFormat:@"%.1f%%", cpu];
     _cpuValueLabel.textColor = (cpu >= 80.0) ? [UIColor systemRedColor] : [UIColor colorWithRed:0.18f green:0.75f blue:0.35f alpha:1.0f];
 
-    _cpuFreqLabel.text = (cpuFreq > 100.0)
+    _cpuFreqLabel.text = (cpuFreq > 0.0)
         ? [NSString stringWithFormat:@"%.0f MHz", cpuFreq]
         : @"-- MHz";
     _fpsValueLabel.text = [NSString stringWithFormat:@"%.0f", fps];
@@ -4946,13 +5203,17 @@ return self;
     double displayCurrent = gSmartChargeHoldDisplay ? 0.0 : current;
     _currentValueLabel.text = [NSString stringWithFormat:@"%.0f mA", displayCurrent];
 
+    sampleTextNetwork();
     // Reuse the existing refresh tick. Pure-text signals ignore ordinary flags
     // and never parse the long carrier/status label.
-    if (floatingTextOnlyMode) {
-        textOnlySignals = (textOnlyShowSIM1 || textOnlyShowSIM2) ? readAllSimSignals() : @[];
-    } else if (showSignalStrength && !fastChargeStartupAnimating) {
+    if (floatingTextOnlyMode || floatingTextOnlyMode2) {
+        textOnlySignals = ((floatingTextOnlyMode && (textOnlyShowSIM1 || textOnlyShowSIM2)) || (floatingTextOnlyMode2 && (textOnly2ShowSIM1 || textOnly2ShowSIM2))) ? readAllSimSignals() : @[];
+    }
+    if (!floatingTextOnlyMode && showSignalStrength && !fastChargeStartupAnimating) {
         _signalLabel.text = getSignalInfoString();
     }
+    if (floatingTextOnlyMode) applyTextOnlyMode();
+    else if (floatingTextOnlyMode2) updateTextOnlySecond();
 
     if (!fastChargeStartupAnimating) {
         if (smartChargeEnable || blockChargingEnable || blockPowerEnable) {
@@ -5062,7 +5323,7 @@ return self;
             NSMutableArray *dockItems = [NSMutableArray array];
             if (statusDockShowCPU) [dockItems addObject:[NSString stringWithFormat:@"CPU %.0f%%", cpu]];
             if (statusDockShowFPS) [dockItems addObject:[NSString stringWithFormat:@"FPS %.0f", fps]];
-            if (statusDockShowFrequency) [dockItems addObject:[NSString stringWithFormat:@"频 %.1fG", cpuFreq / 1000.0]];
+            if (statusDockShowFrequency) [dockItems addObject:(cpuFreq > 0.0 ? [NSString stringWithFormat:@"频 %.1fG", cpuFreq / 1000.0] : @"频 --")];
             if (statusDockShowCurrent) [dockItems addObject:[NSString stringWithFormat:@"%.0fmA", displayCurrent]];
             if (statusDockShowTemperature) [dockItems addObject:(temp > 0 ? [NSString stringWithFormat:@"%.1f°", temp] : @"温 --")];
             if (statusDockShowBattery) [dockItems addObject:[NSString stringWithFormat:@"电 %ld%%", (long)MAX(0, MIN(100, battery))]];
@@ -5965,37 +6226,14 @@ static NSString *bandItemDisplayName(NSInteger g, NSInteger v) {
 
     double freq = getRealCPUFrequency(totalSystemCpu);
     double fps = [SBCPUFPSHelper sharedInstance].currentFPS;
-    _labelsDict[@"CPU主频 / FPS"].text = [NSString stringWithFormat:@"%.0fMHz | %.0fFPS", freq, fps];
+    NSString *frequencyText = freq > 0.0 ? [NSString stringWithFormat:@"%.0fMHz", freq] : @"--MHz";
+    _labelsDict[@"CPU主频 / FPS"].text = [NSString stringWithFormat:@"%@ | %.0fFPS", frequencyText, fps];
 
     _labelsDict[@"内存可用"].text = @"读取失败";
-    uint64_t kernelTotalBytes = 0;
-    size_t kernelTotalSize = sizeof(kernelTotalBytes);
-    if (sysctlbyname("hw.memsize", &kernelTotalBytes, &kernelTotalSize, NULL, 0) != 0 || kernelTotalSize != sizeof(kernelTotalBytes))
-        kernelTotalBytes = 0;
-    uint64_t physicalTotalBytes = [NSProcessInfo processInfo].physicalMemory;
-    mach_port_t hostPort = mach_host_self();
-    vm_size_t pageSize = 0;
-    vm_statistics64_data_t vmStat;
-    memset(&vmStat, 0, sizeof(vmStat));
-    mach_msg_type_number_t hostSize = HOST_VM_INFO64_COUNT;
-    kern_return_t statisticsResult = KERN_FAILURE;
-    if (host_page_size(hostPort, &pageSize) == KERN_SUCCESS && pageSize > 0)
-        statisticsResult = host_statistics64(hostPort, HOST_VM_INFO64, (host_info64_t)&vmStat, &hostSize);
-    if (hostPort != MACH_PORT_NULL) mach_port_deallocate(mach_task_self(), hostPort);
-    SBCPUMemoryPageCounters counters = {0, 0, 0, 0};
-    SBCPUMemoryMetrics metrics;
-    if (statisticsResult == KERN_SUCCESS) {
-        counters.free_count = vmStat.free_count;
-        counters.inactive_count = vmStat.inactive_count;
-        counters.speculative_count = vmStat.speculative_count;
-        counters.purgeable_count = vmStat.purgeable_count;
-    }
-    if (statisticsResult == KERN_SUCCESS &&
-        SBCPUMemoryMetricsCompute(&counters, pageSize, kernelTotalBytes, physicalTotalBytes, &metrics)) {
-        // XNU free_count already contains speculative pages. Inactive is reclaimable,
-        // not guaranteed immediately allocatable; no invented 6 GB on read failure.
+    SBCPUMemoryMetrics metrics=SBCPUMemoryCachedSample();
+    if (metrics.valid) {
         _labelsDict[@"内存可用"].text = [NSString stringWithFormat:@"%.0f MiB / %.2f GiB",
-            metrics.available_bytes / (1024.0 * 1024.0), metrics.total_bytes / (1024.0 * 1024.0 * 1024.0)];
+            (metrics.total_bytes - metrics.used_bytes) / (1024.0 * 1024.0), metrics.total_bytes / (1024.0 * 1024.0 * 1024.0)];
     }
 
     NSDictionary *fsAttrs = [[NSFileManager defaultManager] attributesOfFileSystemForPath:NSHomeDirectory() error:nil];
@@ -6093,7 +6331,15 @@ static NSString *bandItemDisplayName(NSInteger g, NSInteger v) {
     [coordinator animateAlongsideTransition:^(id<UIViewControllerTransitionCoordinatorContext> context) {
         (void)context;
         if (floatingView) updateFloatingSize();
-    } completion:nil];
+    } completion:^(id<UIViewControllerTransitionCoordinatorContext> context) {
+        (void)context;
+        if (floatingView) updateFloatingSize(); // final scene/container/safe area, not old transition bounds
+    }];
+}
+
+- (void)viewSafeAreaInsetsDidChange {
+    [super viewSafeAreaInsetsDidChange];
+    if (floatingView && (floatingTextOnlyMode || floatingTextOnlyMode2)) updateFloatingSize();
 }
 
 @end
@@ -6108,6 +6354,12 @@ static NSString *bandItemDisplayName(NSInteger g, NSInteger v) {
         return [super hitTest:point withEvent:event];
     }
 
+    if (!SBCPUSecondTouchIgnored(textOnly2Locked,isEnabled && floatingTextOnlyMode2,
+        textOnly2Label && textOnly2Label.window==self && !textOnly2Label.hidden &&
+        textOnly2Label.alpha>0.01 && textOnly2Label.userInteractionEnabled, NO)) {
+        CGPoint p=[self convertPoint:point toView:textOnly2Label];
+        if ([textOnly2Label pointInside:p withEvent:event]) return textOnly2Label;
+    }
     if (floatingView && !floatingView.hidden && floatingView.alpha > 0.01) {
         CGPoint p = [self convertPoint:point toView:floatingView];
         if ([floatingView pointInside:p withEvent:event]) return floatingView;
@@ -6223,7 +6475,7 @@ static UIImage *sbcpuIconForTitle(NSString *title, NSInteger section) {
     NSString *sym = nil;
     NSDictionary *rules = @{
         @"cpu.fill": @[@"cpu", @"频率", @"核心", @"占用"],
-        @"gauge.fill": @[@"fps", @"帧率", @"gauge", @"网速", @"网络", @"高刷"],
+        @"gauge.fill": @[@"fps", @"帧率", @"gauge", @"网速", @"网络"],
         @"thermometer.sun.fill": @[@"温度", @"温控", @"过热", @"高温", @"发热"],
         @"bolt.fill": @[@"充电", @"快充", @"电流", @"电压", @"功率", @"涓流"],
         @"battery.100percent": @[@"电池", @"电量", @"停充", @"满血"],

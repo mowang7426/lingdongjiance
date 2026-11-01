@@ -39,7 +39,7 @@ assert 'BOOL ok = prefs != nil' in write
 assert 'chown(' in write and 'chmod(' in write
 getter = body('- (id)getPreferenceValue:')
 popup = body('- (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:')
-assert 'InsulationReadPrefs()' in getter and 'InsulationModeTitle(InsulationMode(prefs))' in getter
+assert 'InsulationReadPrefs()' in getter and 'InsulationMode(prefs)' in getter and 'InsulationModeTitle' not in getter
 assert 'InsulationMode(InsulationReadPrefs())' in popup
 assert 'CFPreferencesCopyValue' not in popup
 setter = body('- (void)setPreferenceValue:')

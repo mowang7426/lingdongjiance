@@ -43,8 +43,14 @@ if [ -x "$DAEMON" ]; then
     done
     ilog "Retired thermal payloads removed; reboot needed to unload any resident hooks"
 fi
-# Shared preferences and historical telemetry are deliberately not erased:
-# no consumer remains, and deleting the shared plist would destroy user settings.
+# Retired experimental refresh-rate injection: remove exact legacy payloads on upgrade.
+# This package no longer ships them; removing both files handles upgrades from
+# older experimental builds without touching any user preference domain.
+for retired in SBCPURefreshRate SBCPUMotionX; do
+    rm -f "$JB/Library/MobileSubstrate/DynamicLibraries/$retired.dylib" \
+          "$JB/Library/MobileSubstrate/DynamicLibraries/$retired.plist" 2>/dev/null
+done
+ilog "Retired refresh-rate hooks removed; reboot/respring is required to unload resident hooks"
 
 # 2) launchd 日志重定向目录（必须在加载前存在）
 mkdir -p "$JB/var/log" 2>/dev/null

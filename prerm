@@ -32,4 +32,12 @@ sleep 1
 rm -f /var/mobile/Library/Preferences/sbcpu_charge.sock 2>/dev/null
 rm -f /var/mobile/Library/Preferences/sbcpu_charge.lock 2>/dev/null
 
+# Remove retired refresh-rate hook files explicitly for uninstall/downgrade too.
+rm -f "$JB/Library/MobileSubstrate/DynamicLibraries/SBCPURefreshRate.dylib" \
+      "$JB/Library/MobileSubstrate/DynamicLibraries/SBCPURefreshRate.plist" \
+      "$JB/Library/MobileSubstrate/DynamicLibraries/SBCPUMotionX.dylib" \
+      "$JB/Library/MobileSubstrate/DynamicLibraries/SBCPUMotionX.plist" 2>/dev/null
+# Resident SpringBoard hooks cannot be unloaded safely from a package script;
+# reboot/respring completes unregistration. User preference files are preserved.
+
 exit 0
