@@ -6233,7 +6233,7 @@ static NSString *bandItemDisplayName(NSInteger g, NSInteger v) {
     SBCPUMemoryMetrics metrics=SBCPUMemoryCachedSample();
     if (metrics.valid) {
         _labelsDict[@"内存可用"].text = [NSString stringWithFormat:@"%.0f MiB / %.2f GiB",
-            metrics.available_bytes / (1024.0 * 1024.0), metrics.total_bytes / (1024.0 * 1024.0 * 1024.0)];
+            (metrics.total_bytes - metrics.used_bytes) / (1024.0 * 1024.0), metrics.total_bytes / (1024.0 * 1024.0 * 1024.0)];
     }
 
     NSDictionary *fsAttrs = [[NSFileManager defaultManager] attributesOfFileSystemForPath:NSHomeDirectory() error:nil];

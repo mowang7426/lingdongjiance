@@ -7,6 +7,8 @@ for prefix,var,n in [('floatingTextOnly','textOnly','窗口1'),('floatingTextOnl
 assert 'textOnlyMemorySample=SBCPUMemoryCachedSample();' in s and s.count('textOnlyMemorySample=SBCPUMemoryCachedSample();')==1
 assert 'free_count' in h and 'inactive_count' not in h and 'NSProcessInfo.processInfo.physicalMemory' in h and 'host_statistics64' in h
 assert 'used_bytes' in m and 'inactive_count' not in m and 'physical_total - free_bytes' in m
+assert 'metrics.available_bytes' not in s and '(metrics.total_bytes - metrics.used_bytes) / (1024.0 * 1024.0)' in s
+assert 'count < HOST_VM_INFO64_COUNT' in h and '(free_bytes >= physical_total) ? 0U' in m
 for sample in ['RAM0.00/0.00GB','RAM99.9/99.9GB','RAM999MB/999MB','RAM--']: assert sample in t
 assert 'SBCPUTextMemoryValue(textOnlyMemorySample)' in s and 'SBCPUMemoryCachedSample()' not in s[s.index('static CGSize layoutTextSlots'):s.index('static void applyTextOnlyTextFilter')]
 print('PASS mem2 dual old-key opt-in, one cache, Inspector free-only used/total and expanded fixed slot')
