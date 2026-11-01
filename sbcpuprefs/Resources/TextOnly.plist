@@ -259,6 +259,12 @@
 			<key>default</key>
 			<true/>
 		</dict>
+        <dict><key>cell</key><string>PSGroupCell</string><key>label</key><string>窗口1 剩余内存</string>
+        <key>footerText</key><string>RAM 为全机空闲与可回收非活跃页估计值：(free_count + inactive_count) × 系统页大小；free 已含 speculative，不另加 purgeable。非保证可分配量，不是进程内存或存储空间。MB/GB 按 1024 进制；读取失败显示 RAM--。默认关闭，开启后追加在原指标末尾，不改变原顺序。</string></dict>
+        <dict><key>cell</key><string>PSSwitchCell</string><key>label</key><string>窗口1 剩余内存（RAM）</string>
+        <key>key</key><string>floatingTextOnlyShowMemory</string><key>default</key><false/>
+        <key>defaults</key><string>com.yourname.sbcpufloating</string><key>get</key><string>getPreferenceValue:</string>
+        <key>set</key><string>setPreferenceValue:specifier:</string></dict>
 		<dict>
 			<key>cell</key>
 			<string>PSGroupCell</string>
@@ -649,6 +655,12 @@
 			<key>defaults</key>
 			<string>com.yourname.sbcpufloating</string>
 		</dict>
+        <dict><key>cell</key><string>PSGroupCell</string><key>label</key><string>窗口2 剩余内存</string>
+        <key>footerText</key><string>RAM 为全机空闲与可回收非活跃页估计值：(free_count + inactive_count) × 系统页大小；free 已含 speculative，不另加 purgeable。非保证可分配量，不是进程内存或存储空间。MB/GB 按 1024 进制；读取失败显示 RAM--。默认关闭，开启后追加在原指标末尾，不改变原顺序。</string></dict>
+        <dict><key>cell</key><string>PSSwitchCell</string><key>label</key><string>窗口2 剩余内存（RAM）</string>
+        <key>key</key><string>floatingTextOnly2ShowMemory</string><key>default</key><false/>
+        <key>defaults</key><string>com.yourname.sbcpufloating</string><key>get</key><string>getPreferenceValue:</string>
+        <key>set</key><string>setPreferenceValue:specifier:</string></dict>
 		<dict>
 			<key>cell</key>
 			<string>PSSwitchCell</string>
