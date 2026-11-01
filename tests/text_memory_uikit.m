@@ -10,7 +10,8 @@
 static UIImage *render(UILabel *label, CGFloat width, CGFloat height, CGFloat scale, BOOL wide) {
     BOOL right=label.textAlignment==NSTextAlignmentRight;
     UIGraphicsBeginImageContextWithOptions(CGSizeMake(width+128,height),NO,scale);
-    CGContextTranslateCTM(UIGraphicsGetCurrentContext(),right&&wide?0:64,0);
+    CGFloat origin=64; if(wide) origin-=right?64:(label.textAlignment==NSTextAlignmentCenter?32:0);
+    CGContextTranslateCTM(UIGraphicsGetCurrentContext(),origin,0);
     label.bounds=CGRectMake(0,0,width+(wide?64:0),height);
     [label drawTextInRect:label.bounds];
     UIImage *image=UIGraphicsGetImageFromCurrentImageContext();
@@ -32,16 +33,6 @@ static void bitmap(NSString *text,UIFont *font,int metric,CGFloat width,int scal
     mask.font=l.font;mask.attributedText=l.attributedText;mask.textAlignment=l.textAlignment;
     mask.numberOfLines=1;mask.lineBreakMode=l.lineBreakMode;mask.adjustsFontSizeToFitWidth=NO;
     assert([fixed isEqualToData:data(render(mask,width,h,scale,NO))]);
-}
-static CGFloat rightInk(UILabel *l,CGFloat width,int scale) {
-    UIImage *image=render(l,width,ceil(l.font.pointSize*1.4),scale,NO);
-    size_t w=CGImageGetWidth(image.CGImage),h=CGImageGetHeight(image.CGImage);
-    unsigned char *p=(unsigned char *)calloc(w*h,4);assert(p);
-    CGColorSpaceRef cs=CGColorSpaceCreateDeviceRGB();
-    CGContextRef c=CGBitmapContextCreate(p,w,h,8,w*4,cs,kCGImageAlphaPremultipliedLast);assert(c);
-    CGContextDrawImage(c,CGRectMake(0,0,w,h),image.CGImage);
-    NSInteger last=-1;for(size_t y=0;y<h;y++)for(size_t x=0;x<w;x++)if(p[(y*w+x)*4+3])last=MAX(last,(NSInteger)x);
-    CGContextRelease(c);CGColorSpaceRelease(cs);free(p);assert(last>=0);return (last+1.0)/scale-64;
 }
 static SBCPUMemoryMetrics sample(uint64_t free) {
     SBCPUMemoryMetrics m={true,UINT64_MAX-free,UINT64_MAX,16384};return m;
@@ -81,17 +72,6 @@ int main(void) {@autoreleasepool {
         NSMutableArray *values=[NSMutableArray arrayWithObject:@"RAM--"];for(NSString *v in expected)[values addObject:v];
         for(NSString *v in values)for(int scale=1;scale<=3;scale++){bitmap(v,font,10,ram,scale);checks++;}
         for(NSString *v in @[@"278mA",@"-278mA",@"0mA",@"-0mA",@"1mA",@"9999mA",@"-9999mA",@"10000mA",@"-10000mA",@"--mA"])for(int scale=1;scale<=3;scale++){bitmap(v,font,5,cur,scale);checks++;}
-        for(int scale=1;scale<=3;scale++){
-            CGFloat edge=rightInk(label(@"278mA",font,5,cur),cur,scale);
-            for(NSString *v in @[@"-10000mA",@"10000mA",@"0mA",@"--mA"])
-                assert(fabs(edge-rightInk(label(v,font,5,cur),cur,scale))<=1.0/scale+0.01);
-            CGFloat oldWidth=9*fs*.65;UILabel *old=label(@"278mA",font,-1,oldWidth);
-            CGFloat oldTail=oldWidth-rightInk(old,oldWidth,scale),newTail=cur-edge;
-            CGFloat cpuWidth=SBCPUTextSlotWidth(0,fs,1000);
-            CGFloat cpuTail=cpuWidth-rightInk(label(@"CPU 100%",font,0,cpuWidth),cpuWidth,scale);
-            assert(newTail<oldTail && newTail<=cpuTail+2 && newTail>=-1);
-            if(fs==13&&bold&&scale==3)printf("mem3 measured trailing ink padding: old278=%.3f new278=%.3f CPU100=%.3f; common dot slot=%.3f\n",(double)oldTail,(double)newTail,(double)cpuTail,SBCPUTextSeparatorWidth(fs,4));
-        }
         for(int hud=0;hud<2;hud++)for(int dual=0;dual<2;dual++)for(int gap=-15;gap<=12;gap++){
             for(int screen=0;screen<3;screen++){double available=(double[]){180,390,844}[screen];
                 SBCPUTextSlot a[11],b[11],old[10];unsigned mask=2047;
@@ -109,7 +89,7 @@ int main(void) {@autoreleasepool {
             SBCPUTextSlot dc=SBCPUTextSeparatorFrame(mask,5,0,a),dr=SBCPUTextSeparatorFrame(mask,10,0,a);
             assert(fabs(dc.width-dr.width)<1e-6&&dr.x==a[5].x+cur);
         }
-        printf("mem3 UIKit fs=%d bold=%d oldCurrent=%.3f current=%.3f RAM=%.3f gap=%.3f right-aligned mA fixed edge\n",fs,bold,9*fs*.65,(double)cur,(double)ram,SBCPUTextSeparatorWidth(fs,4));
+        printf("mem4 UIKit fs=%d bold=%d oldCurrent=%.3f current=%.3f RAM=%.3f gap=%.3f centered mA fixed frame\n",fs,bold,9*fs*.65,(double)cur,(double)ram,SBCPUTextSeparatorWidth(fs,4));
     }}
-    preview();printf("PASS mem3 production UIKit %u bitmap/layout checks; %u exhaustive current glyph cases; 8..24 regular/bold 1..3x; free-only thresholds, old keys, fixed dots, alpha-mask parity\n",checks,domain);
+    preview();printf("PASS mem4 production UIKit %u bitmap/layout checks; %u exhaustive current glyph cases; 8..24 regular/bold 1..3x; free-only thresholds, old keys, fixed dots, alpha-mask parity\n",checks,domain);
 }return 0;}

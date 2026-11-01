@@ -20,6 +20,7 @@ jobs:
           python3 tests/text_memory_wiring.py
           bash tests/text_fps_uikit.sh
           bash tests/text_memory_uikit.sh
+          bash tests/text_spacing_uikit.sh
 
       - name: Read-only P-core production algorithm and A16 evidence regression
         run: |
@@ -292,5 +293,5 @@ jobs:
       - name: Upload UIKit fixture (not real device)
         uses: actions/upload-artifact@v4
         with:
-          name: mem3-UIKit-fixture
-          path: test-output/*.png
+          name: mem4-UIKit-fixture
+          path: test-output/

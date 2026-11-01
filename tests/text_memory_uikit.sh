@@ -20,4 +20,4 @@ PY
 xcrun simctl boot "$DEVICE" 2>/dev/null || true
 xcrun simctl bootstatus "$DEVICE" -b
 mkdir -p test-output
-SIMCTL_CHILD_SBCPU_PREVIEW_PATH="$PWD/test-output/mem3-uikit-fixture.png" xcrun simctl spawn "$DEVICE" "$TMP_MEM/memory-uikit"
+SIMCTL_CHILD_SBCPU_PREVIEW_PATH="$PWD/test-output/mem4-uikit-fixture.png" xcrun simctl spawn "$DEVICE" "$TMP_MEM/memory-uikit"

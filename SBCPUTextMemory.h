@@ -51,16 +51,33 @@ static inline CGFloat SBCPUTextCurrentConfiguredWidth(UIFont *font) {
         width=MAX(width,SBCPUTextFPSGlyphExtent(edge,font));
     width=ceil(width)+2; [cache setObject:@(width) forKey:font]; return width;
 }
+static inline CGFloat SBCPUTextCPUConfiguredWidth(UIFont *font) {
+    static NSCache<UIFont *,NSNumber *> *cache; if (!cache) cache=[NSCache new];
+    NSNumber *hit=[cache objectForKey:font]; if (hit) return hit.doubleValue;
+    CGFloat width=SBCPUTextFPSGlyphExtent(@"CPU --%",font);
+    // The sampler emits 0.0..100.0%. Monospaced digits allow finite templates
+    // for each supported shape, measured only on a font configuration miss.
+    for (int digit=0;digit<=9;digit++) {
+        for (NSString *text in @[[NSString stringWithFormat:@"CPU %d.%d%%",digit,digit],
+                                 [NSString stringWithFormat:@"CPU %d%d.%d%%",digit,digit,digit]])
+            width=MAX(width,SBCPUTextFPSGlyphExtent(text,font));
+    }
+    width=MAX(width,SBCPUTextFPSGlyphExtent(@"CPU 100.0%",font));
+    width=ceil(width)+2; [cache setObject:@(width) forKey:font]; return width;
+}
 static inline NSTextAlignment SBCPUTextMetricAlignment(int metric) {
-    // Anchor mA to its fixed trailing edge: no unused signed-digit reserve
-    // between a short reading and the following dot. Frames never follow values.
-    return metric==5 ? NSTextAlignmentRight : NSTextAlignmentLeft;
+    // Fixed frames/dots remain sample-independent. Split unavoidable short-value
+    // reserve between both edges instead of moving the whole hole to one side.
+    return (metric==0 || metric==5) ? NSTextAlignmentCenter : NSTextAlignmentLeft;
 }
 /* Keep the original ten metric identities/order; RAM remains appended as slot 10. */
-static inline double SBCPUTextSlotsLayoutMemory(unsigned mask,double font,double available,double gap,int dual,double fpsWidth,double currentWidth,double memoryWidth,SBCPUTextSlot slots[11]) {
-    double height=SBCPUTextSlotsLayoutNetworkFPSCurrent(mask&1023u,font,available,gap,dual,fpsWidth,currentWidth,slots); SBCPUTextSlot empty={0,0,0,0}; slots[10]=empty; if (!(mask&(1u<<10))) return height;
+static inline double SBCPUTextSlotsLayoutMemoryConfigured(unsigned mask,double font,double available,double gap,int dual,double fpsWidth,double currentWidth,double memoryWidth,double cpuWidth,SBCPUTextSlot slots[11]) {
+    double height=SBCPUTextSlotsLayoutNetworkConfigured(mask&1023u,font,available,gap,dual,fpsWidth,currentWidth,cpuWidth,slots); SBCPUTextSlot empty={0,0,0,0}; slots[10]=empty; if (!(mask&(1u<<10))) return height;
     double x=0,y=0,h=font*1.4; for (int i=0;i<10;i++) if (mask&(1u<<i)) { x=slots[i].x+slots[i].width; y=slots[i].y; }
     double width=fmin(memoryWidth,fmax(0,available)); double candidate=x>0?x+SBCPUTextSeparatorWidth(font,gap):0; if (x>0 && candidate+width>available) { candidate=0; y+=h; }
     SBCPUTextSlot frame={candidate,y,width,h}; slots[10]=frame; return fmax(height,y+h);
+}
+static inline double SBCPUTextSlotsLayoutMemory(unsigned mask,double font,double available,double gap,int dual,double fpsWidth,double currentWidth,double memoryWidth,SBCPUTextSlot slots[11]) {
+    return SBCPUTextSlotsLayoutMemoryConfigured(mask,font,available,gap,dual,fpsWidth,currentWidth,memoryWidth,0,slots);
 }
 #endif

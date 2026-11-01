@@ -2509,7 +2509,7 @@ static CGSize layoutTextSlots(SBCPUTextBackdropLabel *host, BOOL second, SBCPUTe
     CGFloat available=MAX(1,g.width-g.left-g.right);
     SBCPUTextSlot frames[11];
     CGFloat fpsWidth=SBCPUTextFPSConfiguredWidth(font);
-    CGFloat height=SBCPUTextSlotsLayoutMemory(mask,fs,available,second?floatingTextOnly2DataGap:floatingTextOnlyDataGap,second && textOnly2NetworkDualLine,fpsWidth,(mask&(1u<<5))?SBCPUTextCurrentConfiguredWidth(font):0,(mask&(1u<<10))?SBCPUTextMemoryConfiguredWidth(font):0,frames);
+    CGFloat height=SBCPUTextSlotsLayoutMemoryConfigured(mask,fs,available,second?floatingTextOnly2DataGap:floatingTextOnlyDataGap,second && textOnly2NetworkDualLine,fpsWidth,(mask&(1u<<5))?SBCPUTextCurrentConfiguredWidth(font):0,(mask&(1u<<10))?SBCPUTextMemoryConfiguredWidth(font):0,(mask&1u)?SBCPUTextCPUConfiguredWidth(font):0,frames);
     NSMutableArray *parts=[NSMutableArray array];
     for (int i=0;i<11;i++) {
         SBCPUTextBackdropLabel *slot=(id)[host viewWithTag:4950+i];

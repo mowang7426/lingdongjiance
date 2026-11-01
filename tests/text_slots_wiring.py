@@ -2,7 +2,7 @@ from pathlib import Path
 import plistlib
 r=Path(__file__).resolve().parents[1];s=(r/'Tweak.xm').read_text()
 layout=s[s.index('static CGSize layoutTextSlots'):s.index('static void applyTextOnlyTextFilter(void) {')]
-assert layout.index('SBCPUTextSlotsLayoutMemory(mask,fs,available,second?floatingTextOnly2DataGap:floatingTextOnlyDataGap,second && textOnly2NetworkDualLine,fpsWidth,(mask&(1u<<5))?SBCPUTextCurrentConfiguredWidth(font):0,(mask&(1u<<10))?SBCPUTextMemoryConfiguredWidth(font):0,frames)') < layout.index('NSString *value=')
+assert layout.index('SBCPUTextSlotsLayoutMemoryConfigured(mask,fs,available,second?floatingTextOnly2DataGap:floatingTextOnlyDataGap,second && textOnly2NetworkDualLine,fpsWidth,(mask&(1u<<5))?SBCPUTextCurrentConfiguredWidth(font):0,(mask&(1u<<10))?SBCPUTextMemoryConfiguredWidth(font):0,(mask&1u)?SBCPUTextCPUConfiguredWidth(font):0,frames)') < layout.index('NSString *value=')
 for token in ['slot.adjustsFontSizeToFitWidth=NO','slot.numberOfLines=1','slot.frame=CGRectMake(frames[i].x',
               'slot.font=slotFont','SBCPUTextOnlyAttributedRow','textNetworkDownloadRate,textNetworkUploadRate,i==8,i==9']:
     assert token in layout+s,token
