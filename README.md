@@ -42,3 +42,11 @@ make package THEOS_PACKAGE_SCHEME=roothide
 - 偏好键：`com.yourname.sbcpufloating`（CFPreferences）
 - 依赖：mobilesubstrate、preferenceloader
 - 最低 iOS 14.0
+
+
+## 5.09+mem2：文字浮窗内存占用（RAM）
+
+- 原 mem1 分支 `feature/text-free-memory-5.08` 保留不改；本分支以相同的两个配置键兼容既有开关，但语义更新为“内存占用（RAM）”。
+- 两个文字浮窗各自独立开关、默认关闭，仍复用主刷新周期和至少 1 秒缓存，绝不为 label 新增采样、timer、daemon 或权限。
+- 按 Inspector 0.6.7 的系统统计口径：`free = HOST_VM_INFO64.free_count × page_size`，`used = clamp(NSProcessInfo.physicalMemory - free, 0, physical)`；XNU 的 `free_count` 已含 speculative，不加入 inactive / purgeable。
+- 显示为固定槽 `RAM已用/总量`：例如 `RAM5.19/5.49GB`；小于 1 GiB 时为 `RAM999MB/999MB`，读取失败 `RAM--`。GB 在总量小于 10 时保留两位小数，否则一位；固定宽度按最长已用/总量样例测量。

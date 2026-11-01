@@ -374,7 +374,7 @@ static BOOL textOnly2NetworkDualLine = NO;
 static NSInteger floatingTextOnlyColor = 0; // 0 system appearance, 1 white, 2 black, 3 custom, 4 realtime invert
 static SBCPUTextRGBA textOnlyCustomRGBA = {0, 122.0/255.0, 1, 1};
 static BOOL textOnlyShowMemory = NO, textOnly2ShowMemory = NO;
-static SBCPUMemoryMetrics textOnlyMemorySample={false,0,0,0};
+static SBCPUMemoryMetrics textOnlyMemorySample={false,0,0,0}; /* Inspector-style used/physical sample; shared by both text HUDs. */
 static BOOL textOnlyShowCPU = YES, textOnlyShowFrequency = YES, textOnlyShowFPS = YES;
 static BOOL textOnlyShowBattery = YES, textOnlyShowTemperature = YES, textOnlyShowCurrent = YES;
 static BOOL textOnlyShowSIM1 = YES, textOnlyShowSIM2 = YES;

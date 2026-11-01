@@ -66,7 +66,6 @@
 			<key>action</key>
 			<string>applyDataGapToSecond</string>
 		</dict>
-
 		<dict>
 			<key>cell</key>
 			<string>PSGroupCell</string>
@@ -259,12 +258,30 @@
 			<key>default</key>
 			<true/>
 		</dict>
-        <dict><key>cell</key><string>PSGroupCell</string><key>label</key><string>窗口1 剩余内存</string>
-        <key>footerText</key><string>RAM 为全机空闲与可回收非活跃页估计值：(free_count + inactive_count) × 系统页大小；free 已含 speculative，不另加 purgeable。非保证可分配量，不是进程内存或存储空间。MB/GB 按 1024 进制；读取失败显示 RAM--。默认关闭，开启后追加在原指标末尾，不改变原顺序。</string></dict>
-        <dict><key>cell</key><string>PSSwitchCell</string><key>label</key><string>窗口1 剩余内存（RAM）</string>
-        <key>key</key><string>floatingTextOnlyShowMemory</string><key>default</key><false/>
-        <key>defaults</key><string>com.yourname.sbcpufloating</string><key>get</key><string>getPreferenceValue:</string>
-        <key>set</key><string>setPreferenceValue:specifier:</string></dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
+			<string>窗口1 内存占用（RAM）</string>
+			<key>footerText</key>
+			<string>显示已用/总内存；基于系统空闲页（HOST_VM_INFO64 free_count × 系统页大小），free 已含 speculative。已用=物理内存−空闲内存，不加入 inactive 或 purgeable。读取失败显示 RAM--。默认关闭，开启后追加在原指标末尾，不改变原顺序。</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSSwitchCell</string>
+			<key>label</key>
+			<string>窗口1 内存占用（RAM）</string>
+			<key>key</key>
+			<string>floatingTextOnlyShowMemory</string>
+			<key>default</key>
+			<false/>
+			<key>defaults</key>
+			<string>com.yourname.sbcpufloating</string>
+			<key>get</key>
+			<string>getPreferenceValue:</string>
+			<key>set</key>
+			<string>setPreferenceValue:specifier:</string>
+		</dict>
 		<dict>
 			<key>cell</key>
 			<string>PSGroupCell</string>
@@ -481,20 +498,30 @@
 			<key>defaults</key>
 			<string>com.yourname.sbcpufloating</string>
 		</dict>
-        <dict>
-            <key>cell</key><string>PSGroupCell</string>
-            <key>label</key><string>窗口2 网速布局</string>
-            <key>footerText</key><string>仅影响窗口2网速，默认关闭。上传和下载同时开启时，打开此开关在固定宽度网络块内上行显示 ↑速率、下行显示 ↓速率；关闭则横向显示 ↑ ↓（空间不足沿用自然换行）。只启用一个方向只显示一行，不留空行；均关闭不显示网络块。其他指标不分组、不缩小，仍按宽度自然换行，窗口1完全不受此开关影响。数据间距 -15 至 12 仅用于横向项目间距，网速纵向间距固定。数值变化不改变槽位。</string>
-        </dict>
-        <dict>
-            <key>cell</key><string>PSSwitchCell</string>
-            <key>label</key><string>窗口2 网速双行显示</string>
-            <key>key</key><string>floatingTextOnly2NetworkDualLine</string>
-            <key>defaults</key><string>com.yourname.sbcpufloating</string>
-            <key>get</key><string>getPreferenceValue:</string>
-            <key>set</key><string>setPreferenceValue:specifier:</string>
-            <key>default</key><false/>
-        </dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
+			<string>窗口2 网速布局</string>
+			<key>footerText</key>
+			<string>仅影响窗口2网速，默认关闭。上传和下载同时开启时，打开此开关在固定宽度网络块内上行显示 ↑速率、下行显示 ↓速率；关闭则横向显示 ↑ ↓（空间不足沿用自然换行）。只启用一个方向只显示一行，不留空行；均关闭不显示网络块。其他指标不分组、不缩小，仍按宽度自然换行，窗口1完全不受此开关影响。数据间距 -15 至 12 仅用于横向项目间距，网速纵向间距固定。数值变化不改变槽位。</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSSwitchCell</string>
+			<key>label</key>
+			<string>窗口2 网速双行显示</string>
+			<key>key</key>
+			<string>floatingTextOnly2NetworkDualLine</string>
+			<key>defaults</key>
+			<string>com.yourname.sbcpufloating</string>
+			<key>get</key>
+			<string>getPreferenceValue:</string>
+			<key>set</key>
+			<string>setPreferenceValue:specifier:</string>
+			<key>default</key>
+			<false/>
+		</dict>
 		<dict>
 			<key>cell</key>
 			<string>PSSwitchCell</string>
@@ -655,12 +682,30 @@
 			<key>defaults</key>
 			<string>com.yourname.sbcpufloating</string>
 		</dict>
-        <dict><key>cell</key><string>PSGroupCell</string><key>label</key><string>窗口2 剩余内存</string>
-        <key>footerText</key><string>RAM 为全机空闲与可回收非活跃页估计值：(free_count + inactive_count) × 系统页大小；free 已含 speculative，不另加 purgeable。非保证可分配量，不是进程内存或存储空间。MB/GB 按 1024 进制；读取失败显示 RAM--。默认关闭，开启后追加在原指标末尾，不改变原顺序。</string></dict>
-        <dict><key>cell</key><string>PSSwitchCell</string><key>label</key><string>窗口2 剩余内存（RAM）</string>
-        <key>key</key><string>floatingTextOnly2ShowMemory</string><key>default</key><false/>
-        <key>defaults</key><string>com.yourname.sbcpufloating</string><key>get</key><string>getPreferenceValue:</string>
-        <key>set</key><string>setPreferenceValue:specifier:</string></dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
+			<string>窗口2 内存占用（RAM）</string>
+			<key>footerText</key>
+			<string>显示已用/总内存；基于系统空闲页（HOST_VM_INFO64 free_count × 系统页大小），free 已含 speculative。已用=物理内存−空闲内存，不加入 inactive 或 purgeable。读取失败显示 RAM--。默认关闭，开启后追加在原指标末尾，不改变原顺序。</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSSwitchCell</string>
+			<key>label</key>
+			<string>窗口2 内存占用（RAM）</string>
+			<key>key</key>
+			<string>floatingTextOnly2ShowMemory</string>
+			<key>default</key>
+			<false/>
+			<key>defaults</key>
+			<string>com.yourname.sbcpufloating</string>
+			<key>get</key>
+			<string>getPreferenceValue:</string>
+			<key>set</key>
+			<string>setPreferenceValue:specifier:</string>
+		</dict>
 		<dict>
 			<key>cell</key>
 			<string>PSSwitchCell</string>
