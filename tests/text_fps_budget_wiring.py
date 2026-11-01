@@ -3,7 +3,7 @@ r=Path(__file__).resolve().parents[1]
 s=(r/'Tweak.xm').read_text()
 layout=s[s.index('static CGSize layoutTextSlots'):s.index('static void applyTextOnlyTextFilter(void) {')]
 assert layout.index('SBCPUTextFPSConfiguredWidth(font)') < layout.index('NSString *value=')
-assert 'SBCPUTextSlotsLayoutNetworkFPS(mask,fs,available,second?floatingTextOnly2DataGap:floatingTextOnlyDataGap,second && textOnly2NetworkDualLine,fpsWidth,frames)' in layout
+assert 'SBCPUTextSlotsLayoutMemory(mask,fs,available,second?floatingTextOnly2DataGap:floatingTextOnlyDataGap,second && textOnly2NetworkDualLine,fpsWidth,(mask&(1u<<10))?SBCPUTextMemoryConfiguredWidth(font):0,frames)' in layout
 assert 'slot.font=slotFont' in layout and 'slot.adjustsFontSizeToFitWidth=NO' in layout
 assert 'slot.lineBreakMode=NSLineBreakByClipping' in layout
 assert 'slot.clipsToBounds=YES' in layout

@@ -17,7 +17,9 @@ jobs:
       - name: UIKit FPS glyph budget and clipping regression (iOS Simulator)
         run: |
           python3 tests/text_fps_budget_wiring.py
+          python3 tests/text_memory_wiring.py
           bash tests/text_fps_uikit.sh
+          bash tests/text_memory_uikit.sh
 
       - name: Read-only P-core production algorithm and A16 evidence regression
         run: |
@@ -181,6 +183,9 @@ jobs:
             tests/battery_metrics.m -o "$TMP_PANEL/battery-cxx"
           "$TMP_PANEL/battery-cxx"
           sh tests/memory_metrics.sh
+          TMP_MEM=$(mktemp -d)
+          clang -fobjc-arc -framework Foundation -Wall -Wextra -Werror tests/text_memory_sample.m -o "$TMP_MEM/mem"
+          "$TMP_MEM/mem"
           clang -std=c11 -Wall -Wextra -Werror -pedantic \
             tests/floating_display_policy.c -o "$TMP_PANEL/display"
           "$TMP_PANEL/display"

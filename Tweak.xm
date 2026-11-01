@@ -54,6 +54,8 @@ CFIndex CARenderServerGetDirtyFrameCount(void *) __attribute__((weak_import));
 #import "SBCPUChargeDayNight.h"
 #import "SBCPUBatteryMetrics.h"
 #import "SBCPUMemoryMetrics.h"
+#import "SBCPUMemorySample.h"
+#import "SBCPUTextMemory.h"
 #import "SBCPUPCoreFrequency.h"
 #import "SBCPUFloatingDisplayPolicy.h"
 #import "SBCPUFloatingLockPolicy.h"
@@ -371,6 +373,8 @@ static CGFloat floatingTextOnlyDataGap = 4, floatingTextOnly2DataGap = 4;
 static BOOL textOnly2NetworkDualLine = NO;
 static NSInteger floatingTextOnlyColor = 0; // 0 system appearance, 1 white, 2 black, 3 custom, 4 realtime invert
 static SBCPUTextRGBA textOnlyCustomRGBA = {0, 122.0/255.0, 1, 1};
+static BOOL textOnlyShowMemory = NO, textOnly2ShowMemory = NO;
+static SBCPUMemoryMetrics textOnlyMemorySample={false,0,0,0};
 static BOOL textOnlyShowCPU = YES, textOnlyShowFrequency = YES, textOnlyShowFPS = YES;
 static BOOL textOnlyShowBattery = YES, textOnlyShowTemperature = YES, textOnlyShowCurrent = YES;
 static BOOL textOnlyShowSIM1 = YES, textOnlyShowSIM2 = YES;
@@ -1137,6 +1141,7 @@ static void LoadPreferences(void) {
     textOnly2Bold = getBoolPref(CFSTR("floatingTextOnly2Bold"), NO);
     textOnly2Locked = getBoolPref(CFSTR("floatingTextOnly2Locked"), NO);
     textOnly2ShowCPU = getBoolPref(CFSTR("floatingTextOnly2ShowCPU"), YES);
+    textOnly2ShowMemory = getBoolPref(CFSTR("floatingTextOnly2ShowMemory"), NO);
     textOnly2ShowFrequency = getBoolPref(CFSTR("floatingTextOnly2ShowFrequency"), YES);
     textOnly2ShowFPS = getBoolPref(CFSTR("floatingTextOnly2ShowFPS"), YES);
     textOnly2ShowBattery = getBoolPref(CFSTR("floatingTextOnly2ShowBattery"), YES);
@@ -1156,6 +1161,7 @@ static void LoadPreferences(void) {
     textOnlyBold = getBoolPref(CFSTR("floatingTextOnlyBold"), NO);
     // Independent defaults: ordinary show flags never govern this row.
     textOnlyShowCPU = getBoolPref(CFSTR("floatingTextOnlyShowCPU"), YES);
+    textOnlyShowMemory = getBoolPref(CFSTR("floatingTextOnlyShowMemory"), NO);
     textOnlyShowFrequency = getBoolPref(CFSTR("floatingTextOnlyShowFrequency"), YES);
     textOnlyShowFPS = getBoolPref(CFSTR("floatingTextOnlyShowFPS"), YES);
     textOnlyShowBattery = getBoolPref(CFSTR("floatingTextOnlyShowBattery"), YES);
@@ -2466,12 +2472,12 @@ static void clampAndPositionFloatingView(CGPoint targetCenter, BOOL animate) {
 }
 
 static unsigned textSlotMask(BOOL second) {
-    BOOL flags[10] = {second?textOnly2ShowCPU:textOnlyShowCPU, second?textOnly2ShowFrequency:textOnlyShowFrequency,
+    BOOL flags[11] = {second?textOnly2ShowCPU:textOnlyShowCPU, second?textOnly2ShowFrequency:textOnlyShowFrequency,
         second?textOnly2ShowFPS:textOnlyShowFPS, second?textOnly2ShowBattery:textOnlyShowBattery,
         second?textOnly2ShowTemperature:textOnlyShowTemperature, second?textOnly2ShowCurrent:textOnlyShowCurrent,
         second?textOnly2ShowSIM1:textOnlyShowSIM1, second?textOnly2ShowSIM2:textOnlyShowSIM2,
-        second?textOnly2ShowUploadNetwork:textOnlyShowUploadNetwork, second?textOnly2ShowDownloadNetwork:textOnlyShowDownloadNetwork};
-    unsigned mask=0; for (int i=0;i<10;i++) if(flags[i]) mask |= 1u<<i;
+        second?textOnly2ShowUploadNetwork:textOnlyShowUploadNetwork, second?textOnly2ShowDownloadNetwork:textOnlyShowDownloadNetwork, second?textOnly2ShowMemory:textOnlyShowMemory};
+    unsigned mask=0; for (int i=0;i<11;i++) if(flags[i]) mask |= 1u<<i;
     return mask;
 }
 static void clearTextSlots(SBCPUTextBackdropLabel *host) {
@@ -2501,17 +2507,17 @@ static CGSize layoutTextSlots(SBCPUTextBackdropLabel *host, BOOL second, SBCPUTe
     CGFloat fs=SBCPUTextOnlyBound(second?floatingTextOnly2FontSize:floatingTextOnlyFontSize,8,24,13);
     UIFont *font=[UIFont monospacedDigitSystemFontOfSize:fs weight:(second?textOnly2Bold:textOnlyBold)?UIFontWeightBold:UIFontWeightRegular];
     CGFloat available=MAX(1,g.width-g.left-g.right);
-    SBCPUTextSlot frames[10];
+    SBCPUTextSlot frames[11];
     CGFloat fpsWidth=SBCPUTextFPSConfiguredWidth(font);
-    CGFloat height=SBCPUTextSlotsLayoutNetworkFPS(mask,fs,available,second?floatingTextOnly2DataGap:floatingTextOnlyDataGap,second && textOnly2NetworkDualLine,fpsWidth,frames);
+    CGFloat height=SBCPUTextSlotsLayoutMemory(mask,fs,available,second?floatingTextOnly2DataGap:floatingTextOnlyDataGap,second && textOnly2NetworkDualLine,fpsWidth,(mask&(1u<<10))?SBCPUTextMemoryConfiguredWidth(font):0,frames);
     NSMutableArray *parts=[NSMutableArray array];
-    for (int i=0;i<10;i++) {
+    for (int i=0;i<11;i++) {
         SBCPUTextBackdropLabel *slot=(id)[host viewWithTag:4950+i];
         if (!(mask&(1u<<i))) { slot.realtimeInvertEnabled=NO; [slot removeFromSuperview]; continue; }
         if (!slot) { slot=[[SBCPUCapsuleBackdropLabel alloc] initWithFrame:CGRectZero]; slot.tag=4950+i;
             slot.userInteractionEnabled=NO; slot.backgroundColor=UIColor.clearColor; [host addSubview:slot]; }
         SBCPUTextOnlyFields f={i==0,i==1,i==2,i==3,i==4,i==5,i==6,i==7};
-        NSString *value=i<8?SBCPUTextOnlyRow(f,floatingView.cpuValueLabel.text,floatingView.cpuFreqLabel.text,
+        NSString *value=i==10?SBCPUTextMemoryValue(textOnlyMemorySample):i<8?SBCPUTextOnlyRow(f,floatingView.cpuValueLabel.text,floatingView.cpuFreqLabel.text,
             floatingView.fpsValueLabel.text,floatingView.batteryValueLabel.text,floatingView.tempValueLabel.text,
             SBCPUTextOnlyCurrentText(textOnlyBatteryCurrent,textOnlyCurrentUptime,NSProcessInfo.processInfo.systemUptime),textOnlySignals):
             SBCPUNetworkTextDirections(textNetworkSampleValid,textNetworkDownloadRate,textNetworkUploadRate,i==8,i==9);
@@ -2522,7 +2528,7 @@ static CGSize layoutTextSlots(SBCPUTextBackdropLabel *host, BOOL second, SBCPUTe
         slot.frame=CGRectMake(frames[i].x,frames[i].y,frames[i].width,frames[i].height);
         [parts addObject:value];
     }
-    for (int i=0;i<10;i++) {
+    for (int i=0;i<11;i++) {
         SBCPUTextSlot frame=SBCPUTextSeparatorFrame(mask,i,second && textOnly2NetworkDualLine,frames);
         SBCPUTextBackdropLabel *dot=(id)[host viewWithTag:4970+i];
         if (frame.width<=0) { dot.realtimeInvertEnabled=NO; [dot removeFromSuperview]; continue; }
@@ -2535,7 +2541,7 @@ static CGSize layoutTextSlots(SBCPUTextBackdropLabel *host, BOOL second, SBCPUTe
     host.text=@""; host.hidden=mask==0;
     if (!second) textOnlyPlainText=[parts componentsJoinedByString:@" "];
     colorTextSlots(host, second);
-    CGFloat width=1; for (int i=0;i<10;i++) width=MAX(width,frames[i].x+frames[i].width);
+    CGFloat width=1; for (int i=0;i<11;i++) width=MAX(width,frames[i].x+frames[i].width);
     return CGSizeMake(width,height);
 }
 static void applyTextOnlyTextFilter(void) {
@@ -2970,6 +2976,8 @@ static void updateCPU(void) {
         NSDictionary *chargeInfo = getRealBatteryDetails();
         // Same registry sample as charge-power display; cache before updateData
         // builds the text row. Missing data invalidates the previous sample.
+        if ((floatingTextOnlyMode && textOnlyShowMemory) || (floatingTextOnlyMode2 && textOnly2ShowMemory))
+            textOnlyMemorySample=SBCPUMemoryCachedSample();
         if (floatingTextOnlyMode || floatingTextOnlyMode2) {
             textOnlyBatteryCurrent = ((floatingTextOnlyMode && textOnlyShowCurrent) || (floatingTextOnlyMode2 && textOnly2ShowCurrent)) ? chargeInfo[@"SBCPUTextOnlyCurrentMA"] : nil;
             textOnlyCurrentUptime = [NSProcessInfo processInfo].systemUptime;
@@ -6222,32 +6230,8 @@ static NSString *bandItemDisplayName(NSInteger g, NSInteger v) {
     _labelsDict[@"CPU主频 / FPS"].text = [NSString stringWithFormat:@"%@ | %.0fFPS", frequencyText, fps];
 
     _labelsDict[@"内存可用"].text = @"读取失败";
-    uint64_t kernelTotalBytes = 0;
-    size_t kernelTotalSize = sizeof(kernelTotalBytes);
-    if (sysctlbyname("hw.memsize", &kernelTotalBytes, &kernelTotalSize, NULL, 0) != 0 || kernelTotalSize != sizeof(kernelTotalBytes))
-        kernelTotalBytes = 0;
-    uint64_t physicalTotalBytes = [NSProcessInfo processInfo].physicalMemory;
-    mach_port_t hostPort = mach_host_self();
-    vm_size_t pageSize = 0;
-    vm_statistics64_data_t vmStat;
-    memset(&vmStat, 0, sizeof(vmStat));
-    mach_msg_type_number_t hostSize = HOST_VM_INFO64_COUNT;
-    kern_return_t statisticsResult = KERN_FAILURE;
-    if (host_page_size(hostPort, &pageSize) == KERN_SUCCESS && pageSize > 0)
-        statisticsResult = host_statistics64(hostPort, HOST_VM_INFO64, (host_info64_t)&vmStat, &hostSize);
-    if (hostPort != MACH_PORT_NULL) mach_port_deallocate(mach_task_self(), hostPort);
-    SBCPUMemoryPageCounters counters = {0, 0, 0, 0};
-    SBCPUMemoryMetrics metrics;
-    if (statisticsResult == KERN_SUCCESS) {
-        counters.free_count = vmStat.free_count;
-        counters.inactive_count = vmStat.inactive_count;
-        counters.speculative_count = vmStat.speculative_count;
-        counters.purgeable_count = vmStat.purgeable_count;
-    }
-    if (statisticsResult == KERN_SUCCESS &&
-        SBCPUMemoryMetricsCompute(&counters, pageSize, kernelTotalBytes, physicalTotalBytes, &metrics)) {
-        // XNU free_count already contains speculative pages. Inactive is reclaimable,
-        // not guaranteed immediately allocatable; no invented 6 GB on read failure.
+    SBCPUMemoryMetrics metrics=SBCPUMemoryCachedSample();
+    if (metrics.valid) {
         _labelsDict[@"内存可用"].text = [NSString stringWithFormat:@"%.0f MiB / %.2f GiB",
             metrics.available_bytes / (1024.0 * 1024.0), metrics.total_bytes / (1024.0 * 1024.0 * 1024.0)];
     }

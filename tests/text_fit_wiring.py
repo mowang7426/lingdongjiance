@@ -10,7 +10,7 @@ for required in ['layoutTextSlots(textOnlyLabel,NO,textGeometry)',
                  'textOnlyContainerCenter(p,textGeometry)']:
     assert required in a, required
 helper=s[s.index('static CGSize layoutTextSlots'):s.index('static void applyTextOnlyTextFilter(void) {')]
-for required in ['SBCPUTextSlotsLayoutNetworkFPS(mask,fs,available,second?floatingTextOnly2DataGap:floatingTextOnlyDataGap,second && textOnly2NetworkDualLine,fpsWidth,frames)', 'monospacedDigitSystemFontOfSize:fs',
+for required in ['SBCPUTextSlotsLayoutMemory(mask,fs,available,second?floatingTextOnly2DataGap:floatingTextOnlyDataGap,second && textOnly2NetworkDualLine,fpsWidth,(mask&(1u<<10))?SBCPUTextMemoryConfiguredWidth(font):0,frames)', 'monospacedDigitSystemFontOfSize:fs',
                  'slot.adjustsFontSizeToFitWidth=NO', 'slot.numberOfLines=1', 'slot.clipsToBounds=YES']:
     assert required in helper, required
 for forbidden in ['NSTimer','CADisplayLink','NSLineBreakByTruncating','minimumScaleFactor', 'sizeThatFits', 'boundingRect']:
