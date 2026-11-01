@@ -18,7 +18,7 @@ static inline SBCPUMemoryMetrics SBCPUMemoryReadWith(
     mach_msg_type_number_t count=HOST_VM_INFO64_COUNT;
     if (host==MACH_PORT_NULL || pageQuery(host,&page)!=KERN_SUCCESS || !page ||
         statsQuery(host,HOST_VM_INFO64,(host_info64_t)&vm,&count)!=KERN_SUCCESS ||
-        count<3) return result; /* free, active, inactive; older revisions suffice */
+        count<HOST_VM_INFO64_COUNT) return result; /* complete response before reading VM fields */
     SBCPUMemoryPageCounters counters={vm.free_count,vm.inactive_count,0,0};
     SBCPUMemoryMetricsCompute(&counters,page,total,total,&result);
     return result;
