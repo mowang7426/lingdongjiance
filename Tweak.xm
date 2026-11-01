@@ -374,7 +374,7 @@ static BOOL textOnly2NetworkDualLine = NO;
 static NSInteger floatingTextOnlyColor = 0; // 0 system appearance, 1 white, 2 black, 3 custom, 4 realtime invert
 static SBCPUTextRGBA textOnlyCustomRGBA = {0, 122.0/255.0, 1, 1};
 static BOOL textOnlyShowMemory = NO, textOnly2ShowMemory = NO;
-static SBCPUMemoryMetrics textOnlyMemorySample={false,0,0,0}; /* Inspector-style used/physical sample; shared by both text HUDs. */
+static SBCPUMemoryMetrics textOnlyMemorySample={false,0,0,0}; /* Inspector-style free-only source; used/total retained for detail panel. */
 static BOOL textOnlyShowCPU = YES, textOnlyShowFrequency = YES, textOnlyShowFPS = YES;
 static BOOL textOnlyShowBattery = YES, textOnlyShowTemperature = YES, textOnlyShowCurrent = YES;
 static BOOL textOnlyShowSIM1 = YES, textOnlyShowSIM2 = YES;
@@ -2509,7 +2509,7 @@ static CGSize layoutTextSlots(SBCPUTextBackdropLabel *host, BOOL second, SBCPUTe
     CGFloat available=MAX(1,g.width-g.left-g.right);
     SBCPUTextSlot frames[11];
     CGFloat fpsWidth=SBCPUTextFPSConfiguredWidth(font);
-    CGFloat height=SBCPUTextSlotsLayoutMemory(mask,fs,available,second?floatingTextOnly2DataGap:floatingTextOnlyDataGap,second && textOnly2NetworkDualLine,fpsWidth,(mask&(1u<<10))?SBCPUTextMemoryConfiguredWidth(font):0,frames);
+    CGFloat height=SBCPUTextSlotsLayoutMemory(mask,fs,available,second?floatingTextOnly2DataGap:floatingTextOnlyDataGap,second && textOnly2NetworkDualLine,fpsWidth,(mask&(1u<<5))?SBCPUTextCurrentConfiguredWidth(font):0,(mask&(1u<<10))?SBCPUTextMemoryConfiguredWidth(font):0,frames);
     NSMutableArray *parts=[NSMutableArray array];
     for (int i=0;i<11;i++) {
         SBCPUTextBackdropLabel *slot=(id)[host viewWithTag:4950+i];
@@ -2523,7 +2523,7 @@ static CGSize layoutTextSlots(SBCPUTextBackdropLabel *host, BOOL second, SBCPUTe
             SBCPUNetworkTextDirections(textNetworkSampleValid,textNetworkDownloadRate,textNetworkUploadRate,i==8,i==9);
         UIFont *slotFont=font;
         slot.font=slotFont; slot.text=value; slot.numberOfLines=1; slot.adjustsFontSizeToFitWidth=NO;
-        slot.lineBreakMode=NSLineBreakByClipping; slot.textAlignment=NSTextAlignmentLeft;
+        slot.lineBreakMode=NSLineBreakByClipping; slot.textAlignment=SBCPUTextMetricAlignment(i);
         slot.clipsToBounds=YES;
         slot.frame=CGRectMake(frames[i].x,frames[i].y,frames[i].width,frames[i].height);
         [parts addObject:value];

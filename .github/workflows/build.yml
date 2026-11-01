@@ -288,3 +288,9 @@ jobs:
           name: LingDongMonitor
           path: build/*.deb
 
+
+      - name: Upload UIKit fixture (not real device)
+        uses: actions/upload-artifact@v4
+        with:
+          name: mem3-UIKit-fixture
+          path: test-output/*.png

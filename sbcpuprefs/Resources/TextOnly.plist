@@ -262,15 +262,15 @@
 			<key>cell</key>
 			<string>PSGroupCell</string>
 			<key>label</key>
-			<string>窗口1 内存占用（RAM）</string>
+			<string>窗口1 剩余内存（RAM）</string>
 			<key>footerText</key>
-			<string>显示已用/总内存；基于系统空闲页（HOST_VM_INFO64 free_count × 系统页大小），free 已含 speculative。已用=物理内存−空闲内存，不加入 inactive 或 purgeable。读取失败显示 RAM--。默认关闭，开启后追加在原指标末尾，不改变原顺序。</string>
+			<string>显示系统空闲 RAM，不是存储空间或进程内存限额。剩余=min(HOST_VM_INFO64 free_count × 系统页大小, 物理内存)，不额外加入 inactive 或 purgeable；free 已含 speculative。按 1024 进制显示 RAM256MB / RAM1.25GB。读取失败显示 RAM--。默认关闭，开启后追加在原指标末尾，不改变原顺序。</string>
 		</dict>
 		<dict>
 			<key>cell</key>
 			<string>PSSwitchCell</string>
 			<key>label</key>
-			<string>窗口1 内存占用（RAM）</string>
+			<string>窗口1 剩余内存（RAM）</string>
 			<key>key</key>
 			<string>floatingTextOnlyShowMemory</string>
 			<key>default</key>
@@ -686,15 +686,15 @@
 			<key>cell</key>
 			<string>PSGroupCell</string>
 			<key>label</key>
-			<string>窗口2 内存占用（RAM）</string>
+			<string>窗口2 剩余内存（RAM）</string>
 			<key>footerText</key>
-			<string>显示已用/总内存；基于系统空闲页（HOST_VM_INFO64 free_count × 系统页大小），free 已含 speculative。已用=物理内存−空闲内存，不加入 inactive 或 purgeable。读取失败显示 RAM--。默认关闭，开启后追加在原指标末尾，不改变原顺序。</string>
+			<string>显示系统空闲 RAM，不是存储空间或进程内存限额。剩余=min(HOST_VM_INFO64 free_count × 系统页大小, 物理内存)，不额外加入 inactive 或 purgeable；free 已含 speculative。按 1024 进制显示 RAM256MB / RAM1.25GB。读取失败显示 RAM--。默认关闭，开启后追加在原指标末尾，不改变原顺序。</string>
 		</dict>
 		<dict>
 			<key>cell</key>
 			<string>PSSwitchCell</string>
 			<key>label</key>
-			<string>窗口2 内存占用（RAM）</string>
+			<string>窗口2 剩余内存（RAM）</string>
 			<key>key</key>
 			<string>floatingTextOnly2ShowMemory</string>
 			<key>default</key>

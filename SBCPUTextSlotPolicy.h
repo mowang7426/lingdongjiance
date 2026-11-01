@@ -22,7 +22,7 @@ static inline double SBCPUTextSlotWidth(int metric, double font, double availabl
     double usable = available > 0 ? available : 0;
     return width < usable ? width : usable;
 }
-static inline double SBCPUTextSlotsLayoutFPS(unsigned mask, double font, double available, double gap, double fpsWidth, SBCPUTextSlot slots[10]) {
+static inline double SBCPUTextSlotsLayoutFPSCurrent(unsigned mask, double font, double available, double gap, double fpsWidth, double currentWidth, SBCPUTextSlot slots[10]) {
     double x=0,y=0,h=font*1.4;
     gap=SBCPUTextSeparatorWidth(font,gap);
     for (int i=0;i<10;i++) {
@@ -30,6 +30,7 @@ static inline double SBCPUTextSlotsLayoutFPS(unsigned mask, double font, double 
         if (!(mask & (1u<<i))) continue;
         double width=SBCPUTextSlotWidth(i,font,available);
         if (i==2 && isfinite(fpsWidth) && fpsWidth>width) width=fmin(fpsWidth,fmax(0,available));
+        if (i==5 && isfinite(currentWidth) && currentWidth>0) width=fmin(currentWidth,fmax(0,available));
         double candidate = x>0 ? x+gap : x;
         /* Negative gaps compact adjacent fixed slots, but never escape left. */
         if (candidate < 0) candidate=0;
@@ -45,17 +46,20 @@ static inline double SBCPUTextSlotsLayoutFPS(unsigned mask, double font, double 
     }
     return mask ? y+h : 1;
 }
+static inline double SBCPUTextSlotsLayoutFPS(unsigned mask, double font, double available, double gap, double fpsWidth, SBCPUTextSlot slots[10]) {
+    return SBCPUTextSlotsLayoutFPSCurrent(mask,font,available,gap,fpsWidth,0,slots);
+}
 /* Portable default retains a generous FPS floor without UIKit dependencies. */
 static inline double SBCPUTextSlotsLayout(unsigned mask, double font, double available, double gap, SBCPUTextSlot slots[10]) {
     return SBCPUTextSlotsLayoutFPS(mask,font,available,gap,0,slots);
 }
 /* Only the final network pair is a stacked block. All earlier metrics retain
    their natural fixed-slot wrapping, font size and horizontal data gaps. */
-static inline double SBCPUTextSlotsLayoutNetworkFPS(unsigned mask, double font, double available, double gap,
-                                                int networkDual, double fpsWidth, SBCPUTextSlot slots[10]) {
+static inline double SBCPUTextSlotsLayoutNetworkFPSCurrent(unsigned mask, double font, double available, double gap,
+                                                int networkDual, double fpsWidth, double currentWidth, SBCPUTextSlot slots[10]) {
     if (!networkDual || (mask & (3u<<8)) != (3u<<8))
-        return SBCPUTextSlotsLayoutFPS(mask,font,available,gap,fpsWidth,slots);
-    SBCPUTextSlotsLayoutFPS(mask & ~(3u<<8),font,available,gap,fpsWidth,slots);
+        return SBCPUTextSlotsLayoutFPSCurrent(mask,font,available,gap,fpsWidth,currentWidth,slots);
+    SBCPUTextSlotsLayoutFPSCurrent(mask & ~(3u<<8),font,available,gap,fpsWidth,currentWidth,slots);
     double x=0,y=0,h=font*1.4;
     for (int i=0;i<8;i++) if (mask & (1u<<i)) {
         x=slots[i].x+slots[i].width; y=slots[i].y;
@@ -66,6 +70,9 @@ static inline double SBCPUTextSlotsLayoutNetworkFPS(unsigned mask, double font, 
     SBCPUTextSlot up={candidate,y,width,h}; slots[8]=up;
     SBCPUTextSlot down={candidate,y+h,width,h}; slots[9]=down;
     return y+2*h;
+}
+static inline double SBCPUTextSlotsLayoutNetworkFPS(unsigned mask, double font, double available, double gap, int networkDual, double fpsWidth, SBCPUTextSlot slots[10]) {
+    return SBCPUTextSlotsLayoutNetworkFPSCurrent(mask,font,available,gap,networkDual,fpsWidth,0,slots);
 }
 static inline double SBCPUTextSlotsLayoutNetwork(unsigned mask, double font, double available, double gap,
                                                 int networkDual, SBCPUTextSlot slots[10]) {

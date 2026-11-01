@@ -29,7 +29,7 @@ for suffix in keys:
 assert 'notify_post("com.yourname.sbcpufloating.prefschanged")' in controller
 assert 'SBCPUTextOnlyRow(f,' in text
 assert 'textOnlyLabel.numberOfLines = 1' in text
-assert 'SBCPUTextSlotsLayoutMemory(mask,fs,available,second?floatingTextOnly2DataGap:floatingTextOnlyDataGap,second && textOnly2NetworkDualLine,fpsWidth,(mask&(1u<<10))?SBCPUTextMemoryConfiguredWidth(font):0,frames)' in text
+assert 'SBCPUTextSlotsLayoutMemory(mask,fs,available,second?floatingTextOnly2DataGap:floatingTextOnlyDataGap,second && textOnly2NetworkDualLine,fpsWidth,(mask&(1u<<5))?SBCPUTextCurrentConfiguredWidth(font):0,(mask&(1u<<10))?SBCPUTextMemoryConfiguredWidth(font):0,frames)' in text
 assert 'host.hidden=mask==0' in text
 assert 'textOnlySignals = (textOnlyShowSIM1 || textOnlyShowSIM2) ? readAllSimSignals() : @[];' in text
 assert '(floatingTextOnlyMode && textOnlyShowFPS)' in text

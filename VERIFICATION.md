@@ -1,15 +1,10 @@
-# 5.09+mem2 Verification
+# 5.09+mem3 verification contract
 
-## Scope
-- Branch: `feature/text-memory-used-5.08`; base mem1 commit: `79d00c8c4965ff02615793777759e8acb1adf79a`.
-- mem1 remains preserved on its original branch. mem2 changes the existing text-RAM option rather than adding a second ambiguous metric.
+Base: a1e07ff4c3b4c59c07bd9897b94b20ba5028ee07 on feature/text-memory-used-5.08.
 
-## Accounting
-- `host_statistics64(HOST_VM_INFO64)` supplies `free_count`; `host_page_size` supplies runtime kernel page size.
-- `free_count × page_size` is overflow-saturated, and used is `physicalMemory - free` clamped to `[0, physicalMemory]`.
-- `physicalMemory` is `NSProcessInfo.processInfo.physicalMemory`; inactive, extra speculative and purgeable are excluded.
-
-## Regression coverage
-- Native production-boundary tests cover host failure, zero page size, truncated VM response, free-page multiplication overflow and `physical < free` clamp.
-- Wiring/format coverage confirms both old configuration keys, independent default-off switches, one shared cache, fixed slot candidates `RAM0.00/0.00GB`, `RAM99.9/99.9GB`, `RAM999MB/999MB`, `RAM--`, 8–24pt normal/bold and 1–3x in UIKit CI.
-- No device install, respring, kill or reboot is performed by this change.
+- Free-only accounting remains in production SBCPUMemoryMetrics/Sample headers. Saturate page multiplication; cap at physical; preserve detail-panel used/total fields. Tests inject 4K/16K pages, huge inactive counts, failed/truncated host calls, zero sizes and overflow.
+- Display reads exact total-used integers, never rounded display strings. MB/GB/TB/PB/EB thresholds and RAM-- tested. Both old switch keys and all four saved combinations retained.
+- Current uses a configuration-only glyph budget and right alignment; shortest/longest values share frames and trailing mA edge. Dot allocation equals other metric gaps; no negative offsets or per-reading resize.
+- iOS Simulator UIKit covers 8..24 normal/bold, scales 1..3, exhaustive -10000..10000 current extent, representative bitmap equality against unbounded rendering and alpha-mask public UILabel path, stable layout/network wrapping and FPS120 regression.
+- CI runs on macos-15, builds Rootless and RootHide via build.yml; final artifact SHA and pagewise CodeDirectory verification recorded separately in delivery VERIFICATION.json.
+- No installation, respring, kill, reboot, merge, Release, Hello or Peach restoration. No claim of real-device verification or private backdrop compositor pixel validation.

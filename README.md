@@ -44,9 +44,12 @@ make package THEOS_PACKAGE_SCHEME=roothide
 - 最低 iOS 14.0
 
 
-## 5.09+mem2：文字浮窗内存占用（RAM）
+## 5.09+mem3：剩余内存（RAM）和电流间距
 
-- 原 mem1 分支 `feature/text-free-memory-5.08` 保留不改；本分支以相同的两个配置键兼容既有开关，但语义更新为“内存占用（RAM）”。
-- 两个文字浮窗各自独立开关、默认关闭，仍复用主刷新周期和至少 1 秒缓存，绝不为 label 新增采样、timer、daemon 或权限。
-- 按 Inspector 0.6.7 的系统统计口径：`free = HOST_VM_INFO64.free_count × page_size`，`used = clamp(NSProcessInfo.physicalMemory - free, 0, physical)`；XNU 的 `free_count` 已含 speculative，不加入 inactive / purgeable。
-- 显示为固定槽 `RAM已用/总量`：例如 `RAM5.19/5.49GB`；小于 1 GiB 时为 `RAM999MB/999MB`，读取失败 `RAM--`。GB 在总量小于 10 时保留两位小数，否则一位；固定宽度按最长已用/总量样例测量。
+- 沿 feature/text-memory-used-5.08 增量修复，两个 ShowMemory 键保留原状态、独立生效，新安装默认关闭。
+- 剩余 RAM = min(HOST_VM_INFO64.free_count × host_page_size, NSProcessInfo.physicalMemory)，溢出先饱和再封顶；不额外加入 inactive、purgeable 或 speculative。不是存储空间，也不是进程内存限额。
+- 只显示 RAM256MB、RAM1.25GB 等空闲量；1024 进制，低于 1 GiB 显示整数 MB，较大单位小于 10 时两位小数，否则一位。阈值按未舍入数值选择单位，因此边界可能显示 RAM1024MB / RAM1024.0GB；读取失败 RAM--。绝不从截图的已舍入数字估计。
+- 保留详情面板 used_bytes / total_bytes / page_size 接口；free = total - used 为整数精确值。共享至少 1 秒缓存和既有 1–2 秒刷新，不新增轮询。
+- 根因：电流旧槽按 9×字号×0.65 粗估宽度，左对齐短读数，未用的符号/位数预算出现在 mA 与后续分隔点之间。RAM 原槽尾宽不导致其左侧空白，分隔点原为独立的统一间隔，并无 RAM 特有前置 padding。
+- 电流改用 UIFont/CoreText 配置预算并右对齐固定槽，让 mA 固定贴近后续分隔点；覆盖 -10000..10000mA 与 --mA，不负偏移、不缩字、不按读数改框。RAM 用剩余量格式重算固定预算。字体缓存按 UIFont 区分字号/粗体，采样只查缓存；FPS120 原修复、CPU/充电/温控未改。
+- tests/text_memory_uikit.sh 使用真实 iOS Simulator UIKit：8–24 普通/粗体，1–3×，电流完整格式域、RAM单位边界、固定槽/分隔点、字形遮罩一致性；样图明确为模拟器固定测试数据，非真机截图。
