@@ -5,7 +5,7 @@ static kern_return_t page(host_t h,vm_size_t *p) { (void)h;pages++;*p=mode==2?0:
 static kern_return_t query(host_t h,host_flavor_t f,host_info64_t out,mach_msg_type_number_t *n) {
  (void)h;assert(f==HOST_VM_INFO64);stats++;
  if(mode==3) return KERN_FAILURE;
- if(mode==4) *n=HOST_VM_INFO64_COUNT-1;
+ if(mode==4) *n=2;
  vm_statistics64_t v=(vm_statistics64_t)out;v->free_count=100;v->inactive_count=200;v->speculative_count=50;v->purgeable_count=70;
  return KERN_SUCCESS;
 }

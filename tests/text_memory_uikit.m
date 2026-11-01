@@ -28,7 +28,7 @@ int main(void) { @autoreleasepool {
     assert([fixed isEqualToData:pixels(label,canvas,h,scale)]);checks++;
    }
    for(int hud=0;hud<2;hud++) for(int size=0;size<3;size++) {
-    double available=(double[]){125,390,844}[size];
+    const double widths[]={125,390,844}; double available=widths[size];
     for(int dual=0;dual<=1;dual++) {
      unsigned old=(1u<<10)-1; SBCPUTextSlot slots[11],next[11],original[10];
      double fps=SBCPUTextFPSConfiguredWidth(font);
