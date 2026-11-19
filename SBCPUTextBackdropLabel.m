@@ -317,6 +317,7 @@ UIImage *SBCPUTextBackdropCopyMaskImageForTesting(SBCPUTextBackdropLabel *label,
     if (!self.window) self.realtimeInvertEnabled = NO;
 }
 - (void)sbcpu_setTextOnlyPlainText:(NSString *)text font:(UIFont *)font color:(UIColor *)color {
+    if (![self.text isEqualToString:text]) self.text = text;
     BOOL sameInputs = ((_rowText == text) || [_rowText isEqualToString:text]) &&
         ((_rowFont == font) || [_rowFont isEqual:font]) && ((_rowColor == color) || [_rowColor isEqual:color]);
     BOOL sameAttributedRow = self.attributedText == _rowAttributedText ||
