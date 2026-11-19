@@ -7,6 +7,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#import "text_invert_diagnostics.h"
 
 static NSData *pixels(UIImage *image) {
     assert(image && image.CGImage);
@@ -47,6 +48,10 @@ static void assertMaskParity(NSString *text, UIFont *font, NSTextAlignment align
     reference.textAlignment=label.textAlignment;
     UIImage *expected=drawLabel(reference,scale);
     UIImage *actual=SBCPUTextBackdropCopyMaskImageForTesting(label,scale);
+    if (!actual || ![pixels(actual) isEqualToData:pixels(expected)]) {
+        NSString *name=[NSString stringWithFormat:@"%@-%gpt-%@-align%ld-scale%g",text,font.pointSize,font.fontName,(long)alignment,scale];
+        saveParityDiagnostic(name,actual,expected,label,reference,scale);
+    }
     assert(actual && [pixels(actual) isEqualToData:pixels(expected)]);
     label.realtimeInvertEnabled=NO;
     assert(![label sbcpu_testCopyAlphaMaskAtScale:scale]);

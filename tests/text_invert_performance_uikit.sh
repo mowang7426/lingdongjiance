@@ -20,5 +20,6 @@ PY
 xcrun simctl boot "$DEVICE" 2>/dev/null || true
 xcrun simctl bootstatus "$DEVICE" -b
 mkdir -p test-output
+SIMCTL_CHILD_SBCPU_TEXT_INVERT_DIAGNOSTICS="$PWD/test-output/invert-diagnostics" \
 SIMCTL_CHILD_SBCPU_TEXT_INVERT_RESULT_PATH="$PWD/test-output/text-invert-performance.json" \
   xcrun simctl spawn "$DEVICE" "$TMP_INV/text-invert-uikit"

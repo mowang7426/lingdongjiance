@@ -156,7 +156,9 @@ void SBCPUTextBackdropResetTestCounters(void) { gSBCPUBackdropTestCounters = (SB
 #endif
     BOOL sameAttributedText = _lastAttributedText == self.attributedText ||
         (_lastAttributedText && self.attributedText && [_lastAttributedText isEqualToAttributedString:self.attributedText]);
-    NSString *cacheText = _rowText ?: self.text;
+    // Cache the rendered UILabel string (including attachment placeholders).
+    // Raw row inputs are owned and compared only by the capsule subclass.
+    NSString *cacheText = self.text;
     if (_backdrop && [_lastText isEqualToString:cacheText] && sameAttributedText && [_lastFont isEqual:self.font] &&
         CGRectEqualToRect(_lastBounds, self.bounds) && _lastScale == scale &&
         _lastAlignment == self.textAlignment && _lastNumberOfLines == self.numberOfLines &&

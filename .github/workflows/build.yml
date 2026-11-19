@@ -303,6 +303,7 @@ jobs:
 
 
       - name: Upload UIKit fixture (not real device)
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: mem4-UIKit-fixture
