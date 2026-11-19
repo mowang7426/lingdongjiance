@@ -36,6 +36,7 @@ static void assertMaskParity(NSString *text, UIFont *font, NSTextAlignment align
     SBCPUCapsuleBackdropLabel *label=makeLabel(text,font,alignment,width);
     UILabel *reference=[[UILabel alloc] initWithFrame:label.bounds];
     reference.backgroundColor=UIColor.clearColor; reference.textColor=UIColor.whiteColor;
+    reference.clipsToBounds=YES; reference.layer.contentsScale=scale;
     reference.font=font; reference.text=text;
     reference.attributedText=SBCPUTextOnlyAttributedRow(text,font,UIColor.whiteColor);
     reference.numberOfLines=label.numberOfLines; reference.lineBreakMode=label.lineBreakMode;
