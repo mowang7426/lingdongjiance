@@ -2480,6 +2480,15 @@ static unsigned textSlotMask(BOOL second) {
     unsigned mask=0; for (int i=0;i<11;i++) if(flags[i]) mask |= 1u<<i;
     return mask;
 }
+typedef struct {
+    BOOL valid;
+    unsigned mask;
+    CGFloat fontSize, available, gap, fpsWidth, currentWidth, memoryWidth, cpuWidth;
+    BOOL networkDualLine, bold;
+    CGFloat height;
+    SBCPUTextSlot frames[11];
+} SBCPUTextSlotLayoutCache;
+static SBCPUTextSlotLayoutCache textSlotLayoutCaches[2];
 static void clearTextSlots(SBCPUTextBackdropLabel *host) {
     host.realtimeInvertEnabled = NO;
     for (SBCPUTextBackdropLabel *slot in host.subviews.copy) {
@@ -2494,11 +2503,13 @@ static UIColor *textSlotColor(void) {
         blue:textOnlyCustomRGBA.blue alpha:textOnlyCustomRGBA.alpha];
     return SBCPUTextUsesWhite((int)floatingTextOnlyColor, style) ? UIColor.whiteColor : UIColor.blackColor;
 }
-static void colorTextSlots(SBCPUTextBackdropLabel *host, BOOL second) {
-    for (SBCPUTextBackdropLabel *slot in host.subviews) {
-        if (![slot isKindOfClass:SBCPUTextBackdropLabel.class]) continue;
-        slot.layer.compositingFilter = nil; slot.textColor = textSlotColor();
-        slot.attributedText = SBCPUTextOnlyAttributedRow(slot.text,slot.font,slot.textColor);
+static void colorTextSlots(SBCPUTextBackdropLabel *host) {
+    UIColor *color=textSlotColor();
+    for (UIView *view in host.subviews) {
+        if (![view isKindOfClass:SBCPUCapsuleBackdropLabel.class]) continue;
+        SBCPUCapsuleBackdropLabel *slot=(SBCPUCapsuleBackdropLabel *)view;
+        if (slot.layer.compositingFilter) slot.layer.compositingFilter = nil;
+        [slot sbcpu_setTextOnlyPlainText:slot.text font:slot.font color:color];
         slot.realtimeInvertEnabled = isEnabled && !cpuWindow.hidden && floatingTextOnlyColor == 4 && slot.text.length > 0;
     }
 }
@@ -2509,7 +2520,27 @@ static CGSize layoutTextSlots(SBCPUTextBackdropLabel *host, BOOL second, SBCPUTe
     CGFloat available=MAX(1,g.width-g.left-g.right);
     SBCPUTextSlot frames[11];
     CGFloat fpsWidth=SBCPUTextFPSConfiguredWidth(font);
-    CGFloat height=SBCPUTextSlotsLayoutMemoryConfigured(mask,fs,available,second?floatingTextOnly2DataGap:floatingTextOnlyDataGap,second && textOnly2NetworkDualLine,fpsWidth,(mask&(1u<<5))?SBCPUTextCurrentConfiguredWidth(font):0,(mask&(1u<<10))?SBCPUTextMemoryConfiguredWidth(font):0,(mask&1u)?SBCPUTextCPUConfiguredWidth(font):0,frames);
+    CGFloat currentWidth=(mask&(1u<<5))?SBCPUTextCurrentConfiguredWidth(font):0;
+    CGFloat memoryWidth=(mask&(1u<<10))?SBCPUTextMemoryConfiguredWidth(font):0;
+    CGFloat cpuWidth=(mask&1u)?SBCPUTextCPUConfiguredWidth(font):0;
+    CGFloat gap=second?floatingTextOnly2DataGap:floatingTextOnlyDataGap;
+    BOOL dualLine=second && textOnly2NetworkDualLine;
+    SBCPUTextSlotLayoutCache *cache=&textSlotLayoutCaches[second?1:0];
+    BOOL same=cache->valid && cache->mask==mask && cache->fontSize==fs && cache->available==available &&
+        cache->gap==gap && cache->fpsWidth==fpsWidth && cache->currentWidth==currentWidth &&
+        cache->memoryWidth==memoryWidth && cache->cpuWidth==cpuWidth && cache->networkDualLine==dualLine &&
+        cache->bold==((second?textOnly2Bold:textOnlyBold)!=0);
+    CGFloat height;
+    if (same) {
+        height=cache->height;
+        memcpy(frames,cache->frames,sizeof(cache->frames));
+    } else {
+        height=SBCPUTextSlotsLayoutMemoryConfigured(mask,fs,available,gap,dualLine,fpsWidth,currentWidth,memoryWidth,cpuWidth,frames);
+        cache->valid=YES; cache->mask=mask; cache->fontSize=fs; cache->available=available; cache->gap=gap;
+        cache->fpsWidth=fpsWidth; cache->currentWidth=currentWidth; cache->memoryWidth=memoryWidth; cache->cpuWidth=cpuWidth;
+        cache->networkDualLine=dualLine; cache->bold=((second?textOnly2Bold:textOnlyBold)!=0); cache->height=height;
+        memcpy(cache->frames,frames,sizeof(cache->frames));
+    }
     NSMutableArray *parts=[NSMutableArray array];
     for (int i=0;i<11;i++) {
         SBCPUTextBackdropLabel *slot=(id)[host viewWithTag:4950+i];
@@ -2525,7 +2556,8 @@ static CGSize layoutTextSlots(SBCPUTextBackdropLabel *host, BOOL second, SBCPUTe
         slot.font=slotFont; slot.text=value; slot.numberOfLines=1; slot.adjustsFontSizeToFitWidth=NO;
         slot.lineBreakMode=NSLineBreakByClipping; slot.textAlignment=SBCPUTextMetricAlignment(i);
         slot.clipsToBounds=YES;
-        slot.frame=CGRectMake(frames[i].x,frames[i].y,frames[i].width,frames[i].height);
+        CGRect slotFrame=CGRectMake(frames[i].x,frames[i].y,frames[i].width,frames[i].height);
+        if (!CGRectEqualToRect(slot.frame,slotFrame)) slot.frame=slotFrame;
         [parts addObject:value];
     }
     for (int i=0;i<11;i++) {
@@ -2536,18 +2568,20 @@ static CGSize layoutTextSlots(SBCPUTextBackdropLabel *host, BOOL second, SBCPUTe
             dot.userInteractionEnabled=NO; dot.backgroundColor=UIColor.clearColor; [host addSubview:dot]; }
         dot.font=font; dot.text=@"·"; dot.numberOfLines=1; dot.adjustsFontSizeToFitWidth=NO;
         dot.lineBreakMode=NSLineBreakByClipping; dot.textAlignment=NSTextAlignmentCenter; dot.clipsToBounds=YES;
-        dot.frame=CGRectMake(frame.x,frame.y,frame.width,frame.height);
+        CGRect dotFrame=CGRectMake(frame.x,frame.y,frame.width,frame.height);
+        if (!CGRectEqualToRect(dot.frame,dotFrame)) dot.frame=dotFrame;
     }
-    host.text=@""; host.hidden=mask==0;
+    if (![host.text isEqualToString:@""]) host.text=@"";
+    if (host.hidden!=(mask==0)) host.hidden=mask==0;
     if (!second) textOnlyPlainText=[parts componentsJoinedByString:@" "];
-    colorTextSlots(host, second);
+    colorTextSlots(host);
     CGFloat width=1; for (int i=0;i<11;i++) width=MAX(width,frames[i].x+frames[i].width);
     return CGSizeMake(width,height);
 }
 static void applyTextOnlyTextFilter(void) {
     if (!floatingTextOnlyMode) clearTextSlots(textOnlyLabel);
-    else colorTextSlots(textOnlyLabel, NO);
-    colorTextSlots(textOnly2Label, YES);
+    else colorTextSlots(textOnlyLabel);
+    colorTextSlots(textOnly2Label);
 }
 static BOOL textOnly2Dragging=NO;
 static void syncSecondTextInteraction(void) {

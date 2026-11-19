@@ -29,8 +29,8 @@ for suffix in keys:
 assert 'notify_post("com.yourname.sbcpufloating.prefschanged")' in controller
 assert 'SBCPUTextOnlyRow(f,' in text
 assert 'textOnlyLabel.numberOfLines = 1' in text
-assert 'SBCPUTextSlotsLayoutMemoryConfigured(mask,fs,available,second?floatingTextOnly2DataGap:floatingTextOnlyDataGap,second && textOnly2NetworkDualLine,fpsWidth,(mask&(1u<<5))?SBCPUTextCurrentConfiguredWidth(font):0,(mask&(1u<<10))?SBCPUTextMemoryConfiguredWidth(font):0,(mask&1u)?SBCPUTextCPUConfiguredWidth(font):0,frames)' in text
-assert 'host.hidden=mask==0' in text
+assert 'SBCPUTextSlotsLayoutMemoryConfigured(mask,fs,available,gap,dualLine,fpsWidth,currentWidth,memoryWidth,cpuWidth,frames)' in text
+assert 'if (host.hidden!=(mask==0)) host.hidden=mask==0;' in text
 assert 'textOnlySignals = (textOnlyShowSIM1 || textOnlyShowSIM2) ? readAllSimSignals() : @[];' in text
 assert '(floatingTextOnlyMode && textOnlyShowFPS)' in text
 assert 'if (floatingTextOnlyMode || floatingTextOnlyMode2)' in text[text.index('// Reuse the existing refresh tick.'):][:300]
@@ -60,7 +60,7 @@ assert colors[2]['label'] == '自定义文字颜色'
 assert 'SBCPUTextColorMode(getIntPref(CFSTR("floatingTextOnlyColor"), 0))' in text
 assert 'mode = SBCPUTextColorMode(mode)' in controller
 assert 'monospacedDigitSystemFontOfSize:fs' in mode and 'UIFontWeightBold' in mode
-assert 'SBCPUTextOnlyAttributedRow' in mode
+assert 'sbcpu_setTextOnlyPlainText:slot.text' in mode
 assert 'NSTimer' not in mode and 'snapshotView' not in mode and 'sampleBackgroundLuminance' not in mode
 assert 'textOnlySnapshotCenter' in mode and 'textOnlyHiddenSnapshot' in mode
 assert 'statusBarDockEnable =' not in mode and 'SavePreferencesAndNotify' not in mode
