@@ -156,7 +156,8 @@ void SBCPUTextBackdropResetTestCounters(void) { gSBCPUBackdropTestCounters = (SB
 #endif
     BOOL sameAttributedText = _lastAttributedText == self.attributedText ||
         (_lastAttributedText && self.attributedText && [_lastAttributedText isEqualToAttributedString:self.attributedText]);
-    if (_backdrop && [_lastText isEqualToString:self.text] && sameAttributedText && [_lastFont isEqual:self.font] &&
+    NSString *cacheText = _rowText ?: self.text;
+    if (_backdrop && [_lastText isEqualToString:cacheText] && sameAttributedText && [_lastFont isEqual:self.font] &&
         CGRectEqualToRect(_lastBounds, self.bounds) && _lastScale == scale &&
         _lastAlignment == self.textAlignment && _lastNumberOfLines == self.numberOfLines &&
         _lastLineBreakMode == self.lineBreakMode && _lastAdjustsFontSizeToFitWidth == self.adjustsFontSizeToFitWidth &&
@@ -219,7 +220,7 @@ void SBCPUTextBackdropResetTestCounters(void) { gSBCPUBackdropTestCounters = (SB
             glyph.semanticContentAttribute = self.semanticContentAttribute;
         }
         [_alphaMask setNeedsDisplay];
-        _lastText = [self.text copy];
+        _lastText = [cacheText copy];
         _lastAttributedText = [self.attributedText copy];
         _lastFont = self.font;
         _lastBounds = self.bounds;
