@@ -1,6 +1,7 @@
 // Backdrop/filter recipe adapted from Lessica/TrollSpeed, MIT.
 // See LICENSE.TrollSpeed and TEXT_ONLY_MODE.md for pinned provenance.
 #import "SBCPUTextBackdropLabel.h"
+#import "SBCPUTextOnlyTypography.h"
 #import <QuartzCore/QuartzCore.h>
 #import <CoreText/CoreText.h>
 
@@ -43,13 +44,29 @@
 
 // Main-thread UIKit code. Cache a failed capability/KVC probe for this process.
 static BOOL SBCPUBackdropUnavailable = NO;
+#ifdef SBCPU_TEXT_BACKDROP_TESTING
+static SBCPUTextBackdropTestCounters gSBCPUBackdropTestCounters;
+SBCPUTextBackdropTestCounters SBCPUTextBackdropReadTestCounters(void) { return gSBCPUBackdropTestCounters; }
+void SBCPUTextBackdropResetTestCounters(void) { gSBCPUBackdropTestCounters = (SBCPUTextBackdropTestCounters){0, 0, 0, 0, 0}; }
+#endif
 @implementation SBCPUTextBackdropLabel {
     CALayer *_backdrop;
     SBCPUTextAlphaMask *_alphaMask;
     NSString *_lastText;
+    NSAttributedString *_lastAttributedText;
     UIFont *_lastFont;
     CGRect _lastBounds;
     CGFloat _lastScale;
+    NSTextAlignment _lastAlignment;
+    NSInteger _lastNumberOfLines;
+    NSLineBreakMode _lastLineBreakMode;
+    BOOL _lastAdjustsFontSizeToFitWidth;
+    CGFloat _lastMinimumScaleFactor;
+    UIBaselineAdjustment _lastBaselineAdjustment;
+    UISemanticContentAttribute _lastSemanticContentAttribute;
+#ifdef SBCPU_TEXT_BACKDROP_TESTING
+    CGFloat _testScreenScaleOverride;
+#endif
     BOOL _realtimeInvertEnabled;
 }
 @synthesize realtimeInvertEnabled = _realtimeInvertEnabled;
@@ -63,12 +80,27 @@ static BOOL SBCPUBackdropUnavailable = NO;
     _backdrop = nil;
     _alphaMask = nil;
     _lastText = nil;
+    _lastAttributedText = nil;
     _lastFont = nil;
     [CATransaction commit];
     [self setNeedsDisplay];
 }
 
 - (BOOL)createBackdrop {
+#ifdef SBCPU_TEXT_BACKDROP_TESTING
+    // Exercise the real production mask/cache path without claiming simulator
+    // support for the private CABackdropLayer filters or GPU compositing.
+    _backdrop = [CALayer layer];
+    _alphaMask = [SBCPUTextAlphaMask layer];
+    _alphaMask.foregroundColor = UIColor.whiteColor.CGColor;
+    _alphaMask.wrapped = NO;
+    _alphaMask.alignmentMode = kCAAlignmentCenter;
+    _alphaMask.truncationMode = kCATruncationNone;
+    _backdrop.mask = _alphaMask;
+    [self.layer addSublayer:_backdrop];
+    gSBCPUBackdropTestCounters.backdropCreations++;
+    return YES;
+#else
     if (SBCPUBackdropUnavailable) return NO;
     @try {
         Class backdropClass = NSClassFromString(@"CABackdropLayer");
@@ -104,16 +136,40 @@ static BOOL SBCPUBackdropUnavailable = NO;
         [self clearBackdrop];
         return NO;
     }
+#endif
 }
 
 - (void)syncBackdrop {
+#ifdef SBCPU_TEXT_BACKDROP_TESTING
+    gSBCPUBackdropTestCounters.syncCalls++;
+#endif
     if (!_realtimeInvertEnabled || self.text.length == 0) {
         if (_backdrop) [self clearBackdrop];
         return;
     }
+#ifndef SBCPU_TEXT_BACKDROP_TESTING
+    if (SBCPUBackdropUnavailable) return; // failed capability probes are process-cached
+#endif
     CGFloat scale = self.window.screen.scale ?: UIScreen.mainScreen.scale;
-    if (_backdrop && [_lastText isEqualToString:self.text] && [_lastFont isEqual:self.font] &&
-        CGRectEqualToRect(_lastBounds, self.bounds) && _lastScale == scale) return;
+#ifdef SBCPU_TEXT_BACKDROP_TESTING
+    if (_testScreenScaleOverride > 0) scale = _testScreenScaleOverride;
+#endif
+    BOOL sameAttributedText = _lastAttributedText == self.attributedText ||
+        (_lastAttributedText && self.attributedText && [_lastAttributedText isEqualToAttributedString:self.attributedText]);
+    // Cache the rendered UILabel string (including attachment placeholders).
+    // Raw row inputs are owned and compared only by the capsule subclass.
+    NSString *cacheText = self.text;
+    if (_backdrop && [_lastText isEqualToString:cacheText] && sameAttributedText && [_lastFont isEqual:self.font] &&
+        CGRectEqualToRect(_lastBounds, self.bounds) && _lastScale == scale &&
+        _lastAlignment == self.textAlignment && _lastNumberOfLines == self.numberOfLines &&
+        _lastLineBreakMode == self.lineBreakMode && _lastAdjustsFontSizeToFitWidth == self.adjustsFontSizeToFitWidth &&
+        _lastMinimumScaleFactor == self.minimumScaleFactor && _lastBaselineAdjustment == self.baselineAdjustment &&
+        _lastSemanticContentAttribute == self.semanticContentAttribute) {
+#ifdef SBCPU_TEXT_BACKDROP_TESTING
+        gSBCPUBackdropTestCounters.cacheHits++;
+#endif
+        return;
+    }
     [CATransaction begin];
     [CATransaction setDisableActions:YES];
     @try {
@@ -128,6 +184,9 @@ static BOOL SBCPUBackdropUnavailable = NO;
         _alphaMask.contentsScale = scale;
         _alphaMask.string = [[NSAttributedString alloc] initWithString:self.text attributes:@{
             NSFontAttributeName:fittedFont, NSForegroundColorAttributeName:UIColor.whiteColor}];
+#ifdef SBCPU_TEXT_BACKDROP_TESTING
+        gSBCPUBackdropTestCounters.maskRefreshes++;
+#endif
         if ([self isKindOfClass:SBCPUCapsuleBackdropLabel.class] || self.attributedText.length) {
             UILabel *glyph = _alphaMask.glyphLabel;
             if (!glyph) {
@@ -163,10 +222,18 @@ static BOOL SBCPUBackdropUnavailable = NO;
             glyph.semanticContentAttribute = self.semanticContentAttribute;
         }
         [_alphaMask setNeedsDisplay];
-        _lastText = [self.text copy];
+        _lastText = [cacheText copy];
+        _lastAttributedText = [self.attributedText copy];
         _lastFont = self.font;
         _lastBounds = self.bounds;
         _lastScale = scale;
+        _lastAlignment = self.textAlignment;
+        _lastNumberOfLines = self.numberOfLines;
+        _lastLineBreakMode = self.lineBreakMode;
+        _lastAdjustsFontSizeToFitWidth = self.adjustsFontSizeToFitWidth;
+        _lastMinimumScaleFactor = self.minimumScaleFactor;
+        _lastBaselineAdjustment = self.baselineAdjustment;
+        _lastSemanticContentAttribute = self.semanticContentAttribute;
         [self setNeedsDisplay];
     } @catch (__unused NSException *exception) {
         SBCPUBackdropUnavailable = YES;
@@ -178,10 +245,12 @@ static BOOL SBCPUBackdropUnavailable = NO;
 
 - (void)invalidateBackdropTypography {
     _lastText = nil;
+    _lastAttributedText = nil;
     [self setNeedsLayout];
 }
 
 - (void)setRealtimeInvertEnabled:(BOOL)enabled {
+    if (_realtimeInvertEnabled == enabled) return;
     _realtimeInvertEnabled = enabled;
     [self syncBackdrop]; // includes initial text/font/bounds, before the next tick/layout
 }
@@ -192,14 +261,18 @@ static BOOL SBCPUBackdropUnavailable = NO;
     if (text.length == 0 && _backdrop) [self clearBackdrop];
 }
 - (void)setAttributedText:(NSAttributedString *)text {
-    if ([self.attributedText isEqualToAttributedString:text]) return;
+    if ((self.attributedText == text) || [self.attributedText isEqualToAttributedString:text]) return;
     [super setAttributedText:text];
     [self invalidateBackdropTypography];
 }
 - (void)setFont:(UIFont *)font {
-    if ([self.font isEqual:font]) return;
+    if ((self.font == font) || [self.font isEqual:font]) return;
     [super setFont:font];
     [self setNeedsLayout];
+}
+- (void)setTextColor:(UIColor *)color {
+    if ((self.textColor == color) || [self.textColor isEqual:color]) return;
+    [super setTextColor:color];
 }
 - (void)layoutSubviews {
     [super layoutSubviews];
@@ -208,10 +281,37 @@ static BOOL SBCPUBackdropUnavailable = NO;
 - (void)drawTextInRect:(CGRect)rect {
     if (!_backdrop) [super drawTextInRect:rect]; // fallback is never made transparent
 }
+#ifdef SBCPU_TEXT_BACKDROP_TESTING
+- (void)sbcpu_testSyncBackdropAtScale:(CGFloat)scale {
+    _testScreenScaleOverride = scale;
+    [self syncBackdrop];
+    _testScreenScaleOverride = 0;
+}
+- (UIImage *)sbcpu_testCopyAlphaMaskAtScale:(CGFloat)scale {
+    if (!_alphaMask || CGRectIsEmpty(_alphaMask.bounds)) return nil;
+    UIGraphicsBeginImageContextWithOptions(_alphaMask.bounds.size, NO, scale ?: 1);
+    [_alphaMask drawInContext:UIGraphicsGetCurrentContext()];
+    UIImage *image = UIGraphicsGetImageFromCurrentImageContext();
+    UIGraphicsEndImageContext();
+    return image;
+}
+#endif
 @end
 
-@implementation SBCPUCapsuleBackdropLabel
+#ifdef SBCPU_TEXT_BACKDROP_TESTING
+UIImage *SBCPUTextBackdropCopyMaskImageForTesting(SBCPUTextBackdropLabel *label, CGFloat scale) {
+    return [label sbcpu_testCopyAlphaMaskAtScale:scale];
+}
+#endif
+
+@implementation SBCPUCapsuleBackdropLabel {
+    NSString *_rowText;
+    UIFont *_rowFont;
+    UIColor *_rowColor;
+    NSAttributedString *_rowAttributedText;
+}
 - (void)setHidden:(BOOL)hidden {
+    if (self.hidden == hidden) return;
     [super setHidden:hidden];
     if (hidden) self.realtimeInvertEnabled = NO;
 }
@@ -219,25 +319,53 @@ static BOOL SBCPUBackdropUnavailable = NO;
     [super didMoveToWindow];
     if (!self.window) self.realtimeInvertEnabled = NO;
 }
+- (void)sbcpu_setTextOnlyPlainText:(NSString *)text font:(UIFont *)font color:(UIColor *)color {
+    BOOL sameInputs = ((_rowText == text) || [_rowText isEqualToString:text]) &&
+        ((_rowFont == font) || [_rowFont isEqual:font]) && ((_rowColor == color) || [_rowColor isEqual:color]);
+    BOOL sameAttributedRow = self.attributedText == _rowAttributedText ||
+        (_rowAttributedText && self.attributedText && [self.attributedText isEqualToAttributedString:_rowAttributedText]);
+    // UILabel.text reflects the attachment replacement character. Do not
+    // overwrite valid attributed text just to restore the raw metric prefix.
+    if (sameInputs && sameAttributedRow && [self.font isEqual:font] && [self.textColor isEqual:color]) return;
+    if (![self.text isEqualToString:text]) self.text = text;
+    if (![self.font isEqual:font]) self.font = font;
+    if (![self.textColor isEqual:color]) self.textColor = color;
+    NSAttributedString *row = SBCPUTextOnlyAttributedRow(text, font, color);
+    self.attributedText = row;
+    _rowText = [text copy]; _rowFont = font; _rowColor = color; _rowAttributedText = row;
+#ifdef SBCPU_TEXT_BACKDROP_TESTING
+    gSBCPUBackdropTestCounters.styledAttributeBuilds++;
+#endif
+}
+- (void)sbcpu_applyTextOnlyColor:(UIColor *)color {
+    [self sbcpu_setTextOnlyPlainText:_rowText ?: self.text font:self.font color:color];
+}
 - (void)setTextAlignment:(NSTextAlignment)value {
+    if (self.textAlignment == value) return;
     [super setTextAlignment:value]; [self invalidateBackdropTypography];
 }
 - (void)setNumberOfLines:(NSInteger)value {
+    if (self.numberOfLines == value) return;
     [super setNumberOfLines:value]; [self invalidateBackdropTypography];
 }
 - (void)setLineBreakMode:(NSLineBreakMode)value {
+    if (self.lineBreakMode == value) return;
     [super setLineBreakMode:value]; [self invalidateBackdropTypography];
 }
 - (void)setAdjustsFontSizeToFitWidth:(BOOL)value {
+    if (self.adjustsFontSizeToFitWidth == value) return;
     [super setAdjustsFontSizeToFitWidth:value]; [self invalidateBackdropTypography];
 }
 - (void)setMinimumScaleFactor:(CGFloat)value {
+    if (self.minimumScaleFactor == value) return;
     [super setMinimumScaleFactor:value]; [self invalidateBackdropTypography];
 }
 - (void)setBaselineAdjustment:(UIBaselineAdjustment)value {
+    if (self.baselineAdjustment == value) return;
     [super setBaselineAdjustment:value]; [self invalidateBackdropTypography];
 }
 - (void)setSemanticContentAttribute:(UISemanticContentAttribute)value {
+    if (self.semanticContentAttribute == value) return;
     [super setSemanticContentAttribute:value]; [self invalidateBackdropTypography];
 }
 @end
