@@ -56,7 +56,10 @@ static void assertMaskParity(NSString *text, UIFont *font, NSTextAlignment align
     BOOL rawMatch=[pixels(actual) isEqualToData:pixels(expected)];
     if (!rawMatch) {
         // Keep the old failing reference visible, never relax pixel tolerance.
-        if (gRawReferenceMismatches<12) saveParityDiagnostic([@"original-reference-" stringByAppendingString:name],actual,expected,label,reference,scale);
+        if (gRawReferenceMismatches<12) {
+            saveParityDiagnostic([@"original-reference-" stringByAppendingString:name],actual,expected,label,reference,scale);
+            saveParityDiagnostic([@"mem4-vs-original-reference-" stringByAppendingString:name],mem4Mask(mem4,scale),expected,mem4,reference,scale);
+        }
         gRawReferenceMismatches++;
     }
     // Export context scale is NOT UILabel's display/content scale. mem4's
@@ -65,9 +68,12 @@ static void assertMaskParity(NSString *text, UIFont *font, NSTextAlignment align
     if (!rawMatch && [pixels(actual) isEqualToData:pixels(drawLabel(reference,scale))]) gScaleOnlyMatches++;
     // A mask is opaque-white text AND attachments, unlike the raw UILabel.
     // Apply the documented mem4 mask semantics in an independent UILabel.
-    NSMutableAttributedString *white=[reference.attributedText mutableCopy];
+    // Use the SAME attributed input as the production label. Regenerating SF
+    // Symbols creates a separately configured image, not an identical UILabel
+    // input; retain that original comparison above as diagnostic evidence.
+    NSMutableAttributedString *white=[label.attributedText mutableCopy];
     [white addAttribute:NSForegroundColorAttributeName value:UIColor.whiteColor range:NSMakeRange(0,white.length)];
-    [reference.attributedText enumerateAttribute:NSAttachmentAttributeName inRange:NSMakeRange(0,reference.attributedText.length) options:0 usingBlock:^(id value,NSRange range,BOOL *stop) {
+    [label.attributedText enumerateAttribute:NSAttachmentAttributeName inRange:NSMakeRange(0,reference.attributedText.length) options:0 usingBlock:^(id value,NSRange range,BOOL *stop) {
         (void)stop;if (![value isKindOfClass:NSTextAttachment.class]) return;
         NSTextAttachment *source=value,*a=[NSTextAttachment new];a.bounds=source.bounds;
         a.image=[source.image imageWithTintColor:UIColor.whiteColor renderingMode:UIImageRenderingModeAlwaysOriginal];
