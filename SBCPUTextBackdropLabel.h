@@ -13,6 +13,7 @@
 @interface SBCPUCapsuleBackdropLabel : SBCPUTextBackdropLabel
 // Text-only HUD rows rebuild attachment-backed typography only when their inputs change.
 - (void)sbcpu_setTextOnlyPlainText:(NSString *)text font:(UIFont *)font color:(UIColor *)color;
+- (void)sbcpu_applyTextOnlyColor:(UIColor *)color;
 @end
 
 #ifdef SBCPU_TEXT_BACKDROP_TESTING

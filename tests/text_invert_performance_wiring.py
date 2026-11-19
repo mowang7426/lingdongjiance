@@ -10,7 +10,7 @@ control=(root/'control').read_text()
 workflow=(root/'.github/workflows/build.yml').read_text()
 test=(root/'tests/text_invert_performance_uikit.m').read_text()
 assert 'SBCPUTextBackdropLabel.m' in make
-assert 'sbcpu_setTextOnlyPlainText:slot.text font:slot.font color:color' in tweak
+assert 'sbcpu_setTextOnlyPlainText:value font:slotFont color:color' in tweak
 assert 'if (slot.layer.compositingFilter) slot.layer.compositingFilter = nil;' in tweak
 assert 'SBCPUTextSlotLayoutCache textSlotLayoutCaches[2]' in tweak
 for key in ('mask','fontSize','available','gap','fpsWidth','currentWidth','memoryWidth','cpuWidth','networkDualLine','bold'):

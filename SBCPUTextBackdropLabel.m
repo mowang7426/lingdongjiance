@@ -317,20 +317,24 @@ UIImage *SBCPUTextBackdropCopyMaskImageForTesting(SBCPUTextBackdropLabel *label,
     if (!self.window) self.realtimeInvertEnabled = NO;
 }
 - (void)sbcpu_setTextOnlyPlainText:(NSString *)text font:(UIFont *)font color:(UIColor *)color {
-    if (![self.text isEqualToString:text]) self.text = text;
-    if (![self.font isEqual:font]) self.font = font;
-    if (![self.textColor isEqual:color]) self.textColor = color;
     BOOL sameInputs = ((_rowText == text) || [_rowText isEqualToString:text]) &&
         ((_rowFont == font) || [_rowFont isEqual:font]) && ((_rowColor == color) || [_rowColor isEqual:color]);
     BOOL sameAttributedRow = self.attributedText == _rowAttributedText ||
         (_rowAttributedText && self.attributedText && [self.attributedText isEqualToAttributedString:_rowAttributedText]);
-    if (sameInputs && [self.textColor isEqual:color] && sameAttributedRow) return;
+    // UILabel.text reflects the attachment replacement character. Do not
+    // overwrite valid attributed text just to restore the raw metric prefix.
+    if (sameInputs && sameAttributedRow && [self.font isEqual:font] && [self.textColor isEqual:color]) return;
+    if (![self.font isEqual:font]) self.font = font;
+    if (![self.textColor isEqual:color]) self.textColor = color;
     NSAttributedString *row = SBCPUTextOnlyAttributedRow(text, font, color);
     self.attributedText = row;
     _rowText = [text copy]; _rowFont = font; _rowColor = color; _rowAttributedText = row;
 #ifdef SBCPU_TEXT_BACKDROP_TESTING
     gSBCPUBackdropTestCounters.styledAttributeBuilds++;
 #endif
+}
+- (void)sbcpu_applyTextOnlyColor:(UIColor *)color {
+    [self sbcpu_setTextOnlyPlainText:_rowText ?: self.text font:self.font color:color];
 }
 - (void)setTextAlignment:(NSTextAlignment)value {
     if (self.textAlignment == value) return;

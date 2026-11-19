@@ -147,6 +147,37 @@ static void testNoOpAndDirtyRefresh(void) {
     label.realtimeInvertEnabled=YES; [label layoutSubviews];
     assert(SBCPUTextBackdropReadTestCounters().backdropCreations==1 && [label sbcpu_testCopyAlphaMaskAtScale:2]);
 }
+static void assertAttachment(UILabel *label) {
+    assert([label.attributedText attribute:NSAttachmentAttributeName atIndex:0 effectiveRange:NULL]);
+}
+static void testAttachmentRows(void) {
+    UIFont *font=[UIFont monospacedDigitSystemFontOfSize:16 weight:UIFontWeightRegular];
+    for (NSString *text in @[@"TEMP 42°",@"I 278mA"]) {
+        SBCPUCapsuleBackdropLabel *label=makeLabel(text,font,NSTextAlignmentLeft,140);
+        assertAttachment(label);
+        NSData *before=pixels(SBCPUTextBackdropCopyMaskImageForTesting(label,2));
+        SBCPUTextBackdropResetTestCounters();
+        for (int i=0;i<1000;i++) {
+            [label sbcpu_setTextOnlyPlainText:text font:font color:UIColor.whiteColor];
+            [label sbcpu_applyTextOnlyColor:UIColor.whiteColor];
+            label.realtimeInvertEnabled=YES;
+            [label layoutSubviews];
+        }
+        SBCPUTextBackdropTestCounters c=SBCPUTextBackdropReadTestCounters();
+        assert(c.syncCalls==1000 && c.cacheHits==1000);
+        assert(c.maskRefreshes==0 && c.backdropCreations==0 && c.styledAttributeBuilds==0);
+        assert([before isEqualToData:pixels(SBCPUTextBackdropCopyMaskImageForTesting(label,2))]);
+        [label sbcpu_applyTextOnlyColor:UIColor.blackColor]; [label layoutSubviews];
+        assertAttachment(label);
+        c=SBCPUTextBackdropReadTestCounters();
+        assert(c.maskRefreshes==1 && c.styledAttributeBuilds==1 && c.backdropCreations==0);
+    }
+    puts("PASS TEMP and current: 1000 cycles each, 1000 hits and zero mask/host/row rebuilds per row; recolor retains attachment");
+    NSMutableDictionary *result=[gTestResult mutableCopy];
+    result[@"attachment_same_state"] = @{@"rows":@2,@"cycles_per_row":@1000,@"hits_per_row":@1000,
+        @"mask_refreshes":@0,@"test_backdrop_creations":@0,@"attributed_rows_rebuilt":@0};
+    gTestResult=result;
+}
 static void testDualLabelParity(void) {
     UIFont *font=[UIFont monospacedDigitSystemFontOfSize:14 weight:UIFontWeightBold];
     UIWindow *windowA=[[UIWindow alloc] initWithFrame:CGRectMake(0,0,240,100)];
@@ -163,6 +194,7 @@ static void testDualLabelParity(void) {
 }
 int main(void) {@autoreleasepool {
     testNoOpAndDirtyRefresh();
+    testAttachmentRows();
     testDualLabelParity();
     NSArray *strings=@[@"CPU 100%",@"TEMP 42°",@"I 278mA",@"RAM1.00GB",@"FPS120"];
     NSArray *sizes=@[@8,@13,@18,@24]; unsigned parityCases=0;

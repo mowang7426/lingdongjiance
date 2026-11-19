@@ -4,7 +4,7 @@ s=(r/'Tweak.xm').read_text()
 layout=s[s.index('static CGSize layoutTextSlots'):s.index('static void applyTextOnlyTextFilter(void) {')]
 assert layout.index('SBCPUTextFPSConfiguredWidth(font)') < layout.index('NSString *value=')
 assert 'SBCPUTextSlotsLayoutMemoryConfigured(mask,fs,available,gap,dualLine,fpsWidth,currentWidth,memoryWidth,cpuWidth,frames)' in layout
-assert 'slot.font=slotFont' in layout and 'slot.adjustsFontSizeToFitWidth=NO' in layout
+assert 'sbcpu_setTextOnlyPlainText:value font:slotFont' in layout and 'slot.adjustsFontSizeToFitWidth=NO' in layout
 assert 'slot.lineBreakMode=NSLineBreakByClipping' in layout
 assert 'slot.clipsToBounds=YES' in layout
 budget=(r/'SBCPUTextFPSBudget.h').read_text()

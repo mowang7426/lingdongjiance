@@ -2503,14 +2503,17 @@ static UIColor *textSlotColor(void) {
         blue:textOnlyCustomRGBA.blue alpha:textOnlyCustomRGBA.alpha];
     return SBCPUTextUsesWhite((int)floatingTextOnlyColor, style) ? UIColor.whiteColor : UIColor.blackColor;
 }
+static void syncTextSlotInvert(SBCPUCapsuleBackdropLabel *slot) {
+    if (slot.layer.compositingFilter) slot.layer.compositingFilter = nil;
+    slot.realtimeInvertEnabled = isEnabled && !cpuWindow.hidden && floatingTextOnlyColor == 4 && slot.text.length > 0;
+}
 static void colorTextSlots(SBCPUTextBackdropLabel *host) {
     UIColor *color=textSlotColor();
     for (UIView *view in host.subviews) {
         if (![view isKindOfClass:SBCPUCapsuleBackdropLabel.class]) continue;
         SBCPUCapsuleBackdropLabel *slot=(SBCPUCapsuleBackdropLabel *)view;
-        if (slot.layer.compositingFilter) slot.layer.compositingFilter = nil;
-        [slot sbcpu_setTextOnlyPlainText:slot.text font:slot.font color:color];
-        slot.realtimeInvertEnabled = isEnabled && !cpuWindow.hidden && floatingTextOnlyColor == 4 && slot.text.length > 0;
+        [slot sbcpu_applyTextOnlyColor:color];
+        syncTextSlotInvert(slot);
     }
 }
 static CGSize layoutTextSlots(SBCPUTextBackdropLabel *host, BOOL second, SBCPUTextGeometry g) {
@@ -2541,9 +2544,10 @@ static CGSize layoutTextSlots(SBCPUTextBackdropLabel *host, BOOL second, SBCPUTe
         cache->networkDualLine=dualLine; cache->bold=((second?textOnly2Bold:textOnlyBold)!=0); cache->height=height;
         memcpy(cache->frames,frames,sizeof(cache->frames));
     }
+    UIColor *color=textSlotColor();
     NSMutableArray *parts=[NSMutableArray array];
     for (int i=0;i<11;i++) {
-        SBCPUTextBackdropLabel *slot=(id)[host viewWithTag:4950+i];
+        SBCPUCapsuleBackdropLabel *slot=(id)[host viewWithTag:4950+i];
         if (!(mask&(1u<<i))) { slot.realtimeInvertEnabled=NO; [slot removeFromSuperview]; continue; }
         if (!slot) { slot=[[SBCPUCapsuleBackdropLabel alloc] initWithFrame:CGRectZero]; slot.tag=4950+i;
             slot.userInteractionEnabled=NO; slot.backgroundColor=UIColor.clearColor; [host addSubview:slot]; }
@@ -2553,28 +2557,31 @@ static CGSize layoutTextSlots(SBCPUTextBackdropLabel *host, BOOL second, SBCPUTe
             SBCPUTextOnlyCurrentText(textOnlyBatteryCurrent,textOnlyCurrentUptime,NSProcessInfo.processInfo.systemUptime),textOnlySignals):
             SBCPUNetworkTextDirections(textNetworkSampleValid,textNetworkDownloadRate,textNetworkUploadRate,i==8,i==9);
         UIFont *slotFont=font;
-        slot.font=slotFont; slot.text=value; slot.numberOfLines=1; slot.adjustsFontSizeToFitWidth=NO;
+        [slot sbcpu_setTextOnlyPlainText:value font:slotFont color:color];
+        slot.numberOfLines=1; slot.adjustsFontSizeToFitWidth=NO;
         slot.lineBreakMode=NSLineBreakByClipping; slot.textAlignment=SBCPUTextMetricAlignment(i);
         slot.clipsToBounds=YES;
         CGRect slotFrame=CGRectMake(frames[i].x,frames[i].y,frames[i].width,frames[i].height);
         if (!CGRectEqualToRect(slot.frame,slotFrame)) slot.frame=slotFrame;
+        syncTextSlotInvert(slot);
         [parts addObject:value];
     }
     for (int i=0;i<11;i++) {
         SBCPUTextSlot frame=SBCPUTextSeparatorFrame(mask,i,second && textOnly2NetworkDualLine,frames);
-        SBCPUTextBackdropLabel *dot=(id)[host viewWithTag:4970+i];
+        SBCPUCapsuleBackdropLabel *dot=(id)[host viewWithTag:4970+i];
         if (frame.width<=0) { dot.realtimeInvertEnabled=NO; [dot removeFromSuperview]; continue; }
         if (!dot) { dot=[[SBCPUCapsuleBackdropLabel alloc] initWithFrame:CGRectZero]; dot.tag=4970+i;
             dot.userInteractionEnabled=NO; dot.backgroundColor=UIColor.clearColor; [host addSubview:dot]; }
-        dot.font=font; dot.text=@"·"; dot.numberOfLines=1; dot.adjustsFontSizeToFitWidth=NO;
+        [dot sbcpu_setTextOnlyPlainText:@"·" font:font color:color];
+        dot.numberOfLines=1; dot.adjustsFontSizeToFitWidth=NO;
         dot.lineBreakMode=NSLineBreakByClipping; dot.textAlignment=NSTextAlignmentCenter; dot.clipsToBounds=YES;
         CGRect dotFrame=CGRectMake(frame.x,frame.y,frame.width,frame.height);
         if (!CGRectEqualToRect(dot.frame,dotFrame)) dot.frame=dotFrame;
+        syncTextSlotInvert(dot);
     }
     if (![host.text isEqualToString:@""]) host.text=@"";
     if (host.hidden!=(mask==0)) host.hidden=mask==0;
     if (!second) textOnlyPlainText=[parts componentsJoinedByString:@" "];
-    colorTextSlots(host);
     CGFloat width=1; for (int i=0;i<11;i++) width=MAX(width,frames[i].x+frames[i].width);
     return CGSizeMake(width,height);
 }

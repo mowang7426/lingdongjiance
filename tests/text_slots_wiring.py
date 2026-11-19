@@ -4,18 +4,18 @@ r=Path(__file__).resolve().parents[1];s=(r/'Tweak.xm').read_text()
 layout=s[s.index('static CGSize layoutTextSlots'):s.index('static void applyTextOnlyTextFilter(void) {')]
 assert layout.index('SBCPUTextSlotsLayoutMemoryConfigured(mask,fs,available,gap,dualLine,fpsWidth,currentWidth,memoryWidth,cpuWidth,frames)') < layout.index('NSString *value=')
 for token in ['slot.adjustsFontSizeToFitWidth=NO','slot.numberOfLines=1','if (!CGRectEqualToRect(slot.frame,slotFrame)) slot.frame=slotFrame;',
-              'slot.font=slotFont','sbcpu_setTextOnlyPlainText:slot.text','textNetworkDownloadRate,textNetworkUploadRate,i==8,i==9']:
+              'sbcpu_setTextOnlyPlainText:value font:slotFont','sbcpu_applyTextOnlyColor:color','textNetworkDownloadRate,textNetworkUploadRate,i==8,i==9']:
     assert token in layout+s,token
 for forbidden in ['sizeThatFits','boundingRect','minimumScaleFactor','NSTimer','CADisplayLink']:
     assert forbidden not in layout
 assert 'layoutTextSlots(textOnlyLabel,NO,textGeometry)' in s
 assert 'layoutTextSlots(textOnly2Label,YES,g)' in s
 for token in ['SBCPUTextSeparatorFrame(mask,i,second && textOnly2NetworkDualLine,frames)',
-              'viewWithTag:4970+i', 'dot.text=@"·"', 'dot.adjustsFontSizeToFitWidth=NO',
+              'viewWithTag:4970+i', 'sbcpu_setTextOnlyPlainText:@"·"', 'dot.adjustsFontSizeToFitWidth=NO',
               'dot.userInteractionEnabled=NO', 'if (!CGRectEqualToRect(dot.frame,dotFrame)) dot.frame=dotFrame;',
               'dot.realtimeInvertEnabled=NO; [dot removeFromSuperview]']:
     assert token in layout, token
-assert layout.index('CGRect dotFrame=') < layout.index('dot.frame=dotFrame') < layout.index('colorTextSlots(host)')
+assert layout.index('CGRect dotFrame=') < layout.index('dot.frame=dotFrame') < layout.index('syncTextSlotInvert(dot)')
 assert 'monospacedDigitSystemFontOfSize:fs' in layout
 assert s.count('    sampleTextNetwork();')==1
 assert 'floatingTextOnlyMode2 && secondVisible ? textSlotMask(YES) : 0' in s

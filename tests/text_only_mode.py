@@ -60,7 +60,7 @@ assert colors[2]['label'] == '自定义文字颜色'
 assert 'SBCPUTextColorMode(getIntPref(CFSTR("floatingTextOnlyColor"), 0))' in text
 assert 'mode = SBCPUTextColorMode(mode)' in controller
 assert 'monospacedDigitSystemFontOfSize:fs' in mode and 'UIFontWeightBold' in mode
-assert 'sbcpu_setTextOnlyPlainText:slot.text' in mode
+assert 'sbcpu_applyTextOnlyColor:color' in mode
 assert 'NSTimer' not in mode and 'snapshotView' not in mode and 'sampleBackgroundLuminance' not in mode
 assert 'textOnlySnapshotCenter' in mode and 'textOnlyHiddenSnapshot' in mode
 assert 'statusBarDockEnable =' not in mode and 'SavePreferencesAndNotify' not in mode
