@@ -4,11 +4,12 @@ TMP_INV=$(mktemp -d)
 trap 'rm -rf "$TMP_INV"' EXIT
 SDK=$(xcrun --sdk iphonesimulator --show-sdk-path)
 ARCH=$(uname -m)
+python3 tests/text_invert_mem4_baseline.py "$TMP_INV"
 xcrun --sdk iphonesimulator clang++ -arch "$ARCH" -isysroot "$SDK" \
   -mios-simulator-version-min=14.0 -x objective-c++ -std=c++11 -fobjc-arc -fblocks \
-  -DSBCPU_TEXT_BACKDROP_TESTING=1 -I. -Wall -Wextra -Werror \
+  -DSBCPU_TEXT_BACKDROP_TESTING=1 -I. -I"$TMP_INV" -Wall -Wextra -Werror \
   -framework UIKit -framework Foundation -framework CoreText -framework QuartzCore -framework CoreGraphics \
-  tests/text_invert_performance_uikit.m SBCPUTextBackdropLabel.m -o "$TMP_INV/text-invert-uikit"
+  tests/text_invert_performance_uikit.m SBCPUTextBackdropLabel.m "$TMP_INV/SBCPUMem4BackdropLabel.m" -o "$TMP_INV/text-invert-uikit"
 xcrun simctl list devices available -j > "$TMP_INV/devices.json"
 DEVICE=$(python3 - "$TMP_INV/devices.json" <<'PY'
 import json,sys

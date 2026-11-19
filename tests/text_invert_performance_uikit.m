@@ -33,6 +33,8 @@ static SBCPUCapsuleBackdropLabel *makeLabel(NSString *text, UIFont *font, NSText
     [label layoutSubviews];
     return label;
 }
+#import "text_invert_mem4_comparison.h"
+static unsigned gRawReferenceMismatches, gScaleOnlyMatches, gWhiteNormalizedMatches;
 static void assertMaskParity(NSString *text, UIFont *font, NSTextAlignment alignment, CGFloat width, CGFloat scale) {
     SBCPUCapsuleBackdropLabel *label=makeLabel(text,font,alignment,width);
     UILabel *reference=[[UILabel alloc] initWithFrame:label.bounds];
@@ -48,11 +50,35 @@ static void assertMaskParity(NSString *text, UIFont *font, NSTextAlignment align
     reference.textAlignment=label.textAlignment;
     UIImage *expected=drawLabel(reference,scale);
     UIImage *actual=SBCPUTextBackdropCopyMaskImageForTesting(label,scale);
-    if (!actual || ![pixels(actual) isEqualToData:pixels(expected)]) {
-        NSString *name=[NSString stringWithFormat:@"%@-%gpt-%@-align%ld-scale%g",text,font.pointSize,font.fontName,(long)alignment,scale];
-        saveParityDiagnostic(name,actual,expected,label,reference,scale);
+    NSString *name=[NSString stringWithFormat:@"%@-%gpt-%@-align%ld-scale%g",text,font.pointSize,font.fontName,(long)alignment,scale];
+    SBCPUMem4CapsuleLabel *mem4=makeMem4Label(text,font,alignment,width);
+    assertMem4Pixels(label,mem4,scale,name);
+    BOOL rawMatch=[pixels(actual) isEqualToData:pixels(expected)];
+    if (!rawMatch) {
+        // Keep the old failing reference visible, never relax pixel tolerance.
+        if (gRawReferenceMismatches<12) saveParityDiagnostic([@"original-reference-" stringByAppendingString:name],actual,expected,label,reference,scale);
+        gRawReferenceMismatches++;
     }
+    // Export context scale is NOT UILabel's display/content scale. mem4's
+    // glyph label keeps the screen scale even when exporting at 1x/2x.
+    reference.contentScaleFactor=label.contentScaleFactor;
+    if (!rawMatch && [pixels(actual) isEqualToData:pixels(drawLabel(reference,scale))]) gScaleOnlyMatches++;
+    // A mask is opaque-white text AND attachments, unlike the raw UILabel.
+    // Apply the documented mem4 mask semantics in an independent UILabel.
+    NSMutableAttributedString *white=[reference.attributedText mutableCopy];
+    [white addAttribute:NSForegroundColorAttributeName value:UIColor.whiteColor range:NSMakeRange(0,white.length)];
+    [reference.attributedText enumerateAttribute:NSAttachmentAttributeName inRange:NSMakeRange(0,reference.attributedText.length) options:0 usingBlock:^(id value,NSRange range,BOOL *stop) {
+        (void)stop;if (![value isKindOfClass:NSTextAttachment.class]) return;
+        NSTextAttachment *source=value,*a=[NSTextAttachment new];a.bounds=source.bounds;
+        a.image=[source.image imageWithTintColor:UIColor.whiteColor renderingMode:UIImageRenderingModeAlwaysOriginal];
+        [white addAttribute:NSAttachmentAttributeName value:a range:range];
+    }];
+    reference.attributedText=white;
+    expected=drawLabel(reference,scale);
+    if (!rawMatch && [pixels(actual) isEqualToData:pixels(expected)]) gWhiteNormalizedMatches++;
+    if (![pixels(actual) isEqualToData:pixels(expected)]) saveParityDiagnostic([@"normalized-reference-" stringByAppendingString:name],actual,expected,label,reference,scale);
     assert(actual && [pixels(actual) isEqualToData:pixels(expected)]);
+    mem4.realtimeInvertEnabled=NO;
     label.realtimeInvertEnabled=NO;
     assert(![label sbcpu_testCopyAlphaMaskAtScale:scale]);
 }
@@ -202,6 +228,7 @@ int main(void) {@autoreleasepool {
     testNoOpAndDirtyRefresh();
     testAttachmentRows();
     testDualLabelParity();
+    testMem4Events();
     NSArray *strings=@[@"CPU 100%",@"TEMP 42°",@"I 278mA",@"RAM1.00GB",@"FPS120"];
     NSArray *sizes=@[@8,@13,@18,@24]; unsigned parityCases=0;
     for (NSNumber *size in sizes) for (int bold=0;bold<2;bold++) {
@@ -214,6 +241,11 @@ int main(void) {@autoreleasepool {
     const char *resultPath=getenv("SBCPU_TEXT_INVERT_RESULT_PATH");
     if (resultPath && gTestResult) {
         NSMutableDictionary *result=[gTestResult mutableCopy]; result[@"mask_parity_cases"]=@(parityCases);
+        result[@"mem4_production_exact_pixel_cases"]=@(gMem4ParityCases);
+        result[@"original_independent_reference_mismatches"]=@(gRawReferenceMismatches);
+        result[@"original_mismatches_resolved_by_display_scale_only"]=@(gScaleOnlyMatches);
+        result[@"original_mismatches_resolved_by_mask_semantics"]=@(gWhiteNormalizedMatches);
+        result[@"reference_explanation"]=@"Original UILabel forced export scale onto display scale and did not white-normalize attachment runs/images; mem4 production is the visual authority. No pixel tolerance; both pinned mem4 and normalized independent UILabel require byte equality.";
         result[@"fonts_pt"]=@[@8,@13,@18,@24]; result[@"weights"]=@[@"regular",@"bold"];
         result[@"alignments"]=@[@"left",@"center",@"right"]; result[@"scales"]=@[@1,@2,@3];
         NSData *json=[NSJSONSerialization dataWithJSONObject:result options:NSJSONWritingPrettyPrinted error:NULL];
