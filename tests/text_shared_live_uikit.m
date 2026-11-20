@@ -70,7 +70,12 @@ static void parity(SBCPUTextSlotHost *h, CGFloat scale, NSString *name) {
     }
     UIImage *actual=render(b.mask,h.bounds.size,b.frame.origin,scale);
     UIImage *ref=render(expected,h.bounds.size,CGPointZero,scale);
-    if (![alpha(actual.CGImage) isEqual:alpha(ref.CGImage)]) fprintf(stderr,"union placement mismatch: %s frame=%s\n",name.UTF8String,NSStringFromCGRect(b.frame).UTF8String);
+    if (![alpha(actual.CGImage) isEqual:alpha(ref.CGImage)]) {
+        NSString *dir=[NSProcessInfo.processInfo.environment[@"SBCPU_SHARED_LIVE_RESULT_PATH"] stringByDeletingLastPathComponent];
+        [UIImagePNGRepresentation(actual) writeToFile:[dir stringByAppendingPathComponent:@"shared-actual.png"] atomically:YES];
+        [UIImagePNGRepresentation(ref) writeToFile:[dir stringByAppendingPathComponent:@"shared-mem5-expected.png"] atomically:YES];
+        fprintf(stderr,"union placement mismatch: %s frame=%s\n",name.UTF8String,NSStringFromCGRect(b.frame).UTF8String);
+    }
     assert([alpha(actual.CGImage) isEqual:alpha(ref.CGImage)]);
     assert(b.frame.size.width*b.frame.size.height<h.bounds.size.width*h.bounds.size.height);
     [measurements addObject:@{@"case":name,@"scale":@(scale),@"old_host_frame":NSStringFromCGRect(h.bounds),
@@ -120,6 +125,7 @@ static void runTests(void) {
     SBCPUTextBackdropResetTestCounters();
     for (int i=0;i<1000;i++) { [cpu sbcpu_setTextOnlyPlainText:@"CPU 25%" font:cpu.font color:UIColor.whiteColor]; sync(a,3); sync(b,3); }
     SBCPUTextBackdropTestCounters c=SBCPUTextBackdropReadTestCounters();
+    fprintf(stderr,"same-value counters: mask=%lu sharedWrites=%lu sharedCreate=%lu labelCreate=%lu\n",(unsigned long)c.maskRefreshes,(unsigned long)c.sharedMaskWrites,(unsigned long)c.sharedCreations,(unsigned long)c.backdropCreations);
     assert(c.maskRefreshes==0 && c.sharedMaskWrites==0 && c.sharedCreations==0 && c.backdropCreations==0);
     assert(c.styledAttributeBuilds==0);
     cpu.text=@"CPU 26%"; sync(a,3); assert(SBCPUTextBackdropReadTestCounters().maskRefreshes>0);

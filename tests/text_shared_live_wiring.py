@@ -11,7 +11,9 @@ assert 'CGRectUnion(region,' in s and 'CGFloat pad = 1.0 / scale' in s
 assert 'ceil(CGRectGetMaxX(region)*scale)' in s
 assert 'sbcpu_alphaMaskMatchesScale:scale' in s
 assert 'if (refresh || !_sbcpuSharedGlyph)' in s
-assert 'if (!CGRectEqualToRect(_sbcpuBackdrop.frame, region))' in s
+assert 'SBCPUSetSharedLayerGeometry(_sbcpuBackdrop, region)' in s
+assert 'if (!CGPointEqualToPoint(layer.position, position))' in s
+assert 'if (!CGRectEqualToRect(layer.bounds, bounds))' in s
 assert 'if (_sbcpuMask.contentsScale != scale)' in s
 assert 'backdrop.filters = filters' in s and s.count('backdrop.filters = filters')==1
 assert 'shared && ![backdrop.filters isEqualToArray:filters]' in s

@@ -293,7 +293,8 @@ static CALayer *SBCPUCreateLiveTextBackdrop(CGFloat radius, BOOL shared) {
             UIGraphicsBeginImageContextWithOptions(size, NO, scale);
             @try {
                 [_alphaMask drawInContext:UIGraphicsGetCurrentContext()];
-                image = CGImageRetain(UIGraphicsGetImageFromCurrentImageContext().CGImage);
+                CGImageRef glyphImage = UIGraphicsGetImageFromCurrentImageContext().CGImage;
+                if (glyphImage) image = CGImageRetain(glyphImage);
             } @finally { UIGraphicsEndImageContext(); }
             if (!image) return nil;
             // Only alpha bounds are scanned; native mem5 mask layers remain
@@ -480,6 +481,20 @@ UIImage *SBCPUTextBackdropCopyMaskImageForTesting(SBCPUTextBackdropLabel *label,
 }
 @end
 
+// CALayer.frame is derived from bounds/position; fractional 1/3-point values
+// can round-trip with a different least-significant bit. Compare/set the
+// canonical stored geometry instead, so identical events perform no writes.
+static BOOL SBCPUSetSharedLayerGeometry(CALayer *layer, CGRect frame) {
+    CGRect bounds = (CGRect){CGPointZero, frame.size};
+    CGPoint anchor = layer.anchorPoint;
+    CGPoint position = CGPointMake(frame.origin.x + frame.size.width*anchor.x,
+        frame.origin.y + frame.size.height*anchor.y);
+    BOOL changed = NO;
+    if (!CGRectEqualToRect(layer.bounds, bounds)) { layer.bounds = bounds; changed = YES; }
+    if (!CGPointEqualToPoint(layer.position, position)) { layer.position = position; changed = YES; }
+    return changed;
+}
+
 @implementation SBCPUTextSlotHost {
     BOOL _sbcpuLiveInversionRequested;
     BOOL _sbcpuSharedRejected;
@@ -547,8 +562,8 @@ UIImage *SBCPUTextBackdropCopyMaskImageForTesting(SBCPUTextBackdropLabel *label,
             if (!activate) _sbcpuSharedRejected = YES;
         }
         if (activate) {
-            if (!CGRectEqualToRect(_sbcpuBackdrop.frame, region)) { _sbcpuBackdrop.frame = region; changed = YES; }
-            if (!CGRectEqualToRect(_sbcpuMask.frame, _sbcpuBackdrop.bounds)) { _sbcpuMask.frame = _sbcpuBackdrop.bounds; changed = YES; }
+            if (SBCPUSetSharedLayerGeometry(_sbcpuBackdrop, region)) changed = YES;
+            if (SBCPUSetSharedLayerGeometry(_sbcpuMask, _sbcpuBackdrop.bounds)) changed = YES;
             if (_sbcpuMask.contentsScale != scale) { _sbcpuMask.contentsScale = scale; changed = YES; }
             // Detach any per-label mask ownership before reparenting native
             // alpha layers. The catch/finally path restores ALL labels on error.
@@ -560,7 +575,7 @@ UIImage *SBCPUTextBackdropCopyMaskImageForTesting(SBCPUTextBackdropLabel *label,
             for (NSUInteger i = 0; i < slots.count; i++) {
                 SBCPUCapsuleBackdropLabel *slot = slots[i]; CALayer *mask = masks[i];
                 CGRect frame = CGRectOffset(slot.frame, -region.origin.x, -region.origin.y);
-                if (!CGRectEqualToRect(mask.frame, frame)) { mask.frame = frame; changed = YES; }
+                if (SBCPUSetSharedLayerGeometry(mask, frame)) changed = YES;
                 if (mask.superlayer != _sbcpuMask) { [_sbcpuMask addSublayer:mask]; changed = YES; }
             }
             for (UIView *view in self.subviews) {
