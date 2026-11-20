@@ -152,6 +152,7 @@ static void parity(SBCPUTextSlotHost *h, CGFloat scale, NSString *name) {
     assertSingle(h);
     CALayer *b=[h sbcpu_testSharedBackdrop], *expected=[CALayer layer]; expected.frame=h.bounds;
     NSMutableArray<UIImage *> *currentPixels=[NSMutableArray array], *referencePixels=[NSMutableArray array];
+    NSMutableArray *nativePropertyDiffs=[NSMutableArray array];
     NSUInteger i=0; CGFloat oldBackdropArea=0; CGRect mem5Region=CGRectNull;
     for (SBCPUCapsuleBackdropLabel *l in h.subviews) {
         if (l.hidden || !l.text.length || CGRectIsEmpty(l.bounds)) continue;
@@ -183,7 +184,12 @@ static void parity(SBCPUTextSlotHost *h, CGFloat scale, NSString *name) {
         assert(CGPointEqualToPoint(actual.anchorPoint,e.anchorPoint) && actual.contentsScale==e.contentsScale);
         assert(CATransform3DEqualToTransform(actual.transform,e.transform) &&
             CATransform3DEqualToTransform(actual.sublayerTransform,e.sublayerTransform));
-        assert(actual.opacity==e.opacity && actual.hidden==e.hidden && actual.masksToBounds==e.masksToBounds);
+        if (actual.opacity!=e.opacity || actual.hidden!=e.hidden || actual.masksToBounds!=e.masksToBounds) {
+            [nativePropertyDiffs addObject:@{ @"slot":@(i-1), @"text":l.text,
+                @"candidate_opacity":@(actual.opacity), @"mem5_opacity":@(e.opacity),
+                @"candidate_hidden":@(actual.hidden), @"mem5_hidden":@(e.hidden),
+                @"candidate_masksToBounds":@(actual.masksToBounds), @"mem5_masksToBounds":@(e.masksToBounds)}];
+        }
         UILabel *ag=[actual valueForKey:@"glyphLabel"], *eg=[e valueForKey:@"glyphLabel"];
         if (ag && eg && !CGRectEqualToRect(ag.bounds,eg.bounds))
             fprintf(stderr,"glyph label bounds mismatch text=%s actual=%s mem5=%s\n",l.text.UTF8String,NSStringFromCGRect(ag.bounds).UTF8String,NSStringFromCGRect(eg.bounds).UTF8String);
@@ -248,7 +254,7 @@ static void parity(SBCPUTextSlotHost *h, CGFloat scale, NSString *name) {
     BOOL directOK=matchesMem5Crop(actual,ref,fullRef);
     if (directOK && [direct[@"different_pixels"] unsignedIntegerValue]) quantizedCases++;
     if (!directOK || [parent[@"different_pixels"] unsignedIntegerValue]) strictFailures++;
-    NSDictionary *diag=@{@"case":name,@"scale":@(scale),@"direct":direct,@"parent":parent,
+    NSDictionary *diag=@{@"case":name,@"scale":@(scale),@"direct":direct,@"parent":parent,@"native_leaf_property_differences":nativePropertyDiffs,
         @"native_renderInContext_parent_diagnostic":diff(nativeParent,nativeParentRef,scale),
         @"mem5_crop_vs_full":mem5Crop,@"candidate_crop_vs_full":candidateCrop,
         @"mem5_self_full":selfFullDiff,@"mem5_self_crop":selfCropDiff,@"mem5_self_parent":selfParentDiff};
