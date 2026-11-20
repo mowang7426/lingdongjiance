@@ -57,14 +57,15 @@ static void parity(SBCPUTextSlotHost *h, CGFloat scale, NSString *name) {
         m.semanticContentAttribute=l.semanticContentAttribute; m.clipsToBounds=l.clipsToBounds;
         m.realtimeInvertEnabled=YES; [m sbcpu_testSyncBackdropAtScale:scale];
         UIImage *im=[m sbcpu_testCopyAlphaMaskAtScale:scale]; assert(im);
-        CALayer *actual=b.mask.sublayers[i++]; CGImageRef actualImage=(__bridge CGImageRef)actual.contents;
-        assert(actualImage && [alpha(actualImage) isEqual:alpha(im.CGImage)]);
-        // Independent unshared placement using original slot coordinates. The
-        // host-sized comparison catches clipped union, drift, padding and scale.
-        CALayer *e=[CALayer layer]; e.contents=(__bridge id)im.CGImage;
-        e.contentsScale=scale; e.contentsGravity=kCAGravityTopLeft;
-        e.frame=l.frame; e.bounds=CGRectMake(0,0,ceil(l.bounds.size.width*scale)/scale,ceil(l.bounds.size.height*scale)/scale);
-        e.anchorPoint=CGPointZero; e.position=l.frame.origin;
+        CALayer *actual=b.mask.sublayers[i++];
+        UIImage *current=[l sbcpu_testCopyAlphaMaskAtScale:scale];
+        assert(current && [alpha(current.CGImage) isEqual:alpha(im.CGImage)]);
+        assert(CGSizeEqualToSize(actual.bounds.size,l.bounds.size));
+        // Reuse the pinned mem5 native alpha layer, preserving original bounds
+        // and drawInContext behavior. No bitmap scaling in either implementation.
+        CALayer *e=m.layer.sublayers.firstObject.mask; assert(e);
+        m.layer.sublayers.firstObject.mask=nil;
+        e.frame=l.frame;
         [expected addSublayer:e]; m.realtimeInvertEnabled=NO;
     }
     UIImage *actual=render(b.mask,h.bounds.size,b.frame.origin,scale);

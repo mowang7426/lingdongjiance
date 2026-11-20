@@ -51,7 +51,7 @@ static SBCPUTextBackdropTestCounters gSBCPUBackdropTestCounters;
 static BOOL gSBCPUFailNextSharedCreation;
 void SBCPUTextBackdropFailNextSharedCreation(void) { gSBCPUFailNextSharedCreation = YES; }
 SBCPUTextBackdropTestCounters SBCPUTextBackdropReadTestCounters(void) { return gSBCPUBackdropTestCounters; }
-void SBCPUTextBackdropResetTestCounters(void) { gSBCPUBackdropTestCounters = (SBCPUTextBackdropTestCounters){0}; }
+void SBCPUTextBackdropResetTestCounters(void) { gSBCPUBackdropTestCounters = (SBCPUTextBackdropTestCounters){0, 0, 0, 0, 0, 0, 0}; }
 #endif
 // mem5 radius is retained only for the compatibility renderer.
 static const CGFloat SBCPUSharedBlurRadius = 8.0;
@@ -296,8 +296,8 @@ static CALayer *SBCPUCreateLiveTextBackdrop(CGFloat radius, BOOL shared) {
                 image = CGImageRetain(UIGraphicsGetImageFromCurrentImageContext().CGImage);
             } @finally { UIGraphicsEndImageContext(); }
             if (!image) return nil;
-            // Only the alpha bounds are scanned; the unmodified UIKit bitmap is
-            // retained as layer contents. No screen capture or timed polling.
+            // Only alpha bounds are scanned; native mem5 mask layers remain
+            // the compositor input. No screen capture or timed polling.
             CGContextDrawImage(ctx, CGRectMake(0, 0, width, height), image);
             const uint8_t *rgba = (const uint8_t *)CGBitmapContextGetData(ctx);
             size_t left = width, top = height, right = 0, bottom = 0;
@@ -310,13 +310,9 @@ static CALayer *SBCPUCreateLiveTextBackdrop(CGFloat radius, BOOL shared) {
                 inkFrame = CGRectMake(left/scale, top/scale, (right-left)/scale, (bottom-top)/scale);
                 // Keep the exact UIKit bitmap, not the alpha-scan context.
             }
-            if (!_sbcpuSharedGlyph) {
-                _sbcpuSharedGlyph = [CALayer layer];
-                _sbcpuSharedGlyph.masksToBounds = YES;
-                _sbcpuSharedGlyph.contentsGravity = kCAGravityTopLeft;
-            }
-            _sbcpuSharedGlyph.contentsScale = scale;
-            _sbcpuSharedGlyph.contents = (__bridge id)image;
+            // Reparent the ORIGINAL mem5 alpha layer, not a rescaled bitmap.
+            // The temporary image above measures ink only and is released here.
+            _sbcpuSharedGlyph = _alphaMask;
             _sbcpuInk = inkFrame;
             *changed = YES;
         } @finally {
@@ -547,12 +543,16 @@ UIImage *SBCPUTextBackdropCopyMaskImageForTesting(SBCPUTextBackdropLabel *label,
 #endif
                 }
             }
-            activate = _sbcpuBackdrop != nil;
+            activate = _sbcpuBackdrop != nil && _sbcpuMask != nil && _sbcpuBackdrop.mask == _sbcpuMask;
+            if (!activate) _sbcpuSharedRejected = YES;
         }
         if (activate) {
             if (!CGRectEqualToRect(_sbcpuBackdrop.frame, region)) { _sbcpuBackdrop.frame = region; changed = YES; }
             if (!CGRectEqualToRect(_sbcpuMask.frame, _sbcpuBackdrop.bounds)) { _sbcpuMask.frame = _sbcpuBackdrop.bounds; changed = YES; }
             if (_sbcpuMask.contentsScale != scale) { _sbcpuMask.contentsScale = scale; changed = YES; }
+            // Detach any per-label mask ownership before reparenting native
+            // alpha layers. The catch/finally path restores ALL labels on error.
+            for (SBCPUCapsuleBackdropLabel *slot in slots) [slot sbcpu_useSharedGlyph];
             if (![_sbcpuMask.sublayers isEqualToArray:masks]) {
                 // Restore view order after hidden/remove/insert transitions.
                 _sbcpuMask.sublayers = masks; changed = YES;
@@ -560,12 +560,9 @@ UIImage *SBCPUTextBackdropCopyMaskImageForTesting(SBCPUTextBackdropLabel *label,
             for (NSUInteger i = 0; i < slots.count; i++) {
                 SBCPUCapsuleBackdropLabel *slot = slots[i]; CALayer *mask = masks[i];
                 CGRect frame = CGRectOffset(slot.frame, -region.origin.x, -region.origin.y);
-                frame.size = CGSizeMake(ceil(frame.size.width*scale)/scale, ceil(frame.size.height*scale)/scale);
                 if (!CGRectEqualToRect(mask.frame, frame)) { mask.frame = frame; changed = YES; }
                 if (mask.superlayer != _sbcpuMask) { [_sbcpuMask addSublayer:mask]; changed = YES; }
             }
-            // All potentially failing shared setup completes before mode switch.
-            for (SBCPUCapsuleBackdropLabel *slot in slots) [slot sbcpu_useSharedGlyph];
             for (UIView *view in self.subviews) {
                 if (![view isKindOfClass:SBCPUCapsuleBackdropLabel.class] || [slots containsObject:view]) continue;
                 [(SBCPUCapsuleBackdropLabel *)view sbcpu_leaveSharedMask];
