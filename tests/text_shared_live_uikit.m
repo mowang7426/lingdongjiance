@@ -43,7 +43,11 @@ static void assertSingle(SBCPUTextSlotHost *h) {
     }
 }
 static void parity(SBCPUTextSlotHost *h, CGFloat scale, NSString *name) {
-    sync(h,scale); assertSingle(h);
+    fprintf(stderr,"parity case: %s scale=%g\n",name.UTF8String,scale);
+    sync(h,scale);
+    if (![h sbcpu_testSharedBackdrop]) for (SBCPUCapsuleBackdropLabel *l in h.subviews)
+        fprintf(stderr,"fallback slot frame=%s bounds=%s hidden=%d live=%d text=%s\n",NSStringFromCGRect(l.frame).UTF8String,NSStringFromCGRect(l.bounds).UTF8String,l.hidden,l.realtimeInvertEnabled,l.text.UTF8String);
+    assertSingle(h);
     CALayer *b=[h sbcpu_testSharedBackdrop], *expected=[CALayer layer]; expected.frame=h.bounds;
     NSUInteger i=0; CGFloat oldBackdropArea=0;
     for (SBCPUCapsuleBackdropLabel *l in h.subviews) {
@@ -136,8 +140,13 @@ static void runTests(void) {
     NSMutableAttributedString *att=[[NSMutableAttributedString alloc] initWithAttributedString:temp.attributedText];
     [att addAttribute:NSAttachmentAttributeName value:attachment range:NSMakeRange(0,1)]; temp.attributedText=att;
     parity(b,3,@"attachment-image-bounds-change");
-    cpu.bounds=CGRectMake(0,0,90,22); parity(a,2,@"bounds-scale-change");
+    cpu.bounds=CGRectMake(0,0,90,22); cpu.center=CGPointMake(45,11);
+    parity(a,2,@"bounds-scale-change");
     cpu.center=CGPointMake(50,16); parity(a,2,@"geometry-change");
+    cpu.transform=CGAffineTransformMakeScale(1.05,1); sync(a,2);
+    assert(![a sbcpu_testSharedBackdrop] && cpu.realtimeInvertEnabled);
+    cpu.transform=CGAffineTransformIdentity; parity(a,2,@"unsupported-transform-safe-recovery");
+    a.bounds=CGRectMake(0,0,320,64); parity(a,2,@"host-bounds-change");
     cpu.hidden=YES; parity(a,2,@"slot-hidden"); cpu.hidden=NO; parity(a,2,@"slot-shown");
     a.hidden=YES; assert(![a sbcpu_testSharedBackdrop]); a.hidden=NO; parity(a,2,@"host-shown");
     [a sbcpu_setLiveInversionRequested:NO]; assert(![a sbcpu_testSharedBackdrop]);
