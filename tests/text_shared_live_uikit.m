@@ -114,14 +114,28 @@ static void parity(SBCPUTextSlotHost *h, CGFloat scale, NSString *name) {
     }
     UIImage *actual=render(b.mask,h.bounds.size,b.frame.origin,scale);
     UIImage *ref=render(expected,h.bounds.size,CGPointZero,scale);
+    UIImage *composed=parentComposedMask(b,h.bounds.size,scale);
     if (![alpha(actual.CGImage) isEqual:alpha(ref.CGImage)]) {
+        UIGraphicsBeginImageContextWithOptions(h.bounds.size,NO,scale);
+        [b.mask renderInContext:UIGraphicsGetCurrentContext()];
+        UIImage *unclipped=UIGraphicsGetImageFromCurrentImageContext(); UIGraphicsEndImageContext();
+        UIGraphicsBeginImageContextWithOptions(h.bounds.size,NO,scale);
+        CGContextClipToRect(UIGraphicsGetCurrentContext(),b.frame);
+        [expected renderInContext:UIGraphicsGetCurrentContext()];
+        UIImage *croppedRef=UIGraphicsGetImageFromCurrentImageContext(); UIGraphicsEndImageContext();
+        fprintf(stderr,"diagnostic parent_equal=%d unclipped_equal=%d cropref_equal=%d parent_cropref_equal=%d\n",
+            [alpha(composed.CGImage) isEqual:alpha(ref.CGImage)],
+            [alpha(unclipped.CGImage) isEqual:alpha(ref.CGImage)],
+            [alpha(actual.CGImage) isEqual:alpha(croppedRef.CGImage)],
+            [alpha(composed.CGImage) isEqual:alpha(croppedRef.CGImage)]);
         NSString *dir=[NSProcessInfo.processInfo.environment[@"SBCPU_SHARED_LIVE_RESULT_PATH"] stringByDeletingLastPathComponent];
         [UIImagePNGRepresentation(actual) writeToFile:[dir stringByAppendingPathComponent:@"shared-actual.png"] atomically:YES];
         [UIImagePNGRepresentation(ref) writeToFile:[dir stringByAppendingPathComponent:@"shared-mem5-expected.png"] atomically:YES];
         fprintf(stderr,"union placement mismatch: %s frame=%s\n",name.UTF8String,NSStringFromCGRect(b.frame).UTF8String);
+        for (SBCPUCapsuleBackdropLabel *l in h.subviews)
+            fprintf(stderr,"slot text=%s frame=%s center=%s\n",l.text.UTF8String,NSStringFromCGRect(l.frame).UTF8String,NSStringFromCGPoint(l.center).UTF8String);
     }
     assert([alpha(actual.CGImage) isEqual:alpha(ref.CGImage)]);
-    UIImage *composed=parentComposedMask(b,h.bounds.size,scale);
     assert([alpha(composed.CGImage) isEqual:alpha(ref.CGImage)]);
     assert(b.frame.size.width*b.frame.size.height<h.bounds.size.width*h.bounds.size.height);
     [measurements addObject:@{@"case":name,@"scale":@(scale),@"old_host_frame":NSStringFromCGRect(h.bounds),
