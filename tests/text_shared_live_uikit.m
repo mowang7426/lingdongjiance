@@ -28,6 +28,21 @@ static UIImage *render(CALayer *layer, CGSize size, CGPoint offset, CGFloat scal
     [layer renderInContext:UIGraphicsGetCurrentContext()];
     UIImage *image=UIGraphicsGetImageFromCurrentImageContext(); UIGraphicsEndImageContext(); return image;
 }
+static CGRect imageInk(UIImage *image, CGFloat scale) {
+    NSData *a=alpha(image.CGImage); const uint8_t *p=(const uint8_t *)a.bytes;
+    size_t w=CGImageGetWidth(image.CGImage), h=CGImageGetHeight(image.CGImage);
+    size_t x0=w,y0=h,x1=0,y1=0;
+    for(size_t y=0;y<h;y++) for(size_t x=0;x<w;x++) if(p[y*w+x]) {
+        x0=MIN(x0,x); y0=MIN(y0,y); x1=MAX(x1,x+1); y1=MAX(y1,y+1);
+    }
+    return x1>x0 && y1>y0 ? CGRectMake(x0/scale,y0/scale,(x1-x0)/scale,(y1-y0)/scale) : CGRectNull;
+}
+static UIImage *renderHostCoordinates(CALayer *layer, CGSize size, CGFloat scale, CGRect clip) {
+    UIGraphicsBeginImageContextWithOptions(size,NO,scale);
+    CGContextClipToRect(UIGraphicsGetCurrentContext(),clip);
+    [layer renderInContext:UIGraphicsGetCurrentContext()];
+    UIImage *im=UIGraphicsGetImageFromCurrentImageContext(); UIGraphicsEndImageContext(); return im;
+}
 static UIImage *parentComposedMask(CALayer *backdrop, CGSize size, CGFloat scale) {
     CALayer *root=[CALayer layer], *carrier=[CALayer layer], *mask=backdrop.mask;
     root.bounds=(CGRect){CGPointZero,size};
@@ -89,7 +104,7 @@ static void parity(SBCPUTextSlotHost *h, CGFloat scale, NSString *name) {
         fprintf(stderr,"fallback slot frame=%s bounds=%s hidden=%d live=%d text=%s\n",NSStringFromCGRect(l.frame).UTF8String,NSStringFromCGRect(l.bounds).UTF8String,l.hidden,l.realtimeInvertEnabled,l.text.UTF8String);
     assertSingle(h);
     CALayer *b=[h sbcpu_testSharedBackdrop], *expected=[CALayer layer]; expected.frame=h.bounds;
-    NSUInteger i=0; CGFloat oldBackdropArea=0;
+    NSUInteger i=0; CGFloat oldBackdropArea=0; CGRect mem5Region=CGRectNull;
     for (SBCPUCapsuleBackdropLabel *l in h.subviews) {
         if (l.hidden || !l.text.length || CGRectIsEmpty(l.bounds)) continue;
         oldBackdropArea+=l.bounds.size.width*l.bounds.size.height;
@@ -101,6 +116,8 @@ static void parity(SBCPUTextSlotHost *h, CGFloat scale, NSString *name) {
         m.semanticContentAttribute=l.semanticContentAttribute; m.clipsToBounds=l.clipsToBounds;
         m.realtimeInvertEnabled=YES; [m sbcpu_testSyncBackdropAtScale:scale];
         UIImage *im=[m sbcpu_testCopyAlphaMaskAtScale:scale]; assert(im);
+        CGRect ink=imageInk(im,scale);
+        if(!CGRectIsNull(ink)) mem5Region=CGRectUnion(mem5Region,CGRectOffset(ink,l.frame.origin.x,l.frame.origin.y));
         CALayer *actual=b.mask.sublayers[i++];
         UIImage *current=[l sbcpu_testCopyAlphaMaskAtScale:scale];
         assert(current && [alpha(current.CGImage) isEqual:alpha(im.CGImage)]);
@@ -112,22 +129,21 @@ static void parity(SBCPUTextSlotHost *h, CGFloat scale, NSString *name) {
         e.bounds=l.bounds; e.position=l.center;
         [expected addSublayer:e]; m.realtimeInvertEnabled=NO;
     }
+    mem5Region=CGRectInset(mem5Region,-1.0/scale,-1.0/scale);
+    CGFloat x=floor(CGRectGetMinX(mem5Region)*scale)/scale, y=floor(CGRectGetMinY(mem5Region)*scale)/scale;
+    mem5Region=CGRectIntersection(h.bounds,CGRectMake(x,y,ceil(CGRectGetMaxX(mem5Region)*scale)/scale-x,
+        ceil(CGRectGetMaxY(mem5Region)*scale)/scale-y));
+    assert(CGRectEqualToRect(b.frame,mem5Region)); // independent mem5 ink + 1 physical pixel
     UIImage *actual=render(b.mask,h.bounds.size,b.frame.origin,scale);
-    UIImage *ref=render(expected,h.bounds.size,CGPointZero,scale);
+    UIImage *ref=renderHostCoordinates(expected,h.bounds.size,scale,mem5Region);
+    UIImage *fullRef=render(expected,h.bounds.size,CGPointZero,scale);
+    UIImage *unclipped=renderHostCoordinates(b.mask,h.bounds.size,scale,h.bounds);
+    // Keep exact full-host parity as well as exact equal-clip parity. CPU
+    // renderInContext's clip-dependent glyph quantization is NOT a tolerance:
+    // the diagnosed 45 alpha deltas (max1) are reproduced by clipping mem5 ALONE.
+    assert([alpha(unclipped.CGImage) isEqual:alpha(fullRef.CGImage)]);
     UIImage *composed=parentComposedMask(b,h.bounds.size,scale);
     if (![alpha(actual.CGImage) isEqual:alpha(ref.CGImage)]) {
-        UIGraphicsBeginImageContextWithOptions(h.bounds.size,NO,scale);
-        [b.mask renderInContext:UIGraphicsGetCurrentContext()];
-        UIImage *unclipped=UIGraphicsGetImageFromCurrentImageContext(); UIGraphicsEndImageContext();
-        UIGraphicsBeginImageContextWithOptions(h.bounds.size,NO,scale);
-        CGContextClipToRect(UIGraphicsGetCurrentContext(),b.frame);
-        [expected renderInContext:UIGraphicsGetCurrentContext()];
-        UIImage *croppedRef=UIGraphicsGetImageFromCurrentImageContext(); UIGraphicsEndImageContext();
-        fprintf(stderr,"diagnostic parent_equal=%d unclipped_equal=%d cropref_equal=%d parent_cropref_equal=%d\n",
-            [alpha(composed.CGImage) isEqual:alpha(ref.CGImage)],
-            [alpha(unclipped.CGImage) isEqual:alpha(ref.CGImage)],
-            [alpha(actual.CGImage) isEqual:alpha(croppedRef.CGImage)],
-            [alpha(composed.CGImage) isEqual:alpha(croppedRef.CGImage)]);
         NSString *dir=[NSProcessInfo.processInfo.environment[@"SBCPU_SHARED_LIVE_RESULT_PATH"] stringByDeletingLastPathComponent];
         [UIImagePNGRepresentation(actual) writeToFile:[dir stringByAppendingPathComponent:@"shared-actual.png"] atomically:YES];
         [UIImagePNGRepresentation(ref) writeToFile:[dir stringByAppendingPathComponent:@"shared-mem5-expected.png"] atomically:YES];
@@ -228,7 +244,11 @@ static void runTests(void) {
     [failed sbcpu_setLiveInversionRequested:NO]; assert(!f.realtimeInvertEnabled);
     productionLayout(w);
     NSDictionary *result=@{@"status":@"PASS",@"same_value_events":@1000,@"same_value_mask_refreshes":@(c.maskRefreshes),
-        @"same_value_shared_mask_writes":@(c.sharedMaskWrites),@"same_value_filter_or_host_recreations":@(c.sharedCreations+c.backdropCreations),
+        @"same_value_shared_mask_writes":@(c.sharedMaskWrites),@"same_value_shared_creations":@(c.sharedCreations),
+        @"same_value_perlabel_creations":@(c.backdropCreations),@"same_value_styled_attribute_builds":@(c.styledAttributeBuilds),
+        @"same_value_filter_or_host_recreations":@(c.sharedCreations+c.backdropCreations),
+        @"parent_coordinates":@"PASS synthetic positive/negative controls plus unchanged-mask CA parent composition",
+        @"full_host_unclipped_alpha_parity":@"exact",@"independent_mem5_union_clip_alpha_parity":@"exact",
         @"measurements":measurements,@"mask_parity":@"exact alpha pixels and aggregate placement against pinned mem5 production renderer",
         @"boundary":@"UIKit Simulator with CALayer surrogate: no real CABackdropLayer, filter GPU performance or device compatibility proof"};
     NSString *path=NSProcessInfo.processInfo.environment[@"SBCPU_SHARED_LIVE_RESULT_PATH"];

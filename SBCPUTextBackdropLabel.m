@@ -281,12 +281,7 @@ static CALayer *SBCPUCreateLiveTextBackdrop(CGFloat radius, BOOL shared) {
         CGSize size = _alphaMask.bounds.size;
         CGFloat w = ceil(size.width * scale), h = ceil(size.height * scale);
         if (!isfinite(w) || !isfinite(h) || w < 1 || h < 1 || w > 8192 || h > 2048 || w*h > 4194304) return nil;
-        size_t width = (size_t)w, height = (size_t)h, stride = width * 4;
-        CGColorSpaceRef space = CGColorSpaceCreateDeviceRGB();
-        CGContextRef ctx = CGBitmapContextCreate(NULL, width, height, 8, stride, space,
-            kCGImageAlphaPremultipliedLast | kCGBitmapByteOrder32Big);
-        CGColorSpaceRelease(space);
-        if (!ctx) return nil;
+        CGContextRef ctx = NULL;
         CGRect inkFrame = CGRectNull;
         CGImageRef image = NULL;
         @try {
@@ -297,6 +292,15 @@ static CALayer *SBCPUCreateLiveTextBackdrop(CGFloat radius, BOOL shared) {
                 if (glyphImage) image = CGImageRetain(glyphImage);
             } @finally { UIGraphicsEndImageContext(); }
             if (!image) return nil;
+            // UIKit may round fractional point extents to a different pixel
+            // count than ceil(). Scan the ACTUAL image at 1:1, never rescale it.
+            size_t width = CGImageGetWidth(image), height = CGImageGetHeight(image), stride = width * 4;
+            if (!width || !height || width > 8192 || height > 2048 || width*height > 4194304) return nil;
+            CGColorSpaceRef space = CGColorSpaceCreateDeviceRGB();
+            ctx = CGBitmapContextCreate(NULL, width, height, 8, stride, space,
+                kCGImageAlphaPremultipliedLast | kCGBitmapByteOrder32Big);
+            CGColorSpaceRelease(space);
+            if (!ctx) return nil;
             // Only alpha bounds are scanned; native mem5 mask layers remain
             // the compositor input. No screen capture or timed polling.
             CGContextDrawImage(ctx, CGRectMake(0, 0, width, height), image);
@@ -318,7 +322,7 @@ static CALayer *SBCPUCreateLiveTextBackdrop(CGFloat radius, BOOL shared) {
             *changed = YES;
         } @finally {
             if (image) CGImageRelease(image);
-            CGContextRelease(ctx);
+            if (ctx) CGContextRelease(ctx);
         }
     }
     *ink = _sbcpuInk;
