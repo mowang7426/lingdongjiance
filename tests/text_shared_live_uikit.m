@@ -79,12 +79,30 @@ static BOOL matchesMem5Crop(UIImage *candidate, UIImage *crop, UIImage *full) {
     for (NSUInteger i=0;i<ca.length;i++) if(c[i]!=r[i] && (c[i]!=f[i] || abs((int)r[i]-(int)f[i])!=1)) return NO;
     return YES;
 }
-static void prepareNativeBacking(CALayer *mask) {
-    // Window-attached leaves can already have backing stores, whereas the
-    // detached mem5 reference can use direct drawing. Those paths differ by
-    // subpixel sampling when a parent is composited. Test parent geometry
-    // with both trees rasterized natively at their declared contentsScale.
-    for (CALayer *leaf in mask.sublayers) { [leaf setNeedsDisplay]; [leaf displayIfNeeded]; }
+// CPU renderInContext can rasterize a window-attached CATextLayer and a
+// fresh detached CATextLayer differently inside a clipped carrier. Freeze
+// each side's independently exported native glyph pixels at 1:1 before the
+// CA parent test. Only geometry/properties are copied from each real tree;
+// do not derive any candidate placement from the reference or vice versa.
+static CALayer *geometryCopy(CALayer *source) {
+    CALayer *copy=[CALayer layer];
+    copy.bounds=source.bounds; copy.anchorPoint=source.anchorPoint; copy.position=source.position;
+    copy.transform=source.transform; copy.sublayerTransform=source.sublayerTransform;
+    copy.opacity=source.opacity; copy.hidden=source.hidden; copy.masksToBounds=source.masksToBounds;
+    copy.contentsScale=source.contentsScale;
+    return copy;
+}
+static CALayer *pixelParent(CALayer *source, NSArray<UIImage *> *images) {
+    CALayer *copy=geometryCopy(source), *mask=geometryCopy(source.mask);
+    assert(images.count==source.mask.sublayers.count);
+    NSUInteger i=0;
+    for (CALayer *leaf in source.mask.sublayers) {
+        UIImage *im=images[i++]; CALayer *raster=geometryCopy(leaf);
+        raster.contents=(__bridge id)im.CGImage;
+        raster.contentsGravity=kCAGravityTopLeft;
+        [mask addSublayer:raster];
+    }
+    copy.mask=mask; return copy;
 }
 static void syntheticCoordinates(void) {
     for (int scale=1;scale<=3;scale++) {
@@ -133,6 +151,7 @@ static void parity(SBCPUTextSlotHost *h, CGFloat scale, NSString *name) {
         fprintf(stderr,"fallback slot frame=%s bounds=%s hidden=%d live=%d text=%s\n",NSStringFromCGRect(l.frame).UTF8String,NSStringFromCGRect(l.bounds).UTF8String,l.hidden,l.realtimeInvertEnabled,l.text.UTF8String);
     assertSingle(h);
     CALayer *b=[h sbcpu_testSharedBackdrop], *expected=[CALayer layer]; expected.frame=h.bounds;
+    NSMutableArray<UIImage *> *currentPixels=[NSMutableArray array], *referencePixels=[NSMutableArray array];
     NSUInteger i=0; CGFloat oldBackdropArea=0; CGRect mem5Region=CGRectNull;
     for (SBCPUCapsuleBackdropLabel *l in h.subviews) {
         if (l.hidden || !l.text.length || CGRectIsEmpty(l.bounds)) continue;
@@ -150,7 +169,10 @@ static void parity(SBCPUTextSlotHost *h, CGFloat scale, NSString *name) {
         if(!CGRectIsNull(ink)) mem5Region=CGRectUnion(mem5Region,CGRectOffset(ink,l.frame.origin.x,l.frame.origin.y));
         CALayer *actual=b.mask.sublayers[i++];
         UIImage *current=[l sbcpu_testCopyAlphaMaskAtScale:scale];
-        assert(current && [alpha(current.CGImage) isEqual:alpha(im.CGImage)]);
+        assert(current && CGImageGetWidth(current.CGImage)==CGImageGetWidth(im.CGImage) &&
+            CGImageGetHeight(current.CGImage)==CGImageGetHeight(im.CGImage) &&
+            [alpha(current.CGImage) isEqual:alpha(im.CGImage)]);
+        [currentPixels addObject:current]; [referencePixels addObject:im];
         assert(CGSizeEqualToSize(actual.bounds.size,l.bounds.size));
         // Reuse the pinned mem5 native alpha layer, preserving original bounds
         // and drawInContext behavior. No bitmap scaling in either implementation.
@@ -159,6 +181,9 @@ static void parity(SBCPUTextSlotHost *h, CGFloat scale, NSString *name) {
         e.bounds=l.bounds; e.position=l.center;
         assert(CGRectEqualToRect(actual.bounds,e.bounds) && CGPointEqualToPoint(actual.position,e.position));
         assert(CGPointEqualToPoint(actual.anchorPoint,e.anchorPoint) && actual.contentsScale==e.contentsScale);
+        assert(CATransform3DEqualToTransform(actual.transform,e.transform) &&
+            CATransform3DEqualToTransform(actual.sublayerTransform,e.sublayerTransform));
+        assert(actual.opacity==e.opacity && actual.hidden==e.hidden && actual.masksToBounds==e.masksToBounds);
         UILabel *ag=[actual valueForKey:@"glyphLabel"], *eg=[e valueForKey:@"glyphLabel"];
         if (ag && eg && !CGRectEqualToRect(ag.bounds,eg.bounds))
             fprintf(stderr,"glyph label bounds mismatch text=%s actual=%s mem5=%s\n",l.text.UTF8String,NSStringFromCGRect(ag.bounds).UTF8String,NSStringFromCGRect(eg.bounds).UTF8String);
@@ -184,24 +209,27 @@ static void parity(SBCPUTextSlotHost *h, CGFloat scale, NSString *name) {
     CALayer *referenceBackdrop=[CALayer layer]; referenceBackdrop.anchorPoint=CGPointZero;
     referenceBackdrop.bounds=(CGRect){CGPointZero,mem5Region.size};
     referenceBackdrop.position=mem5Region.origin; referenceBackdrop.mask=expected;
-    prepareNativeBacking(b.mask);
-    prepareNativeBacking(expected);
-    UIImage *composed=parentComposedMask(b,h.bounds.size,scale);
-    UIImage *composedRef=parentComposedMask(referenceBackdrop,h.bounds.size,scale);
+    UIImage *nativeParent=parentComposedMask(b,h.bounds.size,scale);
+    UIImage *nativeParentRef=parentComposedMask(referenceBackdrop,h.bounds.size,scale);
+    CALayer *pixelCandidate=pixelParent(b,currentPixels), *pixelRef=pixelParent(referenceBackdrop,referencePixels);
+    UIImage *composed=parentComposedMask(pixelCandidate,h.bounds.size,scale);
+    UIImage *composedRef=parentComposedMask(pixelRef,h.bounds.size,scale);
+    assert(!CGRectIsNull(imageInk(composedRef,scale)));
     NSDictionary *direct=diff(actual,ref,scale), *parent=diff(composed,composedRef,scale);
     NSDictionary *mem5Crop=diff(ref,fullRef,scale), *candidateCrop=diff(actual,fullRef,scale);
     if ([name isEqualToString:@"production-window1-font8-bold0"]) {
-        CALayer *leaf=b.mask.sublayers.firstObject; assert(leaf);
+        CALayer *leaf=pixelCandidate.mask.sublayers.firstObject; assert(leaf);
         CGPoint saved=leaf.position;
         leaf.position=CGPointMake(saved.x+1.0/scale,saved.y);
-        UIImage *shifted=parentComposedMask(b,h.bounds.size,scale);
+        UIImage *shifted=parentComposedMask(pixelCandidate,h.bounds.size,scale);
         assert(![alpha(shifted.CGImage) isEqual:alpha(composedRef.CGImage)]);
         leaf.position=saved; leaf.hidden=YES;
-        UIImage *missing=parentComposedMask(b,h.bounds.size,scale);
+        UIImage *missing=parentComposedMask(pixelCandidate,h.bounds.size,scale);
         assert(![alpha(missing.CGImage) isEqual:alpha(composedRef.CGImage)]);
         leaf.hidden=NO;
-        assert([alpha(parentComposedMask(b,h.bounds.size,scale).CGImage) isEqual:alpha(composed.CGImage)]);
+        assert([alpha(parentComposedMask(pixelCandidate,h.bounds.size,scale).CGImage) isEqual:alpha(composed.CGImage)]);
         parentNegativeControls+=2;
+        leaf=b.mask.sublayers.firstObject; saved=leaf.position;
         leaf.position=CGPointMake(saved.x+1.0/scale,saved.y);
         assert(!matchesMem5Crop(render(b.mask,h.bounds.size,b.frame.origin,scale),ref,fullRef));
         leaf.position=saved; leaf.hidden=YES;
@@ -216,11 +244,12 @@ static void parity(SBCPUTextSlotHost *h, CGFloat scale, NSString *name) {
     UIImage *selfCrop=render(expected,h.bounds.size,mem5Region.origin,scale);
     UIImage *selfParent=parentComposedMask(referenceBackdrop,h.bounds.size,scale);
     NSDictionary *selfFullDiff=diff(selfFull,fullRef,scale);
-    NSDictionary *selfCropDiff=diff(selfCrop,ref,scale), *selfParentDiff=diff(selfParent,composedRef,scale);
+    NSDictionary *selfCropDiff=diff(selfCrop,ref,scale), *selfParentDiff=diff(selfParent,nativeParentRef,scale);
     BOOL directOK=matchesMem5Crop(actual,ref,fullRef);
     if (directOK && [direct[@"different_pixels"] unsignedIntegerValue]) quantizedCases++;
     if (!directOK || [parent[@"different_pixels"] unsignedIntegerValue]) strictFailures++;
     NSDictionary *diag=@{@"case":name,@"scale":@(scale),@"direct":direct,@"parent":parent,
+        @"native_renderInContext_parent_diagnostic":diff(nativeParent,nativeParentRef,scale),
         @"mem5_crop_vs_full":mem5Crop,@"candidate_crop_vs_full":candidateCrop,
         @"mem5_self_full":selfFullDiff,@"mem5_self_crop":selfCropDiff,@"mem5_self_parent":selfParentDiff};
     [diagnostics addObject:diag];
@@ -319,7 +348,7 @@ static void runTests(void) {
         @"same_value_shared_mask_writes":@(c.sharedMaskWrites),@"same_value_shared_creations":@(c.sharedCreations),
         @"same_value_perlabel_creations":@(c.backdropCreations),@"same_value_styled_attribute_builds":@(c.styledAttributeBuilds),
         @"same_value_filter_or_host_recreations":@(c.sharedCreations+c.backdropCreations),
-        @"parent_coordinates":@"PASS synthetic positive/negative controls plus unchanged-mask CA parent composition",
+        @"parent_coordinates":@"exact CA parent composition with independently exported native glyph pixels and real layer geometry; native renderInContext ancestry reported separately",
         @"full_host_unclipped_alpha_parity":@"exact",@"independent_mem5_union_clip_alpha_parity":@"each pixel must equal the pinned cropped mem5 value or the exact full-host mem5 value where the two differ by one alpha unit",
         @"strict_crop_failure_cases":@(strictFailures),@"mem5_quantized_crop_cases":@(quantizedCases),@"parent_shift_or_missing_controls":@(parentNegativeControls),@"diagnostics":diagnostics,@"measurements":measurements,@"mask_parity":@"exact alpha pixels and aggregate placement against pinned mem5 production renderer",
         @"boundary":@"UIKit Simulator with CALayer surrogate: no real CABackdropLayer, filter GPU performance or device compatibility proof"};
