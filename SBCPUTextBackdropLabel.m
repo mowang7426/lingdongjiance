@@ -492,7 +492,8 @@ static BOOL SBCPUSetSharedLayerLayout(CALayer *layer, CGRect bounds, CGPoint pos
 }
 static BOOL SBCPUSetSharedLayerGeometry(CALayer *layer, CGRect frame) {
     return SBCPUSetSharedLayerLayout(layer, (CGRect){CGPointZero, frame.size},
-        CGPointMake(CGRectGetMidX(frame), CGRectGetMidY(frame)));
+        CGPointMake(frame.origin.x + frame.size.width*layer.anchorPoint.x,
+            frame.origin.y + frame.size.height*layer.anchorPoint.y));
 }
 
 @implementation SBCPUTextSlotHost {
@@ -552,7 +553,9 @@ static BOOL SBCPUSetSharedLayerGeometry(CALayer *layer, CGRect frame) {
                 _sbcpuBackdrop = SBCPUCreateLiveTextBackdrop(SBCPUSharedBlurRadius, YES);
                 if (!_sbcpuBackdrop) _sbcpuSharedRejected = YES;
                 else {
+                    _sbcpuBackdrop.anchorPoint = CGPointZero;
                     _sbcpuMask = [CALayer layer];
+                    _sbcpuMask.anchorPoint = CGPointZero;
                     _sbcpuBackdrop.mask = _sbcpuMask;
 #ifdef SBCPU_TEXT_BACKDROP_TESTING
                     gSBCPUBackdropTestCounters.sharedCreations++;
@@ -567,8 +570,7 @@ static BOOL SBCPUSetSharedLayerGeometry(CALayer *layer, CGRect frame) {
             // Keep all child coordinates in ORIGINAL host space. Moving each
             // fractional child relative to a union origin changes rounding in
             // Core Animation's rasterization matrix (even at 1/255 alpha).
-            if (SBCPUSetSharedLayerLayout(_sbcpuMask, region,
-                CGPointMake(region.size.width/2, region.size.height/2))) changed = YES;
+            if (SBCPUSetSharedLayerLayout(_sbcpuMask, region, CGPointZero)) changed = YES;
             if (_sbcpuMask.contentsScale != scale) { _sbcpuMask.contentsScale = scale; changed = YES; }
             // Detach any per-label mask ownership before reparenting native
             // alpha layers. The catch/finally path restores ALL labels on error.

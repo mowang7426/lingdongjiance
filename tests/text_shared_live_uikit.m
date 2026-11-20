@@ -20,10 +20,50 @@ static NSData *alpha(CGImageRef image) {
 }
 static UIImage *render(CALayer *layer, CGSize size, CGPoint offset, CGFloat scale) {
     UIGraphicsBeginImageContextWithOptions(size,NO,scale);
-    CGContextTranslateCTM(UIGraphicsGetCurrentContext(),offset.x,offset.y);
-    CGContextClipToRect(UIGraphicsGetCurrentContext(),(CGRect){CGPointZero,layer.bounds.size});
+    // A ROOT render draws its coordinates directly, not its parent placement.
+    // Normalize nonzero bounds once; the independent parent-composition check
+    // below must also pass, so this exporter cannot hide a misplaced mask.
+    CGContextTranslateCTM(UIGraphicsGetCurrentContext(),offset.x-layer.bounds.origin.x,offset.y-layer.bounds.origin.y);
+    CGContextClipToRect(UIGraphicsGetCurrentContext(),layer.bounds);
     [layer renderInContext:UIGraphicsGetCurrentContext()];
     UIImage *image=UIGraphicsGetImageFromCurrentImageContext(); UIGraphicsEndImageContext(); return image;
+}
+static UIImage *parentComposedMask(CALayer *backdrop, CGSize size, CGFloat scale) {
+    CALayer *root=[CALayer layer], *carrier=[CALayer layer], *mask=backdrop.mask;
+    root.bounds=(CGRect){CGPointZero,size};
+    carrier.bounds=backdrop.bounds; carrier.anchorPoint=backdrop.anchorPoint;
+    carrier.position=backdrop.position; carrier.masksToBounds=YES;
+    assert(CGRectEqualToRect(mask.frame,backdrop.bounds));
+    // CPU renderInContext does not reliably exercise layer.mask. Reparent the
+    // SAME mask as an ordinary child without changing its geometry, to exercise
+    // CA's actual bounds/anchor/position transform under the backdrop surrogate.
+    backdrop.mask=nil; [carrier addSublayer:mask]; [root addSublayer:carrier];
+    UIImage *result=render(root,size,CGPointZero,scale);
+    [mask removeFromSuperlayer]; backdrop.mask=mask;
+    return result;
+}
+static void syntheticCoordinates(void) {
+    for (int scale=1;scale<=3;scale++) {
+        CALayer *backdrop=[CALayer layer], *mask=[CALayer layer], *ink=[CALayer layer];
+        backdrop.anchorPoint=CGPointZero; backdrop.frame=CGRectMake(20,3,159,13);
+        mask.anchorPoint=CGPointZero; mask.bounds=backdrop.frame; mask.position=CGPointZero;
+        ink.frame=CGRectMake(21,4,2,2); ink.backgroundColor=UIColor.whiteColor.CGColor;
+        [mask addSublayer:ink]; backdrop.mask=mask;
+        CALayer *gold=[CALayer layer], *goldInk=[CALayer layer]; gold.bounds=CGRectMake(0,0,200,30);
+        goldInk.frame=ink.frame; goldInk.backgroundColor=ink.backgroundColor; [gold addSublayer:goldInk];
+        NSData *expected=alpha(render(gold,gold.bounds.size,CGPointZero,scale).CGImage);
+        assert([expected isEqual:alpha(parentComposedMask(backdrop,gold.bounds.size,scale).CGImage)]);
+        assert([expected isEqual:alpha(render(mask,gold.bounds.size,backdrop.frame.origin,scale).CGImage)]);
+        // Reproduce the old export's extra (20,3) translation, independently of
+        // any UILabel. It must NOT equal the parent-composed known rectangle.
+        UIGraphicsBeginImageContextWithOptions(gold.bounds.size,NO,scale);
+        CGContextTranslateCTM(UIGraphicsGetCurrentContext(),20,3);
+        CGContextClipToRect(UIGraphicsGetCurrentContext(),CGRectMake(0,0,159,13));
+        [mask renderInContext:UIGraphicsGetCurrentContext()];
+        UIImage *wrong=UIGraphicsGetImageFromCurrentImageContext(); UIGraphicsEndImageContext();
+        assert(![expected isEqual:alpha(wrong.CGImage)]);
+    }
+    fprintf(stderr,"PASS synthetic parent coordinates and nonzero-bounds export negative control (1x/2x/3x)\n");
 }
 static SBCPUCapsuleBackdropLabel *add(SBCPUTextSlotHost *h, NSString *text, CGRect frame) {
     SBCPUCapsuleBackdropLabel *l=[[SBCPUCapsuleBackdropLabel alloc] initWithFrame:frame];
@@ -81,6 +121,8 @@ static void parity(SBCPUTextSlotHost *h, CGFloat scale, NSString *name) {
         fprintf(stderr,"union placement mismatch: %s frame=%s\n",name.UTF8String,NSStringFromCGRect(b.frame).UTF8String);
     }
     assert([alpha(actual.CGImage) isEqual:alpha(ref.CGImage)]);
+    UIImage *composed=parentComposedMask(b,h.bounds.size,scale);
+    assert([alpha(composed.CGImage) isEqual:alpha(ref.CGImage)]);
     assert(b.frame.size.width*b.frame.size.height<h.bounds.size.width*h.bounds.size.height);
     [measurements addObject:@{@"case":name,@"scale":@(scale),@"old_host_frame":NSStringFromCGRect(h.bounds),
         @"new_union_frame":NSStringFromCGRect(b.frame),@"old_area":@(h.bounds.size.width*h.bounds.size.height),
@@ -115,6 +157,7 @@ static void productionLayout(UIWindow *window) {
 }
 static void runTests(void) {
     measurements=[NSMutableArray array];
+    syntheticCoordinates();
     UIWindow *w=[[UIWindow alloc] initWithFrame:CGRectMake(0,0,400,400)]; w.hidden=NO;
     SBCPUTextSlotHost *a=[[SBCPUTextSlotHost alloc] initWithFrame:CGRectMake(0,0,340,64)];
     SBCPUTextSlotHost *b=[[SBCPUTextSlotHost alloc] initWithFrame:CGRectMake(0,80,340,64)];
