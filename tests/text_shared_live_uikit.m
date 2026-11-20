@@ -109,6 +109,7 @@ static void parity(SBCPUTextSlotHost *h, CGFloat scale, NSString *name) {
         if (l.hidden || !l.text.length || CGRectIsEmpty(l.bounds)) continue;
         oldBackdropArea+=l.bounds.size.width*l.bounds.size.height;
         SBCPUMem5CapsuleBackdropLabel *m=[[SBCPUMem5CapsuleBackdropLabel alloc] initWithFrame:l.bounds];
+        m.bounds=l.bounds; // avoid UIView frame-derived fractional bounds round trips
         m.font=l.font; m.text=l.text; m.attributedText=l.attributedText;
         m.textAlignment=l.textAlignment; m.numberOfLines=l.numberOfLines;
         m.lineBreakMode=l.lineBreakMode; m.adjustsFontSizeToFitWidth=l.adjustsFontSizeToFitWidth;
@@ -127,6 +128,11 @@ static void parity(SBCPUTextSlotHost *h, CGFloat scale, NSString *name) {
         CALayer *e=m.layer.sublayers.firstObject.mask; assert(e);
         m.layer.sublayers.firstObject.mask=nil;
         e.bounds=l.bounds; e.position=l.center;
+        assert(CGRectEqualToRect(actual.bounds,e.bounds) && CGPointEqualToPoint(actual.position,e.position));
+        assert(CGPointEqualToPoint(actual.anchorPoint,e.anchorPoint) && actual.contentsScale==e.contentsScale);
+        UILabel *ag=[actual valueForKey:@"glyphLabel"], *eg=[e valueForKey:@"glyphLabel"];
+        if (ag && eg && !CGRectEqualToRect(ag.bounds,eg.bounds))
+            fprintf(stderr,"glyph label bounds mismatch text=%s actual=%s mem5=%s\n",l.text.UTF8String,NSStringFromCGRect(ag.bounds).UTF8String,NSStringFromCGRect(eg.bounds).UTF8String);
         [expected addSublayer:e]; m.realtimeInvertEnabled=NO;
     }
     mem5Region=CGRectInset(mem5Region,-1.0/scale,-1.0/scale);
@@ -155,7 +161,7 @@ static void parity(SBCPUTextSlotHost *h, CGFloat scale, NSString *name) {
         NSString *dir=[NSProcessInfo.processInfo.environment[@"SBCPU_SHARED_LIVE_RESULT_PATH"] stringByDeletingLastPathComponent];
         [UIImagePNGRepresentation(actual) writeToFile:[dir stringByAppendingPathComponent:@"shared-actual.png"] atomically:YES];
         [UIImagePNGRepresentation(ref) writeToFile:[dir stringByAppendingPathComponent:@"shared-mem5-expected.png"] atomically:YES];
-        fprintf(stderr,"union placement mismatch: %s frame=%s\n",name.UTF8String,NSStringFromCGRect(b.frame).UTF8String);
+        fprintf(stderr,"union placement mismatch: %s frame=%s parent_reference_equal=%d\n",name.UTF8String,NSStringFromCGRect(b.frame).UTF8String,[alpha(composed.CGImage) isEqual:alpha(composedRef.CGImage)]);
         for (SBCPUCapsuleBackdropLabel *l in h.subviews)
             fprintf(stderr,"slot text=%s frame=%s center=%s\n",l.text.UTF8String,NSStringFromCGRect(l.frame).UTF8String,NSStringFromCGPoint(l.center).UTF8String);
     }
