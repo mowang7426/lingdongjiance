@@ -152,7 +152,6 @@ static void parity(SBCPUTextSlotHost *h, CGFloat scale, NSString *name) {
     assertSingle(h);
     CALayer *b=[h sbcpu_testSharedBackdrop], *expected=[CALayer layer]; expected.frame=h.bounds;
     NSMutableArray<UIImage *> *currentPixels=[NSMutableArray array], *referencePixels=[NSMutableArray array];
-    NSMutableArray *nativePropertyDiffs=[NSMutableArray array];
     NSUInteger i=0; CGFloat oldBackdropArea=0; CGRect mem5Region=CGRectNull;
     for (SBCPUCapsuleBackdropLabel *l in h.subviews) {
         if (l.hidden || !l.text.length || CGRectIsEmpty(l.bounds)) continue;
@@ -184,12 +183,7 @@ static void parity(SBCPUTextSlotHost *h, CGFloat scale, NSString *name) {
         assert(CGPointEqualToPoint(actual.anchorPoint,e.anchorPoint) && actual.contentsScale==e.contentsScale);
         assert(CATransform3DEqualToTransform(actual.transform,e.transform) &&
             CATransform3DEqualToTransform(actual.sublayerTransform,e.sublayerTransform));
-        if (actual.opacity!=e.opacity || actual.hidden!=e.hidden || actual.masksToBounds!=e.masksToBounds) {
-            [nativePropertyDiffs addObject:@{ @"slot":@(i-1), @"text":l.text,
-                @"candidate_opacity":@(actual.opacity), @"mem5_opacity":@(e.opacity),
-                @"candidate_hidden":@(actual.hidden), @"mem5_hidden":@(e.hidden),
-                @"candidate_masksToBounds":@(actual.masksToBounds), @"mem5_masksToBounds":@(e.masksToBounds)}];
-        }
+        assert(actual.opacity==e.opacity && actual.hidden==e.hidden && actual.masksToBounds==e.masksToBounds);
         UILabel *ag=[actual valueForKey:@"glyphLabel"], *eg=[e valueForKey:@"glyphLabel"];
         if (ag && eg && !CGRectEqualToRect(ag.bounds,eg.bounds))
             fprintf(stderr,"glyph label bounds mismatch text=%s actual=%s mem5=%s\n",l.text.UTF8String,NSStringFromCGRect(ag.bounds).UTF8String,NSStringFromCGRect(eg.bounds).UTF8String);
@@ -217,6 +211,27 @@ static void parity(SBCPUTextSlotHost *h, CGFloat scale, NSString *name) {
     referenceBackdrop.position=mem5Region.origin; referenceBackdrop.mask=expected;
     UIImage *nativeParent=parentComposedMask(b,h.bounds.size,scale);
     UIImage *nativeParentRef=parentComposedMask(referenceBackdrop,h.bounds.size,scale);
+    assert(CATransform3DEqualToTransform(b.transform,referenceBackdrop.transform) &&
+        CATransform3DEqualToTransform(b.sublayerTransform,referenceBackdrop.sublayerTransform) &&
+        b.opacity==referenceBackdrop.opacity && b.hidden==referenceBackdrop.hidden &&
+        b.masksToBounds==referenceBackdrop.masksToBounds && b.contentsScale==referenceBackdrop.contentsScale &&
+        CATransform3DEqualToTransform(b.mask.transform,referenceBackdrop.mask.transform) &&
+        CATransform3DEqualToTransform(b.mask.sublayerTransform,referenceBackdrop.mask.sublayerTransform) &&
+        b.mask.opacity==referenceBackdrop.mask.opacity && b.mask.hidden==referenceBackdrop.mask.hidden &&
+        b.mask.masksToBounds==referenceBackdrop.mask.masksToBounds &&
+        b.mask.contentsScale==referenceBackdrop.mask.contentsScale);
+    assert(b.mask.sublayers.count==referenceBackdrop.mask.sublayers.count);
+    for (NSUInteger j=0;j<b.mask.sublayers.count;j++) {
+        CALayer *candidateLeaf=b.mask.sublayers[j], *referenceLeaf=referenceBackdrop.mask.sublayers[j];
+        assert(CGRectEqualToRect(candidateLeaf.bounds,referenceLeaf.bounds) &&
+            CGPointEqualToPoint(candidateLeaf.position,referenceLeaf.position) &&
+            CGPointEqualToPoint(candidateLeaf.anchorPoint,referenceLeaf.anchorPoint) &&
+            CATransform3DEqualToTransform(candidateLeaf.transform,referenceLeaf.transform) &&
+            CATransform3DEqualToTransform(candidateLeaf.sublayerTransform,referenceLeaf.sublayerTransform) &&
+            candidateLeaf.opacity==referenceLeaf.opacity && candidateLeaf.hidden==referenceLeaf.hidden &&
+            candidateLeaf.masksToBounds==referenceLeaf.masksToBounds &&
+            candidateLeaf.contentsScale==referenceLeaf.contentsScale);
+    }
     CALayer *pixelCandidate=pixelParent(b,currentPixels), *pixelRef=pixelParent(referenceBackdrop,referencePixels);
     UIImage *composed=parentComposedMask(pixelCandidate,h.bounds.size,scale);
     UIImage *composedRef=parentComposedMask(pixelRef,h.bounds.size,scale);
@@ -254,7 +269,7 @@ static void parity(SBCPUTextSlotHost *h, CGFloat scale, NSString *name) {
     BOOL directOK=matchesMem5Crop(actual,ref,fullRef);
     if (directOK && [direct[@"different_pixels"] unsignedIntegerValue]) quantizedCases++;
     if (!directOK || [parent[@"different_pixels"] unsignedIntegerValue]) strictFailures++;
-    NSDictionary *diag=@{@"case":name,@"scale":@(scale),@"direct":direct,@"parent":parent,@"native_leaf_property_differences":nativePropertyDiffs,
+    NSDictionary *diag=@{@"case":name,@"scale":@(scale),@"direct":direct,@"parent":parent,@"native_leaf_properties_exact":@YES,
         @"native_renderInContext_parent_diagnostic":diff(nativeParent,nativeParentRef,scale),
         @"mem5_crop_vs_full":mem5Crop,@"candidate_crop_vs_full":candidateCrop,
         @"mem5_self_full":selfFullDiff,@"mem5_self_crop":selfCropDiff,@"mem5_self_parent":selfParentDiff};

@@ -214,7 +214,7 @@ static CALayer *SBCPUCreateLiveTextBackdrop(CGFloat radius, BOOL shared) {
         _alphaMask.wrapped = NO;
         _alphaMask.alignmentMode = kCAAlignmentCenter;
         _alphaMask.truncationMode = kCATruncationNone;
-        _alphaMask.masksToBounds = YES;
+        _alphaMask.masksToBounds = NO;
     }
     _alphaMask.bounds = (CGRect){CGPointZero,self.bounds.size};
     _alphaMask.contentsScale = scale;
