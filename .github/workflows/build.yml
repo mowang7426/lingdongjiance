@@ -27,6 +27,8 @@ jobs:
           set -e
           python3 tests/text_invert_performance_wiring.py
           bash tests/text_invert_performance_uikit.sh
+          python3 tests/text_shared_live_wiring.py
+          bash tests/text_shared_live_uikit.sh
 
       - name: Read-only P-core production algorithm and A16 evidence regression
         run: |
@@ -273,7 +275,7 @@ jobs:
           cp "$ROOTHIDE_DEB" "build/LingDongMonitor-$VERSION-${GITHUB_SHA:0:12}-roothide.deb"
 
       - name: Verify Rootless/RootHide DEBs, Mach-O slices and page hashes
-        run: python3 tests/verify_packages.py --build-dir build --version 5.09+mem5
+        run: python3 tests/verify_packages.py --build-dir build --version 5.09+mem6
 
       - name: Verify preference bundle is packaged
         run: |
@@ -295,7 +297,7 @@ jobs:
       - name: Upload DEB packages and package verification
         uses: actions/upload-artifact@v4
         with:
-          name: LingDongMonitor-5.09-mem5
+          name: LingDongMonitor-5.09-mem6
           path: |
             build/*.deb
             build/VERIFICATION.json
@@ -306,5 +308,5 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: mem4-UIKit-fixture
+          name: mem6-UIKit-fixture
           path: test-output/

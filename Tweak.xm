@@ -390,7 +390,7 @@ static BOOL textOnly2ShowCPU = YES, textOnly2ShowFrequency = YES, textOnly2ShowF
 static BOOL textOnly2ShowBattery = YES, textOnly2ShowTemperature = YES, textOnly2ShowCurrent = YES;
 static BOOL textOnly2ShowSIM1 = YES, textOnly2ShowSIM2 = YES;
 static BOOL textOnly2ShowUploadNetwork = NO, textOnly2ShowDownloadNetwork = NO;
-static SBCPUTextBackdropLabel *textOnly2Label = nil;
+static SBCPUTextSlotHost *textOnly2Label = nil;
 static NSDictionary *textNetworkPrevious = nil;
 static double textNetworkUptime = 0;
 static NSString *textNetworkRow = nil;
@@ -454,7 +454,7 @@ static void sampleTextNetwork(void) {
 // smart-stop zero or the legacy 150 mA fallback.
 static NSNumber *textOnlyBatteryCurrent = nil;
 static NSTimeInterval textOnlyCurrentUptime = 0;
-static SBCPUTextBackdropLabel *textOnlyLabel = nil;
+static SBCPUTextSlotHost *textOnlyLabel = nil;
 static BOOL textOnlyDragging = NO;
 static BOOL textOnlySnapshotValid = NO, textOnlySnapshotCollapsed = NO;
 static CGPoint textOnlySnapshotCenter;
@@ -2489,7 +2489,8 @@ typedef struct {
     SBCPUTextSlot frames[11];
 } SBCPUTextSlotLayoutCache;
 static SBCPUTextSlotLayoutCache textSlotLayoutCaches[2];
-static void clearTextSlots(SBCPUTextBackdropLabel *host) {
+static void clearTextSlots(SBCPUTextSlotHost *host) {
+    [host sbcpu_setLiveInversionRequested:NO];
     host.realtimeInvertEnabled = NO;
     for (SBCPUTextBackdropLabel *slot in host.subviews.copy) {
         if (![slot isKindOfClass:SBCPUTextBackdropLabel.class]) continue;
@@ -2503,20 +2504,17 @@ static UIColor *textSlotColor(void) {
         blue:textOnlyCustomRGBA.blue alpha:textOnlyCustomRGBA.alpha];
     return SBCPUTextUsesWhite((int)floatingTextOnlyColor, style) ? UIColor.whiteColor : UIColor.blackColor;
 }
-static void syncTextSlotInvert(SBCPUCapsuleBackdropLabel *slot) {
-    if (slot.layer.compositingFilter) slot.layer.compositingFilter = nil;
-    slot.realtimeInvertEnabled = isEnabled && !cpuWindow.hidden && floatingTextOnlyColor == 4 && slot.text.length > 0;
-}
-static void colorTextSlots(SBCPUTextBackdropLabel *host) {
+static void colorTextSlots(SBCPUTextSlotHost *host) {
     UIColor *color=textSlotColor();
     for (UIView *view in host.subviews) {
         if (![view isKindOfClass:SBCPUCapsuleBackdropLabel.class]) continue;
         SBCPUCapsuleBackdropLabel *slot=(SBCPUCapsuleBackdropLabel *)view;
         [slot sbcpu_applyTextOnlyColor:color];
-        syncTextSlotInvert(slot);
+        if (slot.layer.compositingFilter) slot.layer.compositingFilter = nil;
     }
+    [host sbcpu_setLiveInversionRequested:isEnabled && floatingTextOnlyColor == 4];
 }
-static CGSize layoutTextSlots(SBCPUTextBackdropLabel *host, BOOL second, SBCPUTextGeometry g) {
+static CGSize layoutTextSlots(SBCPUTextSlotHost *host, BOOL second, SBCPUTextGeometry g) {
     unsigned mask=textSlotMask(second);
     CGFloat fs=SBCPUTextOnlyBound(second?floatingTextOnly2FontSize:floatingTextOnlyFontSize,8,24,13);
     UIFont *font=[UIFont monospacedDigitSystemFontOfSize:fs weight:(second?textOnly2Bold:textOnlyBold)?UIFontWeightBold:UIFontWeightRegular];
@@ -2563,7 +2561,6 @@ static CGSize layoutTextSlots(SBCPUTextBackdropLabel *host, BOOL second, SBCPUTe
         slot.clipsToBounds=YES;
         CGRect slotFrame=CGRectMake(frames[i].x,frames[i].y,frames[i].width,frames[i].height);
         if (!CGRectEqualToRect(slot.frame,slotFrame)) slot.frame=slotFrame;
-        syncTextSlotInvert(slot);
         [parts addObject:value];
     }
     for (int i=0;i<11;i++) {
@@ -2577,7 +2574,6 @@ static CGSize layoutTextSlots(SBCPUTextBackdropLabel *host, BOOL second, SBCPUTe
         dot.lineBreakMode=NSLineBreakByClipping; dot.textAlignment=NSTextAlignmentCenter; dot.clipsToBounds=YES;
         CGRect dotFrame=CGRectMake(frame.x,frame.y,frame.width,frame.height);
         if (!CGRectEqualToRect(dot.frame,dotFrame)) dot.frame=dotFrame;
-        syncTextSlotInvert(dot);
     }
     if (![host.text isEqualToString:@""]) host.text=@"";
     if (host.hidden!=(mask==0)) host.hidden=mask==0;
@@ -2641,7 +2637,7 @@ static void updateTextOnlySecond(void) {
     UIView *host=cpuWindow.rootViewController.view;
     if (!textOnly2Label || textOnly2Label.superview!=host) {
         clearTextSlots(textOnly2Label); [textOnly2Label removeFromSuperview];
-        textOnly2Label=[[SBCPUTextBackdropLabel alloc] initWithFrame:CGRectZero];
+        textOnly2Label=[[SBCPUTextSlotHost alloc] initWithFrame:CGRectZero];
         textOnly2Label.backgroundColor=UIColor.clearColor;
         UIPanGestureRecognizer *pan=[[UIPanGestureRecognizer alloc] initWithTarget:cpuWindow.rootViewController action:@selector(sbcpu_secondTextPan:)];
         [textOnly2Label addGestureRecognizer:pan]; [host addSubview:textOnly2Label];
@@ -2666,6 +2662,7 @@ static void updateTextOnlySecond(void) {
         textOnly2Label.center=textOnlyContainerCenter(p,g);
     }
     textOnly2Label.hidden=textOnly2Label.hidden || floatingView.hidden;
+    colorTextSlots(textOnly2Label);
 }
 
 static void applyTextOnlyMode(void) {
@@ -2675,7 +2672,7 @@ static void applyTextOnlyMode(void) {
     if (!floatingView || !floatingTextOnlyMode) return;
     if (!textOnlyLabel || textOnlyLabel.superview != floatingView) {
         [textOnlyLabel removeFromSuperview];
-        textOnlyLabel = [[SBCPUTextBackdropLabel alloc] initWithFrame:CGRectZero];
+        textOnlyLabel = [[SBCPUTextSlotHost alloc] initWithFrame:CGRectZero];
         textOnlyLabel.numberOfLines = 1;
         textOnlyLabel.lineBreakMode = NSLineBreakByWordWrapping;
         textOnlyLabel.adjustsFontSizeToFitWidth = NO;
@@ -2707,7 +2704,7 @@ static void applyTextOnlyMode(void) {
     p.x = SBCPUTextSafeCoordinate(p.x,textGeometry.left+rowWidth/2,textGeometry.width-textGeometry.right-rowWidth/2);
     p.y = SBCPUTextSafeCoordinate(p.y,textGeometry.top+rowHeight/2,textGeometry.height-textGeometry.bottom-rowHeight/2);
     floatingView.center = textOnlyContainerCenter(p,textGeometry);
-    applyTextOnlyTextFilter();
+    colorTextSlots(textOnlyLabel);
 }
 
 static void handleTextOnlyModeTransition(BOOL wasEnabled) {

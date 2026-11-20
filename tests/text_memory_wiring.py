@@ -1,7 +1,7 @@
 from pathlib import Path
 import plistlib
 r=Path(__file__).resolve().parents[1]; s=(r/'Tweak.xm').read_text(); h=(r/'SBCPUMemorySample.h').read_text(); m=(r/'SBCPUMemoryMetrics.h').read_text(); t=(r/'SBCPUTextMemory.h').read_text(); ui=plistlib.load((r/'sbcpuprefs/Resources/TextOnly.plist').open('rb'))['items']
-assert 'Version: 5.09+mem5\n' in (r/'control').read_text()
+assert 'Version: 5.09+mem6\n' in (r/'control').read_text()
 for prefix,var,n in [('floatingTextOnly','textOnly','窗口1'),('floatingTextOnly2','textOnly2','窗口2')]:
  row=[x for x in ui if x.get('key')==prefix+'ShowMemory'][0]; assert row['cell']=='PSSwitchCell' and row['default'] is False and row['label']==n+' 剩余内存（RAM）'; assert f'{var}ShowMemory = getBoolPref(CFSTR("{prefix}ShowMemory"), NO)' in s
 assert 'textOnlyMemorySample=SBCPUMemoryCachedSample();' in s and s.count('textOnlyMemorySample=SBCPUMemoryCachedSample();')==1

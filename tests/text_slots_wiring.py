@@ -15,7 +15,8 @@ for token in ['SBCPUTextSeparatorFrame(mask,i,second && textOnly2NetworkDualLine
               'dot.userInteractionEnabled=NO', 'if (!CGRectEqualToRect(dot.frame,dotFrame)) dot.frame=dotFrame;',
               'dot.realtimeInvertEnabled=NO; [dot removeFromSuperview]']:
     assert token in layout, token
-assert layout.index('CGRect dotFrame=') < layout.index('dot.frame=dotFrame') < layout.index('syncTextSlotInvert(dot)')
+assert layout.index('CGRect dotFrame=') < layout.index('dot.frame=dotFrame')
+assert 'colorTextSlots(textOnlyLabel)' in s and '[host sbcpu_setLiveInversionRequested:' in s
 assert 'monospacedDigitSystemFontOfSize:fs' in layout
 assert s.count('    sampleTextNetwork();')==1
 assert 'floatingTextOnlyMode2 && secondVisible ? textSlotMask(YES) : 0' in s

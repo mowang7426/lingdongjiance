@@ -26,7 +26,7 @@ assert 'sbcpu_setTextOnlyPlainText:' in header
 assert 'SBCPUTextBackdropReadTestCounters' in test
 assert 'assert(c.maskRefreshes==0 && c.backdropCreations==0 && c.styledAttributeBuilds==0)' in test
 assert 'pixels(actual) isEqualToData:pixels(expected)' in test
-assert 'Version: 5.09+mem5' in control
+assert 'Version: 5.09+mem6' in control
 assert 'runs-on: macos-15' in workflow and 'tests/text_invert_performance_uikit.sh' in workflow
 # Keep scheduler, sample interval, FPS units, free-memory math and old mem4 spacing untouched.
 assert 'NSTimer' not in label and 'dispatch_source' not in label
