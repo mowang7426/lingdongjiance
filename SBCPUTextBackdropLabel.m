@@ -484,15 +484,15 @@ UIImage *SBCPUTextBackdropCopyMaskImageForTesting(SBCPUTextBackdropLabel *label,
 // CALayer.frame is derived from bounds/position; fractional 1/3-point values
 // can round-trip with a different least-significant bit. Compare/set the
 // canonical stored geometry instead, so identical events perform no writes.
-static BOOL SBCPUSetSharedLayerGeometry(CALayer *layer, CGRect frame) {
-    CGRect bounds = (CGRect){CGPointZero, frame.size};
-    CGPoint anchor = layer.anchorPoint;
-    CGPoint position = CGPointMake(frame.origin.x + frame.size.width*anchor.x,
-        frame.origin.y + frame.size.height*anchor.y);
+static BOOL SBCPUSetSharedLayerLayout(CALayer *layer, CGRect bounds, CGPoint position) {
     BOOL changed = NO;
     if (!CGRectEqualToRect(layer.bounds, bounds)) { layer.bounds = bounds; changed = YES; }
     if (!CGPointEqualToPoint(layer.position, position)) { layer.position = position; changed = YES; }
     return changed;
+}
+static BOOL SBCPUSetSharedLayerGeometry(CALayer *layer, CGRect frame) {
+    return SBCPUSetSharedLayerLayout(layer, (CGRect){CGPointZero, frame.size},
+        CGPointMake(CGRectGetMidX(frame), CGRectGetMidY(frame)));
 }
 
 @implementation SBCPUTextSlotHost {
@@ -528,6 +528,7 @@ static BOOL SBCPUSetSharedLayerGeometry(CALayer *layer, CGRect frame) {
             if (slot.hidden || !slot.text.length || CGRectIsEmpty(slot.bounds)) continue;
             if (!CGAffineTransformIsIdentity(slot.transform) || slot.alpha != 1 ||
                 !CGPointEqualToPoint(slot.bounds.origin, CGPointZero) ||
+                !CGPointEqualToPoint(slot.layer.anchorPoint, CGPointMake(0.5,0.5)) ||
                 !CGRectContainsRect(self.bounds, slot.frame)) { supported = NO; break; }
             CGRect ink = CGRectNull;
             CALayer *mask = [slot sbcpu_prepareSharedMaskAtScale:scale ink:&ink changed:&changed];
@@ -563,7 +564,11 @@ static BOOL SBCPUSetSharedLayerGeometry(CALayer *layer, CGRect frame) {
         }
         if (activate) {
             if (SBCPUSetSharedLayerGeometry(_sbcpuBackdrop, region)) changed = YES;
-            if (SBCPUSetSharedLayerGeometry(_sbcpuMask, _sbcpuBackdrop.bounds)) changed = YES;
+            // Keep all child coordinates in ORIGINAL host space. Moving each
+            // fractional child relative to a union origin changes rounding in
+            // Core Animation's rasterization matrix (even at 1/255 alpha).
+            if (SBCPUSetSharedLayerLayout(_sbcpuMask, region,
+                CGPointMake(region.size.width/2, region.size.height/2))) changed = YES;
             if (_sbcpuMask.contentsScale != scale) { _sbcpuMask.contentsScale = scale; changed = YES; }
             // Detach any per-label mask ownership before reparenting native
             // alpha layers. The catch/finally path restores ALL labels on error.
@@ -574,8 +579,7 @@ static BOOL SBCPUSetSharedLayerGeometry(CALayer *layer, CGRect frame) {
             }
             for (NSUInteger i = 0; i < slots.count; i++) {
                 SBCPUCapsuleBackdropLabel *slot = slots[i]; CALayer *mask = masks[i];
-                CGRect frame = CGRectOffset(slot.frame, -region.origin.x, -region.origin.y);
-                if (SBCPUSetSharedLayerGeometry(mask, frame)) changed = YES;
+                if (SBCPUSetSharedLayerLayout(mask, slot.bounds, slot.center)) changed = YES;
                 if (mask.superlayer != _sbcpuMask) { [_sbcpuMask addSublayer:mask]; changed = YES; }
             }
             for (UIView *view in self.subviews) {

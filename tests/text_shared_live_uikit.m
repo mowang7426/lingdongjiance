@@ -21,7 +21,7 @@ static NSData *alpha(CGImageRef image) {
 static UIImage *render(CALayer *layer, CGSize size, CGPoint offset, CGFloat scale) {
     UIGraphicsBeginImageContextWithOptions(size,NO,scale);
     CGContextTranslateCTM(UIGraphicsGetCurrentContext(),offset.x,offset.y);
-    CGContextClipToRect(UIGraphicsGetCurrentContext(),layer.bounds);
+    CGContextClipToRect(UIGraphicsGetCurrentContext(),(CGRect){CGPointZero,layer.bounds.size});
     [layer renderInContext:UIGraphicsGetCurrentContext()];
     UIImage *image=UIGraphicsGetImageFromCurrentImageContext(); UIGraphicsEndImageContext(); return image;
 }
@@ -69,7 +69,7 @@ static void parity(SBCPUTextSlotHost *h, CGFloat scale, NSString *name) {
         // and drawInContext behavior. No bitmap scaling in either implementation.
         CALayer *e=m.layer.sublayers.firstObject.mask; assert(e);
         m.layer.sublayers.firstObject.mask=nil;
-        e.frame=l.frame;
+        e.bounds=l.bounds; e.position=l.center;
         [expected addSublayer:e]; m.realtimeInvertEnabled=NO;
     }
     UIImage *actual=render(b.mask,h.bounds.size,b.frame.origin,scale);
