@@ -2,20 +2,21 @@ from pathlib import Path
 import plistlib
 r=Path(__file__).resolve().parents[1];s=(r/'Tweak.xm').read_text()
 layout=s[s.index('static CGSize layoutTextSlots'):s.index('static void applyTextOnlyTextFilter(void) {')]
-assert layout.index('SBCPUTextSlotsLayoutMemoryConfigured(mask,fs,available,second?floatingTextOnly2DataGap:floatingTextOnlyDataGap,second && textOnly2NetworkDualLine,fpsWidth,(mask&(1u<<5))?SBCPUTextCurrentConfiguredWidth(font):0,(mask&(1u<<10))?SBCPUTextMemoryConfiguredWidth(font):0,(mask&1u)?SBCPUTextCPUConfiguredWidth(font):0,frames)') < layout.index('NSString *value=')
-for token in ['slot.adjustsFontSizeToFitWidth=NO','slot.numberOfLines=1','slot.frame=CGRectMake(frames[i].x',
-              'slot.font=slotFont','SBCPUTextOnlyAttributedRow','textNetworkDownloadRate,textNetworkUploadRate,i==8,i==9']:
+assert layout.index('SBCPUTextSlotsLayoutMemoryConfigured(mask,fs,available,gap,dualLine,fpsWidth,currentWidth,memoryWidth,cpuWidth,frames)') < layout.index('NSString *value=')
+for token in ['slot.adjustsFontSizeToFitWidth=NO','slot.numberOfLines=1','if (!CGRectEqualToRect(slot.frame,slotFrame)) slot.frame=slotFrame;',
+              'sbcpu_setTextOnlyPlainText:value font:slotFont','sbcpu_applyTextOnlyColor:color','textNetworkDownloadRate,textNetworkUploadRate,i==8,i==9']:
     assert token in layout+s,token
 for forbidden in ['sizeThatFits','boundingRect','minimumScaleFactor','NSTimer','CADisplayLink']:
     assert forbidden not in layout
 assert 'layoutTextSlots(textOnlyLabel,NO,textGeometry)' in s
 assert 'layoutTextSlots(textOnly2Label,YES,g)' in s
 for token in ['SBCPUTextSeparatorFrame(mask,i,second && textOnly2NetworkDualLine,frames)',
-              'viewWithTag:4970+i', 'dot.text=@"·"', 'dot.adjustsFontSizeToFitWidth=NO',
-              'dot.userInteractionEnabled=NO', 'dot.frame=CGRectMake(frame.x',
+              'viewWithTag:4970+i', 'sbcpu_setTextOnlyPlainText:@"·"', 'dot.adjustsFontSizeToFitWidth=NO',
+              'dot.userInteractionEnabled=NO', 'if (!CGRectEqualToRect(dot.frame,dotFrame)) dot.frame=dotFrame;',
               'dot.realtimeInvertEnabled=NO; [dot removeFromSuperview]']:
     assert token in layout, token
-assert layout.index('dot.frame=CGRectMake') < layout.index('colorTextSlots(host, second)')
+assert layout.index('CGRect dotFrame=') < layout.index('dot.frame=dotFrame')
+assert 'colorTextSlots(textOnlyLabel)' in s and '[host sbcpu_setLiveInversionRequested:' in s
 assert 'monospacedDigitSystemFontOfSize:fs' in layout
 assert s.count('    sampleTextNetwork();')==1
 assert 'floatingTextOnlyMode2 && secondVisible ? textSlotMask(YES) : 0' in s

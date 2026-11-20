@@ -28,9 +28,9 @@ assert 'if (hidden) self.realtimeInvertEnabled = NO' in source
 assert 'if (!self.window) self.realtimeInvertEnabled = NO' in source
 for token in ('snapshotView', 'renderInContext:', 'drawViewHierarchy', 'NSTimer', 'CADisplayLink', '%hook'):
     assert token not in source
-assert source.count('_backdrop.filters = filters') == 1
+assert source.count('backdrop.filters = filters') == 1
 assert 'if (!_backdrop && ![self createBackdrop]) return' in source
-assert 'if (!_backdrop) [super drawTextInRect:rect]' in source
+assert 'if (!_backdrop && !_sbcpuSharedMask) [super drawTextInRect:rect]' in source
 with (root / 'sbcpuprefs/Resources/TextOnly.plist').open('rb') as f:
     prefs = plistlib.load(f)
 assert '实时反色适用于纯文字和胶囊' in str(prefs)

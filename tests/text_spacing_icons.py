@@ -16,7 +16,7 @@ assert 'NSKernAttributeName' not in fmt
 assert 'floatingTextOnlyLetterSpacing' not in tweak
 assert 'floatingTextOnly2LetterSpacing' not in tweak
 assert 'floatingTextOnlyLetterSpacing' not in controller
-assert 'SBCPUTextOnlyAttributedRow(slot.text,slot.font,slot.textColor);' in tweak
+assert '[slot sbcpu_setTextOnlyPlainText:value font:slotFont color:color];' in tweak
 # Icon fallback and both metric icons remain intact.
 assert 'SBCPUTextOnlyFallbackIcon' in fmt
 assert 'thermometer' in fmt and 'bolt.fill' in fmt

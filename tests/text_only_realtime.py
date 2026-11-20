@@ -17,35 +17,37 @@ assert ': UILabel' in header and ': CATextLayer' in source
 assert 'NSClassFromString(@"CABackdropLayer")' in source
 assert 'NSClassFromString(@"CAFilter")' in source
 assert '@[@"gaussianBlur", @"colorBrightness", @"colorContrast", @"colorSaturate", @"colorInvert"]' in source
-assert '@[@50.0, @(-0.285), @1000.0, @0.0]' in source
+assert '@[@(radius), @(-0.285), @1000.0, @0.0]' in source
+assert 'SBCPUCreateLiveTextBackdrop(50.0, NO)' in source
+assert 'SBCPUSharedBlurRadius = 8.0' in source
 for token in ('inputRadius', 'inputAmount', 'inputNormalizeEdges', 'respondsToSelector:',
               'isSubclassOfClass:CALayer.class', '@catch', '@finally', 'SBCPUBackdropUnavailable = YES',
-              'if (SBCPUBackdropUnavailable) return NO', '_backdrop.filters = filters',
+              'if (SBCPUBackdropUnavailable) return NO', 'backdrop.filters = filters',
               '_backdrop.mask = _alphaMask', 'NSForegroundColorAttributeName:UIColor.whiteColor',
               'CTLineGetTypographicBounds', 'CTLineDraw', 'ascent - descent',
               'width / width', 'setDisableActions:YES', '[super layoutSubviews]',
-              '[_lastText isEqualToString:self.text]', '[_lastFont isEqual:self.font]',
+              '[_lastText isEqualToString:cacheText]', '[_lastFont isEqual:self.font]',
               'CGRectEqualToRect(_lastBounds, self.bounds)', '_lastScale == scale'):
     assert token in source, token
 for token in ('differenceBlendMode', 'snapshotView', 'drawViewHierarchy', 'renderInContext:',
               'sampleBackgroundLuminance', 'CADisplayLink', 'NSTimer', '%hook', 'UIGraphicsImageRenderer'):
     assert token not in source + mode, token
-assert 'self.textColor =' not in source  # fallback never becomes clear
-assert 'if (!_backdrop) [super drawTextInRect:rect]' in source
+assert not re.search(r'(?:self\.textColor\s*=(?!=)|\[self setTextColor:)\s*(?:nil|UIColor\.clearColor|\[UIColor clearColor\])', source)  # keep the fallback readable
+assert 'if (!_backdrop && !_sbcpuSharedMask) [super drawTextInRect:rect]' in source
 setter = source[source.index('- (void)setRealtimeInvertEnabled:'):source.index('- (void)setText:')]
 assert '[self syncBackdrop]' in setter
 sync = source[source.index('- (void)syncBackdrop'):source.index('- (void)setRealtimeInvertEnabled:')]
-assert sync.index('CGRectEqualToRect') < sync.index('[self createBackdrop]')
+assert sync.index('[self sbcpu_alphaMaskMatchesScale:scale]') < sync.index('[self createBackdrop]')
 assert 'if (!_backdrop && ![self createBackdrop]) return' in sync
 assert 'if (!_realtimeInvertEnabled || self.text.length == 0)' in sync
 clear = source[source.index('- (void)clearBackdrop'):source.index('- (BOOL)createBackdrop')]
 for token in ('removeFromSuperlayer', '_backdrop.mask = nil', '_backdrop.filters = nil',
               '_backdrop = nil', '_alphaMask = nil', '_lastText = nil', '_lastFont = nil'):
     assert token in clear
-assert '[[SBCPUTextBackdropLabel alloc] initWithFrame:CGRectZero]' in mode
+assert '[[SBCPUTextSlotHost alloc] initWithFrame:CGRectZero]' in mode
 assert '[floatingView addSubview:textOnlyLabel]' in mode
 assert 'view.hidden = (view != textOnlyLabel)' in mode
-assert 'floatingTextOnlyColor == 4 && slot.text.length > 0' in mode
+assert 'sbcpu_setLiveInversionRequested:isEnabled && floatingTextOnlyColor == 4' in mode
 assert 'textOnlyLabel.realtimeInvertEnabled = NO' in mode
 assert 'SBCPUFloating_FILES = Tweak.xm SBCPUTextBackdropLabel.m' in make
 assert 'CoreGraphics CoreText' in make and 'QuartzCore' in make
