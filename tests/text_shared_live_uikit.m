@@ -9,7 +9,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 static NSMutableArray *measurements;
-static NSUInteger strictFailures;
+static NSUInteger strictFailures, quantizedCases, parentNegativeControls;
 static NSMutableArray *diagnostics;
 static NSData *alpha(CGImageRef image) {
     size_t w=CGImageGetWidth(image), h=CGImageGetHeight(image);
@@ -68,6 +68,23 @@ static NSDictionary *diff(UIImage *a, UIImage *b, CGFloat scale) {
     return @{@"pixels":@(aa.length),@"different_pixels":@(count),@"max_delta":@(max),@"total_absolute_delta":@(total),
         @"actual_total_alpha":@(sa),@"reference_total_alpha":@(sb),@"actual_bbox":NSStringFromCGRect(imageInk(a,scale)),
         @"reference_bbox":NSStringFromCGRect(imageInk(b,scale))};
+}
+// A crop may alter 8-bit coverage rounding, but only at pixels where
+// the pinned mem5 crop itself differs from the exact full-host baseline.
+// The candidate must be one of the two mem5 values at every pixel.
+static BOOL matchesMem5Crop(UIImage *candidate, UIImage *crop, UIImage *full) {
+    NSData *ca=alpha(candidate.CGImage), *cr=alpha(crop.CGImage), *fu=alpha(full.CGImage);
+    assert(ca.length==cr.length && cr.length==fu.length);
+    const uint8_t *c=(const uint8_t *)ca.bytes, *r=(const uint8_t *)cr.bytes, *f=(const uint8_t *)fu.bytes;
+    for (NSUInteger i=0;i<ca.length;i++) if(c[i]!=r[i] && (c[i]!=f[i] || abs((int)r[i]-(int)f[i])!=1)) return NO;
+    return YES;
+}
+static void prepareNativeBacking(CALayer *mask) {
+    // Window-attached leaves can already have backing stores, whereas the
+    // detached mem5 reference can use direct drawing. Those paths differ by
+    // subpixel sampling when a parent is composited. Test parent geometry
+    // with both trees rasterized natively at their declared contentsScale.
+    for (CALayer *leaf in mask.sublayers) { [leaf setNeedsDisplay]; [leaf displayIfNeeded]; }
 }
 static void syntheticCoordinates(void) {
     for (int scale=1;scale<=3;scale++) {
@@ -167,10 +184,30 @@ static void parity(SBCPUTextSlotHost *h, CGFloat scale, NSString *name) {
     CALayer *referenceBackdrop=[CALayer layer]; referenceBackdrop.anchorPoint=CGPointZero;
     referenceBackdrop.bounds=(CGRect){CGPointZero,mem5Region.size};
     referenceBackdrop.position=mem5Region.origin; referenceBackdrop.mask=expected;
+    prepareNativeBacking(b.mask);
+    prepareNativeBacking(expected);
     UIImage *composed=parentComposedMask(b,h.bounds.size,scale);
     UIImage *composedRef=parentComposedMask(referenceBackdrop,h.bounds.size,scale);
     NSDictionary *direct=diff(actual,ref,scale), *parent=diff(composed,composedRef,scale);
     NSDictionary *mem5Crop=diff(ref,fullRef,scale), *candidateCrop=diff(actual,fullRef,scale);
+    if ([name isEqualToString:@"production-window1-font8-bold0"]) {
+        CALayer *leaf=b.mask.sublayers.firstObject; assert(leaf);
+        CGPoint saved=leaf.position;
+        leaf.position=CGPointMake(saved.x+1.0/scale,saved.y);
+        UIImage *shifted=parentComposedMask(b,h.bounds.size,scale);
+        assert(![alpha(shifted.CGImage) isEqual:alpha(composedRef.CGImage)]);
+        leaf.position=saved; leaf.hidden=YES;
+        UIImage *missing=parentComposedMask(b,h.bounds.size,scale);
+        assert(![alpha(missing.CGImage) isEqual:alpha(composedRef.CGImage)]);
+        leaf.hidden=NO;
+        assert([alpha(parentComposedMask(b,h.bounds.size,scale).CGImage) isEqual:alpha(composed.CGImage)]);
+        parentNegativeControls+=2;
+        leaf.position=CGPointMake(saved.x+1.0/scale,saved.y);
+        assert(!matchesMem5Crop(render(b.mask,h.bounds.size,b.frame.origin,scale),ref,fullRef));
+        leaf.position=saved; leaf.hidden=YES;
+        assert(!matchesMem5Crop(render(b.mask,h.bounds.size,b.frame.origin,scale),ref,fullRef));
+        leaf.hidden=NO;
+    }
     // Re-render the SAME pinned mem5 layers after returning to host bounds,
     // then crop/reparent again. No production glyph is involved in this control.
     expected.bounds=h.bounds; expected.position=CGPointZero;
@@ -180,8 +217,9 @@ static void parity(SBCPUTextSlotHost *h, CGFloat scale, NSString *name) {
     UIImage *selfParent=parentComposedMask(referenceBackdrop,h.bounds.size,scale);
     NSDictionary *selfFullDiff=diff(selfFull,fullRef,scale);
     NSDictionary *selfCropDiff=diff(selfCrop,ref,scale), *selfParentDiff=diff(selfParent,composedRef,scale);
-    BOOL exact=[alpha(actual.CGImage) isEqual:alpha(ref.CGImage)] && [alpha(composed.CGImage) isEqual:alpha(composedRef.CGImage)];
-    if (!exact) strictFailures++;
+    BOOL directOK=matchesMem5Crop(actual,ref,fullRef);
+    if (directOK && [direct[@"different_pixels"] unsignedIntegerValue]) quantizedCases++;
+    if (!directOK || [parent[@"different_pixels"] unsignedIntegerValue]) strictFailures++;
     NSDictionary *diag=@{@"case":name,@"scale":@(scale),@"direct":direct,@"parent":parent,
         @"mem5_crop_vs_full":mem5Crop,@"candidate_crop_vs_full":candidateCrop,
         @"mem5_self_full":selfFullDiff,@"mem5_self_crop":selfCropDiff,@"mem5_self_parent":selfParentDiff};
@@ -277,17 +315,18 @@ static void runTests(void) {
     assert(![failed sbcpu_testSharedBackdrop] && f.realtimeInvertEnabled);
     [failed sbcpu_setLiveInversionRequested:NO]; assert(!f.realtimeInvertEnabled);
     productionLayout(w);
-    NSDictionary *result=@{@"status":@"PASS",@"same_value_events":@1000,@"same_value_mask_refreshes":@(c.maskRefreshes),
+    NSDictionary *result=@{@"status":(strictFailures==0?@"PASS":@"FAIL"),@"same_value_events":@1000,@"same_value_mask_refreshes":@(c.maskRefreshes),
         @"same_value_shared_mask_writes":@(c.sharedMaskWrites),@"same_value_shared_creations":@(c.sharedCreations),
         @"same_value_perlabel_creations":@(c.backdropCreations),@"same_value_styled_attribute_builds":@(c.styledAttributeBuilds),
         @"same_value_filter_or_host_recreations":@(c.sharedCreations+c.backdropCreations),
         @"parent_coordinates":@"PASS synthetic positive/negative controls plus unchanged-mask CA parent composition",
-        @"full_host_unclipped_alpha_parity":@"exact",@"independent_mem5_union_clip_alpha_parity":@"exact",
-        @"strict_crop_failure_cases":@(strictFailures),@"diagnostics":diagnostics,@"measurements":measurements,@"mask_parity":@"exact alpha pixels and aggregate placement against pinned mem5 production renderer",
+        @"full_host_unclipped_alpha_parity":@"exact",@"independent_mem5_union_clip_alpha_parity":@"each pixel must equal the pinned cropped mem5 value or the exact full-host mem5 value where the two differ by one alpha unit",
+        @"strict_crop_failure_cases":@(strictFailures),@"mem5_quantized_crop_cases":@(quantizedCases),@"parent_shift_or_missing_controls":@(parentNegativeControls),@"diagnostics":diagnostics,@"measurements":measurements,@"mask_parity":@"exact alpha pixels and aggregate placement against pinned mem5 production renderer",
         @"boundary":@"UIKit Simulator with CALayer surrogate: no real CABackdropLayer, filter GPU performance or device compatibility proof"};
     NSString *path=NSProcessInfo.processInfo.environment[@"SBCPU_SHARED_LIVE_RESULT_PATH"];
     if (path) assert([[NSJSONSerialization dataWithJSONObject:result options:NSJSONWritingPrettyPrinted error:NULL] writeToFile:path atomically:YES]);
     puts([[result description] UTF8String]);
+    assert(parentNegativeControls==6);
     assert(strictFailures==0); // diagnostic traversal never stops at first crop delta
 }
 int main(void) { @autoreleasepool { runTests(); } return 0; }
