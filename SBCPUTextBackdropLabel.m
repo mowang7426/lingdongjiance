@@ -48,6 +48,8 @@
 static BOOL SBCPUBackdropUnavailable = NO;
 #ifdef SBCPU_TEXT_BACKDROP_TESTING
 static SBCPUTextBackdropTestCounters gSBCPUBackdropTestCounters;
+static BOOL gSBCPUFailNextSharedCreation;
+void SBCPUTextBackdropFailNextSharedCreation(void) { gSBCPUFailNextSharedCreation = YES; }
 SBCPUTextBackdropTestCounters SBCPUTextBackdropReadTestCounters(void) { return gSBCPUBackdropTestCounters; }
 void SBCPUTextBackdropResetTestCounters(void) { gSBCPUBackdropTestCounters = (SBCPUTextBackdropTestCounters){0}; }
 #endif
@@ -56,6 +58,7 @@ static const CGFloat SBCPUSharedBlurRadius = 8.0;
 static CALayer *SBCPUCreateLiveTextBackdrop(CGFloat radius, BOOL shared) {
 #ifdef SBCPU_TEXT_BACKDROP_TESTING
     // Structural surrogate only; never exercises the private compositor.
+    if (shared && gSBCPUFailNextSharedCreation) { gSBCPUFailNextSharedCreation = NO; return nil; }
     (void)radius; (void)shared;
     return [CALayer layer];
 #else
@@ -550,8 +553,9 @@ UIImage *SBCPUTextBackdropCopyMaskImageForTesting(SBCPUTextBackdropLabel *label,
             if (!CGRectEqualToRect(_sbcpuBackdrop.frame, region)) { _sbcpuBackdrop.frame = region; changed = YES; }
             if (!CGRectEqualToRect(_sbcpuMask.frame, _sbcpuBackdrop.bounds)) { _sbcpuMask.frame = _sbcpuBackdrop.bounds; changed = YES; }
             if (_sbcpuMask.contentsScale != scale) { _sbcpuMask.contentsScale = scale; changed = YES; }
-            for (CALayer *old in _sbcpuMask.sublayers.copy) if (![masks containsObject:old]) {
-                [old removeFromSuperlayer]; changed = YES;
+            if (![_sbcpuMask.sublayers isEqualToArray:masks]) {
+                // Restore view order after hidden/remove/insert transitions.
+                _sbcpuMask.sublayers = masks; changed = YES;
             }
             for (NSUInteger i = 0; i < slots.count; i++) {
                 SBCPUCapsuleBackdropLabel *slot = slots[i]; CALayer *mask = masks[i];
@@ -592,6 +596,7 @@ UIImage *SBCPUTextBackdropCopyMaskImageForTesting(SBCPUTextBackdropLabel *label,
     }
 }
 
+- (void)sbcpu_refreshLiveInversionVisibility { [self sbcpu_syncSharedBackdrop]; }
 - (void)sbcpu_setLiveInversionRequested:(BOOL)requested {
     _sbcpuLiveInversionRequested = requested;
     [self sbcpu_syncSharedBackdrop];

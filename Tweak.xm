@@ -6383,6 +6383,17 @@ static NSString *bandItemDisplayName(NSInteger g, NSInteger v) {
 @end
 
 @implementation SBCPUWindow
+- (void)setHidden:(BOOL)hidden {
+    if (self.hidden == hidden) return;
+    [super setHidden:hidden];
+    if (textOnlyLabel.window == self) [textOnlyLabel sbcpu_refreshLiveInversionVisibility];
+    if (textOnly2Label.window == self) [textOnly2Label sbcpu_refreshLiveInversionVisibility];
+}
+- (void)traitCollectionDidChange:(UITraitCollection *)previousTraitCollection {
+    [super traitCollectionDidChange:previousTraitCollection];
+    if (textOnlyLabel.window == self) [textOnlyLabel sbcpu_refreshLiveInversionVisibility];
+    if (textOnly2Label.window == self) [textOnly2Label sbcpu_refreshLiveInversionVisibility];
+}
 - (UIView *)hitTest:(CGPoint)point withEvent:(UIEvent *)event {
     // 全屏设置页需要接收整页触摸，不能继续使用旧版卡片透传逻辑。
     if (settingsShowing) {

@@ -76,7 +76,7 @@ def verify_macho(path):
 
 def main():
     ap=argparse.ArgumentParser();ap.add_argument('--build-dir',type=pathlib.Path,default=pathlib.Path('build'))
-    ap.add_argument('--baseline-dir',type=pathlib.Path);ap.add_argument('--version',default='5.09+mem5');a=ap.parse_args();build=a.build_dir.resolve()
+    ap.add_argument('--baseline-dir',type=pathlib.Path);ap.add_argument('--version',default='5.09+mem6');a=ap.parse_args();build=a.build_dir.resolve()
     debs=sorted(build.glob('*.deb'));assert len(debs)==2,[p.name for p in debs]
     output=[]
     with tempfile.TemporaryDirectory(prefix='sbcpu-verify-') as tmp:

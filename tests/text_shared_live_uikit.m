@@ -2,6 +2,8 @@
 #import <UIKit/UIKit.h>
 #import <QuartzCore/QuartzCore.h>
 #import "../SBCPUTextBackdropLabel.h"
+#import "../SBCPUTextMemory.h"
+#import "../SBCPUTextOnlyTypography.h"
 #import "SBCPUMem5TextBackdropLabel.h"
 #include <assert.h>
 #include <stdio.h>
@@ -19,6 +21,7 @@ static NSData *alpha(CGImageRef image) {
 static UIImage *render(CALayer *layer, CGSize size, CGPoint offset, CGFloat scale) {
     UIGraphicsBeginImageContextWithOptions(size,NO,scale);
     CGContextTranslateCTM(UIGraphicsGetCurrentContext(),offset.x,offset.y);
+    CGContextClipToRect(UIGraphicsGetCurrentContext(),layer.bounds);
     [layer renderInContext:UIGraphicsGetCurrentContext()];
     UIImage *image=UIGraphicsGetImageFromCurrentImageContext(); UIGraphicsEndImageContext(); return image;
 }
@@ -42,9 +45,10 @@ static void assertSingle(SBCPUTextSlotHost *h) {
 static void parity(SBCPUTextSlotHost *h, CGFloat scale, NSString *name) {
     sync(h,scale); assertSingle(h);
     CALayer *b=[h sbcpu_testSharedBackdrop], *expected=[CALayer layer]; expected.frame=h.bounds;
-    NSUInteger i=0;
+    NSUInteger i=0; CGFloat oldBackdropArea=0;
     for (SBCPUCapsuleBackdropLabel *l in h.subviews) {
         if (l.hidden || !l.text.length || CGRectIsEmpty(l.bounds)) continue;
+        oldBackdropArea+=l.bounds.size.width*l.bounds.size.height;
         SBCPUMem5CapsuleBackdropLabel *m=[[SBCPUMem5CapsuleBackdropLabel alloc] initWithFrame:l.bounds];
         m.font=l.font; m.text=l.text; m.attributedText=l.attributedText;
         m.textAlignment=l.textAlignment; m.numberOfLines=l.numberOfLines;
@@ -71,7 +75,33 @@ static void parity(SBCPUTextSlotHost *h, CGFloat scale, NSString *name) {
     [measurements addObject:@{@"case":name,@"scale":@(scale),@"old_host_frame":NSStringFromCGRect(h.bounds),
         @"new_union_frame":NSStringFromCGRect(b.frame),@"old_area":@(h.bounds.size.width*h.bounds.size.height),
         @"union_area":@(b.frame.size.width*b.frame.size.height),@"mask_components":@(i),@"shared_backdrops":@1,
+        @"old_per_label_backdrops":@(i),@"old_filter_recipe_entries":@(i*5),@"old_per_label_total_area":@(oldBackdropArea),
         @"filter_recipe_entries":@5,@"filters_gpu_exercised":@NO}];
+}
+static void productionLayout(UIWindow *window) {
+    NSArray *rows=@[@"CPU 25%",@"3.46GHz",@"FPS816",@"BATT 85%",@"TEMP 42°",@"I 278mA",@"SIM1",@"SIM2",@"↑1.0MB/s",@"↓2.0MB/s",@"RAM 6.1GB"];
+    const int sizes[]={8,13,18,24};
+    for (int second=0;second<2;second++) for (int fs: sizes) for (int bold=0;bold<2;bold++) {
+        UIFont *font=[UIFont monospacedDigitSystemFontOfSize:fs weight:bold?UIFontWeightBold:UIFontWeightRegular];
+        unsigned mask=second ? ((1u<<4)|(1u<<5)|(3u<<8)|(1u<<10)) : ((1u<<0)|(1u<<2)|(1u<<10));
+        SBCPUTextSlot slots[11];
+        CGFloat height=SBCPUTextSlotsLayoutMemoryConfigured(mask,fs,340,0,second,
+            SBCPUTextFPSConfiguredWidth(font),SBCPUTextCurrentConfiguredWidth(font),SBCPUTextMemoryConfiguredWidth(font),SBCPUTextCPUConfiguredWidth(font),slots);
+        CGFloat width=1;for(int i=0;i<11;i++) width=MAX(width,slots[i].x+slots[i].width);
+        SBCPUTextSlotHost *h=[[SBCPUTextSlotHost alloc] initWithFrame:CGRectMake(0,200,width,height)];[window addSubview:h];
+        for(int i=0;i<11;i++) if(mask&(1u<<i)) {
+            SBCPUCapsuleBackdropLabel *l=add(h,rows[i],CGRectMake(slots[i].x,slots[i].y,slots[i].width,slots[i].height));
+            [l sbcpu_setTextOnlyPlainText:rows[i] font:font color:UIColor.whiteColor];l.textAlignment=SBCPUTextMetricAlignment(i);
+        }
+        for(int i=0;i<11;i++) {
+            SBCPUTextSlot d=SBCPUTextSeparatorFrame(mask,i,second,slots);if(d.width<=0)continue;
+            SBCPUCapsuleBackdropLabel *l=add(h,@"·",CGRectMake(d.x,d.y,d.width,d.height));
+            [l sbcpu_setTextOnlyPlainText:@"·" font:font color:UIColor.whiteColor];
+        }
+        [h sbcpu_setLiveInversionRequested:YES];
+        for(int sc=1;sc<=3;sc++) parity(h,sc,[NSString stringWithFormat:@"production-window%d-font%d-bold%d",second+1,fs,bold]);
+        [h sbcpu_setLiveInversionRequested:NO];[h removeFromSuperview];
+    }
 }
 static void runTests(void) {
     measurements=[NSMutableArray array];
@@ -107,6 +137,10 @@ static void runTests(void) {
     for (SBCPUCapsuleBackdropLabel *l in a.subviews) assert(!l.realtimeInvertEnabled);
     [a sbcpu_setLiveInversionRequested:YES]; parity(a,2,@"off-on");
     [a removeFromSuperview]; assert(![a sbcpu_testSharedBackdrop]); [w addSubview:a]; parity(a,2,@"window-reattach");
+    w.hidden=YES; [a sbcpu_refreshLiveInversionVisibility]; [b sbcpu_refreshLiveInversionVisibility];
+    assert(![a sbcpu_testSharedBackdrop] && ![b sbcpu_testSharedBackdrop]);
+    w.hidden=NO; [a sbcpu_refreshLiveInversionVisibility]; [b sbcpu_refreshLiveInversionVisibility];
+    parity(a,2,@"window-visible-again"); parity(b,3,@"window2-visible-again");
     [a sbcpu_testRejectSharedBackdrop]; assert(![a sbcpu_testSharedBackdrop]);
     for (SBCPUCapsuleBackdropLabel *l in a.subviews) {
         assert(l.realtimeInvertEnabled); NSUInteger count=0;
@@ -116,9 +150,10 @@ static void runTests(void) {
     assertSingle(b); // one HUD's failure must not disable the other
     SBCPUTextSlotHost *failed=[[SBCPUTextSlotHost alloc] initWithFrame:CGRectMake(0,160,300,40)];
     [w addSubview:failed]; SBCPUCapsuleBackdropLabel *f=add(failed,@"RAM 6.1GB",CGRectMake(0,0,120,19));
-    [failed sbcpu_testRejectSharedBackdrop]; [failed sbcpu_setLiveInversionRequested:YES];
+    SBCPUTextBackdropFailNextSharedCreation(); [failed sbcpu_setLiveInversionRequested:YES];
     assert(![failed sbcpu_testSharedBackdrop] && f.realtimeInvertEnabled);
     [failed sbcpu_setLiveInversionRequested:NO]; assert(!f.realtimeInvertEnabled);
+    productionLayout(w);
     NSDictionary *result=@{@"status":@"PASS",@"same_value_events":@1000,@"same_value_mask_refreshes":@(c.maskRefreshes),
         @"same_value_shared_mask_writes":@(c.sharedMaskWrites),@"same_value_filter_or_host_recreations":@(c.sharedCreations+c.backdropCreations),
         @"measurements":measurements,@"mask_parity":@"exact alpha pixels and aggregate placement against pinned mem5 production renderer",

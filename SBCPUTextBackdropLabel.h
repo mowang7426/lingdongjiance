@@ -19,6 +19,7 @@
 // One renderer per pure-text HUD. The two HUDs can share the same UIWindow.
 @interface SBCPUTextSlotHost : SBCPUTextBackdropLabel
 - (void)sbcpu_setLiveInversionRequested:(BOOL)requested;
+- (void)sbcpu_refreshLiveInversionVisibility;
 #ifdef SBCPU_TEXT_BACKDROP_TESTING
 - (void)sbcpu_testSyncSharedAtScale:(CGFloat)scale;
 - (CALayer *)sbcpu_testSharedBackdrop;
@@ -39,5 +40,6 @@ typedef struct {
 } SBCPUTextBackdropTestCounters;
 SBCPUTextBackdropTestCounters SBCPUTextBackdropReadTestCounters(void);
 void SBCPUTextBackdropResetTestCounters(void);
+void SBCPUTextBackdropFailNextSharedCreation(void);
 UIImage *SBCPUTextBackdropCopyMaskImageForTesting(SBCPUTextBackdropLabel *label, CGFloat scale);
 #endif
