@@ -9,6 +9,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 static NSMutableArray *measurements;
+static NSUInteger strictFailures;
+static NSMutableArray *diagnostics;
 static NSData *alpha(CGImageRef image) {
     size_t w=CGImageGetWidth(image), h=CGImageGetHeight(image);
     NSMutableData *rgba=[NSMutableData dataWithLength:w*h*4], *out=[NSMutableData dataWithLength:w*h];
@@ -56,6 +58,16 @@ static UIImage *parentComposedMask(CALayer *backdrop, CGSize size, CGFloat scale
     UIImage *result=render(root,size,CGPointZero,scale);
     [mask removeFromSuperlayer]; backdrop.mask=mask;
     return result;
+}
+static NSDictionary *diff(UIImage *a, UIImage *b, CGFloat scale) {
+    NSData *aa=alpha(a.CGImage), *bb=alpha(b.CGImage); assert(aa.length==bb.length);
+    const uint8_t *x=(const uint8_t *)aa.bytes, *y=(const uint8_t *)bb.bytes;
+    NSUInteger count=0,total=0,max=0,sa=0,sb=0;
+    for(NSUInteger i=0;i<aa.length;i++) { NSUInteger d=abs((int)x[i]-(int)y[i]);
+        if(d) count++; total+=d;max=MAX(max,d);sa+=x[i];sb+=y[i]; }
+    return @{@"pixels":@(aa.length),@"different_pixels":@(count),@"max_delta":@(max),@"total_absolute_delta":@(total),
+        @"actual_total_alpha":@(sa),@"reference_total_alpha":@(sb),@"actual_bbox":NSStringFromCGRect(imageInk(a,scale)),
+        @"reference_bbox":NSStringFromCGRect(imageInk(b,scale))};
 }
 static void syntheticCoordinates(void) {
     for (int scale=1;scale<=3;scale++) {
@@ -157,16 +169,24 @@ static void parity(SBCPUTextSlotHost *h, CGFloat scale, NSString *name) {
     referenceBackdrop.position=mem5Region.origin; referenceBackdrop.mask=expected;
     UIImage *composed=parentComposedMask(b,h.bounds.size,scale);
     UIImage *composedRef=parentComposedMask(referenceBackdrop,h.bounds.size,scale);
-    if (![alpha(actual.CGImage) isEqual:alpha(ref.CGImage)]) {
-        NSString *dir=[NSProcessInfo.processInfo.environment[@"SBCPU_SHARED_LIVE_RESULT_PATH"] stringByDeletingLastPathComponent];
-        [UIImagePNGRepresentation(actual) writeToFile:[dir stringByAppendingPathComponent:@"shared-actual.png"] atomically:YES];
-        [UIImagePNGRepresentation(ref) writeToFile:[dir stringByAppendingPathComponent:@"shared-mem5-expected.png"] atomically:YES];
-        fprintf(stderr,"union placement mismatch: %s frame=%s parent_reference_equal=%d\n",name.UTF8String,NSStringFromCGRect(b.frame).UTF8String,[alpha(composed.CGImage) isEqual:alpha(composedRef.CGImage)]);
-        for (SBCPUCapsuleBackdropLabel *l in h.subviews)
-            fprintf(stderr,"slot text=%s frame=%s center=%s\n",l.text.UTF8String,NSStringFromCGRect(l.frame).UTF8String,NSStringFromCGPoint(l.center).UTF8String);
-    }
-    assert([alpha(actual.CGImage) isEqual:alpha(ref.CGImage)]);
-    assert([alpha(composed.CGImage) isEqual:alpha(composedRef.CGImage)]);
+    NSDictionary *direct=diff(actual,ref,scale), *parent=diff(composed,composedRef,scale);
+    NSDictionary *mem5Crop=diff(ref,fullRef,scale), *candidateCrop=diff(actual,fullRef,scale);
+    // Re-render the SAME pinned mem5 layers after returning to host bounds,
+    // then crop/reparent again. No production glyph is involved in this control.
+    expected.bounds=h.bounds; expected.position=CGPointZero;
+    UIImage *selfFull=render(expected,h.bounds.size,CGPointZero,scale);
+    expected.bounds=mem5Region;
+    UIImage *selfCrop=render(expected,h.bounds.size,mem5Region.origin,scale);
+    UIImage *selfParent=parentComposedMask(referenceBackdrop,h.bounds.size,scale);
+    NSDictionary *selfFullDiff=diff(selfFull,fullRef,scale);
+    NSDictionary *selfCropDiff=diff(selfCrop,ref,scale), *selfParentDiff=diff(selfParent,composedRef,scale);
+    BOOL exact=[alpha(actual.CGImage) isEqual:alpha(ref.CGImage)] && [alpha(composed.CGImage) isEqual:alpha(composedRef.CGImage)];
+    if (!exact) strictFailures++;
+    NSDictionary *diag=@{@"case":name,@"scale":@(scale),@"direct":direct,@"parent":parent,
+        @"mem5_crop_vs_full":mem5Crop,@"candidate_crop_vs_full":candidateCrop,
+        @"mem5_self_full":selfFullDiff,@"mem5_self_crop":selfCropDiff,@"mem5_self_parent":selfParentDiff};
+    [diagnostics addObject:diag];
+    fprintf(stderr,"MATRIX %s\n",[[diag description] UTF8String]);
     assert(b.frame.size.width*b.frame.size.height<h.bounds.size.width*h.bounds.size.height);
     [measurements addObject:@{@"case":name,@"scale":@(scale),@"old_host_frame":NSStringFromCGRect(h.bounds),
         @"new_union_frame":NSStringFromCGRect(b.frame),@"old_area":@(h.bounds.size.width*h.bounds.size.height),
@@ -200,7 +220,7 @@ static void productionLayout(UIWindow *window) {
     }
 }
 static void runTests(void) {
-    measurements=[NSMutableArray array];
+    measurements=[NSMutableArray array]; diagnostics=[NSMutableArray array];
     syntheticCoordinates();
     UIWindow *w=[[UIWindow alloc] initWithFrame:CGRectMake(0,0,400,400)]; w.hidden=NO;
     SBCPUTextSlotHost *a=[[SBCPUTextSlotHost alloc] initWithFrame:CGRectMake(0,0,340,64)];
@@ -263,10 +283,11 @@ static void runTests(void) {
         @"same_value_filter_or_host_recreations":@(c.sharedCreations+c.backdropCreations),
         @"parent_coordinates":@"PASS synthetic positive/negative controls plus unchanged-mask CA parent composition",
         @"full_host_unclipped_alpha_parity":@"exact",@"independent_mem5_union_clip_alpha_parity":@"exact",
-        @"measurements":measurements,@"mask_parity":@"exact alpha pixels and aggregate placement against pinned mem5 production renderer",
+        @"strict_crop_failure_cases":@(strictFailures),@"diagnostics":diagnostics,@"measurements":measurements,@"mask_parity":@"exact alpha pixels and aggregate placement against pinned mem5 production renderer",
         @"boundary":@"UIKit Simulator with CALayer surrogate: no real CABackdropLayer, filter GPU performance or device compatibility proof"};
     NSString *path=NSProcessInfo.processInfo.environment[@"SBCPU_SHARED_LIVE_RESULT_PATH"];
     if (path) assert([[NSJSONSerialization dataWithJSONObject:result options:NSJSONWritingPrettyPrinted error:NULL] writeToFile:path atomically:YES]);
     puts([[result description] UTF8String]);
+    assert(strictFailures==0); // diagnostic traversal never stops at first crop delta
 }
 int main(void) { @autoreleasepool { runTests(); } return 0; }
