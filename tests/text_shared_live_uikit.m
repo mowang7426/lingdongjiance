@@ -135,14 +135,22 @@ static void parity(SBCPUTextSlotHost *h, CGFloat scale, NSString *name) {
         ceil(CGRectGetMaxY(mem5Region)*scale)/scale-y));
     assert(CGRectEqualToRect(b.frame,mem5Region)); // independent mem5 ink + 1 physical pixel
     UIImage *actual=render(b.mask,h.bounds.size,b.frame.origin,scale);
-    UIImage *ref=renderHostCoordinates(expected,h.bounds.size,scale,mem5Region);
     UIImage *fullRef=render(expected,h.bounds.size,CGPointZero,scale);
     UIImage *unclipped=renderHostCoordinates(b.mask,h.bounds.size,scale,h.bounds);
-    // Keep exact full-host parity as well as exact equal-clip parity. CPU
-    // renderInContext's clip-dependent glyph quantization is NOT a tolerance:
-    // the diagnosed 45 alpha deltas (max1) are reproduced by clipping mem5 ALONE.
+    // Preserve exact full-host native mem5 glyph parity, before adding ANY
+    // crop topology to the reference. This is a separate mandatory assertion.
     assert([alpha(unclipped.CGImage) isEqual:alpha(fullRef.CGImage)]);
+    // Build the reference crop solely from pinned mem5 alpha, in the same CA
+    // coordinate topology. A bounds-origin/ancestry change alters CGContext
+    // fractional glyph quantization even with identical clip rectangles.
+    expected.anchorPoint=CGPointZero; expected.bounds=mem5Region;
+    expected.position=CGPointZero; expected.contentsScale=scale;
+    UIImage *ref=render(expected,h.bounds.size,mem5Region.origin,scale);
+    CALayer *referenceBackdrop=[CALayer layer]; referenceBackdrop.anchorPoint=CGPointZero;
+    referenceBackdrop.bounds=(CGRect){CGPointZero,mem5Region.size};
+    referenceBackdrop.position=mem5Region.origin; referenceBackdrop.mask=expected;
     UIImage *composed=parentComposedMask(b,h.bounds.size,scale);
+    UIImage *composedRef=parentComposedMask(referenceBackdrop,h.bounds.size,scale);
     if (![alpha(actual.CGImage) isEqual:alpha(ref.CGImage)]) {
         NSString *dir=[NSProcessInfo.processInfo.environment[@"SBCPU_SHARED_LIVE_RESULT_PATH"] stringByDeletingLastPathComponent];
         [UIImagePNGRepresentation(actual) writeToFile:[dir stringByAppendingPathComponent:@"shared-actual.png"] atomically:YES];
@@ -152,7 +160,7 @@ static void parity(SBCPUTextSlotHost *h, CGFloat scale, NSString *name) {
             fprintf(stderr,"slot text=%s frame=%s center=%s\n",l.text.UTF8String,NSStringFromCGRect(l.frame).UTF8String,NSStringFromCGPoint(l.center).UTF8String);
     }
     assert([alpha(actual.CGImage) isEqual:alpha(ref.CGImage)]);
-    assert([alpha(composed.CGImage) isEqual:alpha(ref.CGImage)]);
+    assert([alpha(composed.CGImage) isEqual:alpha(composedRef.CGImage)]);
     assert(b.frame.size.width*b.frame.size.height<h.bounds.size.width*h.bounds.size.height);
     [measurements addObject:@{@"case":name,@"scale":@(scale),@"old_host_frame":NSStringFromCGRect(h.bounds),
         @"new_union_frame":NSStringFromCGRect(b.frame),@"old_area":@(h.bounds.size.width*h.bounds.size.height),
